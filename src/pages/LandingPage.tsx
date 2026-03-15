@@ -153,7 +153,7 @@ function PhoneCarousel({ visible, sectionRef }: { visible: boolean; sectionRef: 
   }, [visible])
 
   return (
-    <section ref={sectionRef} className="relative py-16 flex flex-col items-center">
+    <section ref={sectionRef} className="relative py-24 flex flex-col items-center px-6">
       <div className="relative z-10">
         {visible && (
           <div className="fade-up delay-2">
@@ -243,34 +243,36 @@ export function LandingPage() {
       `}</style>
 
       {/* ─── NAV ─── */}
-      <nav className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-6 py-4"
+      <nav className="fixed top-0 inset-x-0 z-50"
            style={{ backdropFilter: 'blur(16px)', background: 'rgba(8,9,14,0.7)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #818CF8, #6366F1)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <rect x="3" y="4" width="8" height="14" rx="2"/>
-              <rect x="13" y="4" width="8" height="14" rx="2" opacity="0.5"/>
-            </svg>
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #818CF8, #6366F1)' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                <rect x="3" y="4" width="8" height="14" rx="2"/>
+                <rect x="13" y="4" width="8" height="14" rx="2" opacity="0.5"/>
+              </svg>
+            </div>
+            <span className="text-[15px] font-semibold tracking-tight">Mokkoi</span>
           </div>
-          <span className="text-[15px] font-semibold tracking-tight">Mokkoi</span>
-        </div>
-        <div className="flex items-center gap-5">
-          <a href="https://github.com/nicepkg/mokkoi" target="_blank" rel="noopener noreferrer"
-             className="text-[13px] text-[#94A3B8] hover:text-white transition-colors">GitHub</a>
-          <a href="https://www.npmjs.com/package/mokkoi-mcp-server" target="_blank" rel="noopener noreferrer"
-             className="text-[13px] text-[#94A3B8] hover:text-white transition-colors">npm</a>
-          <a href="/app"
-             className="text-[13px] font-medium px-3.5 py-1.5 rounded-lg transition-all duration-200"
-             style={{ background: 'rgba(129,140,248,0.1)', color: '#818CF8', border: '1px solid rgba(129,140,248,0.15)' }}>
-            Open App
-          </a>
+          <div className="flex items-center gap-5">
+            <a href="https://github.com/nicepkg/mokkoi" target="_blank" rel="noopener noreferrer"
+               className="text-[13px] text-[#94A3B8] hover:text-white transition-colors">GitHub</a>
+            <a href="https://www.npmjs.com/package/mokkoi-mcp-server" target="_blank" rel="noopener noreferrer"
+               className="text-[13px] text-[#94A3B8] hover:text-white transition-colors">npm</a>
+            <a href="/app"
+               className="text-[13px] font-medium px-3.5 py-1.5 rounded-lg transition-all duration-200"
+               style={{ background: 'rgba(129,140,248,0.1)', color: '#818CF8', border: '1px solid rgba(129,140,248,0.15)' }}>
+              Open App
+            </a>
+          </div>
         </div>
       </nav>
 
       {/* ─── HERO ─── */}
-      <section ref={hero.ref} className="relative pt-36 pb-20 px-6 flex flex-col items-center text-center">
+      <section ref={hero.ref} className="relative pt-40 pb-24 flex flex-col items-center text-center">
         <GradientOrbs />
-        <div className="relative z-10 max-w-3xl mx-auto">
+        <div className="relative z-10 max-w-3xl mx-auto px-6">
           {hero.visible && (
             <>
               {/* Badge */}
@@ -337,8 +339,8 @@ export function LandingPage() {
       <PhoneCarousel visible={phone.visible} sectionRef={phone.ref} />
 
       {/* ─── FEATURES ─── */}
-      <section ref={features.ref} className="relative py-24 px-6">
-        <div className="max-w-4xl mx-auto">
+      <section ref={features.ref} className="relative py-28 px-6">
+        <div className="max-w-6xl mx-auto">
           {features.visible && (
             <>
               <div className="text-center mb-16">
@@ -349,11 +351,11 @@ export function LandingPage() {
                 </h2>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {FEATURES.map((f, i) => (
                   <div
                     key={f.label}
-                    className={`fade-up delay-${i + 2} group relative rounded-2xl p-6 transition-all duration-300 hover:translate-y-[-2px]`}
+                    className={`fade-up delay-${i + 2} group relative rounded-2xl p-7 transition-all duration-300 hover:translate-y-[-2px]`}
                     style={{
                       background: 'rgba(255,255,255,0.02)',
                       border: '1px solid rgba(255,255,255,0.05)',
@@ -382,8 +384,8 @@ export function LandingPage() {
       </section>
 
       {/* ─── HOW IT WORKS ─── */}
-      <section ref={steps.ref} className="relative py-24 px-6">
-        <div className="max-w-3xl mx-auto">
+      <section ref={steps.ref} className="relative py-28 px-6">
+        <div className="max-w-4xl mx-auto">
           {steps.visible && (
             <>
               <div className="text-center mb-16">
@@ -398,7 +400,7 @@ export function LandingPage() {
                 {STEPS.map((step, i) => (
                   <div
                     key={step.num}
-                    className={`fade-up delay-${i + 2} relative rounded-2xl p-6 overflow-hidden`}
+                    className={`fade-up delay-${i + 2} relative rounded-2xl p-7 sm:p-8 overflow-hidden`}
                     style={{
                       background: 'rgba(255,255,255,0.02)',
                       border: '1px solid rgba(255,255,255,0.05)',
@@ -431,15 +433,15 @@ export function LandingPage() {
       </section>
 
       {/* ─── QUICK INSTALL ─── */}
-      <section ref={install.ref} className="relative py-24 px-6">
-        <div className="max-w-2xl mx-auto text-center">
+      <section ref={install.ref} className="relative py-28 px-6">
+        <div className="max-w-3xl mx-auto text-center">
           {install.visible && (
             <>
-              <h2 className="fade-up text-[clamp(1.5rem,3.5vw,2rem)] font-bold tracking-tight mb-4"
+              <h2 className="fade-up text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold tracking-tight mb-5"
                   style={{ fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
                 Start generating screens now
               </h2>
-              <p className="fade-up delay-1 text-[14px] text-[#64748B] mb-8">
+              <p className="fade-up delay-1 text-[15px] text-[#64748B] mb-10 max-w-md mx-auto">
                 One command to connect Mokkoi to your AI agent.
               </p>
 
@@ -462,8 +464,8 @@ export function LandingPage() {
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer className="py-12 px-6" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+      <footer className="py-14 px-6" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #818CF8, #6366F1)' }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -476,7 +478,7 @@ export function LandingPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-8">
             <a href="https://github.com/nicepkg/mokkoi" target="_blank" rel="noopener noreferrer" className="text-[13px] text-[#4B5563] hover:text-[#94A3B8] transition-colors">
               GitHub
             </a>
@@ -486,7 +488,7 @@ export function LandingPage() {
             <a href="https://twitter.com/Mokkoi_dev" target="_blank" rel="noopener noreferrer" className="text-[13px] text-[#4B5563] hover:text-[#94A3B8] transition-colors">
               @Mokkoi_dev
             </a>
-            <span className="text-[12px] text-[#2D3348]">MIT License</span>
+            <span className="text-[13px] text-[#2D3348]">MIT License</span>
           </div>
         </div>
       </footer>
