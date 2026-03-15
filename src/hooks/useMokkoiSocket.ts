@@ -42,7 +42,7 @@ export function useMokkoiSocket(url = 'ws://localhost:3100') {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
   const [selectedScreenId, setSelectedScreenId] = useState<string>(DEMO_SCREENS[0].id)
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>()
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return

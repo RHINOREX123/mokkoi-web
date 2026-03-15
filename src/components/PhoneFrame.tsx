@@ -1,34 +1,15 @@
 import type { Screen } from '../types/mokkoi'
+import { ScreenRenderer } from './ScreenRenderer'
+import { MOCK_SCREEN_TREES } from '../data/mockScreens'
 
 interface PhoneFrameProps {
   screen: Screen | undefined
 }
 
-function PlaceholderScreen({ name }: { name: string }) {
-  return (
-    <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">
-      <div className="w-12 h-12 rounded-2xl bg-mokkoi-accent/10 flex items-center justify-center">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="1.5">
-          <rect x="3" y="4" width="8" height="14" rx="2"/>
-          <rect x="13" y="4" width="8" height="14" rx="2" opacity="0.4"/>
-        </svg>
-      </div>
-      <div className="text-center">
-        <div className="text-[14px] font-medium text-mokkoi-text mb-1">{name}</div>
-        <div className="text-[12px] text-mokkoi-text-dim leading-relaxed">
-          Waiting for component render<br />from Mokkoi MCP server
-        </div>
-      </div>
-      <div className="flex gap-1.5 mt-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_infinite]" />
-        <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-        <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
-      </div>
-    </div>
-  )
-}
-
 export function PhoneFrame({ screen }: PhoneFrameProps) {
+  // Resolve the component tree: prefer screen.componentTree, fall back to mock data
+  const componentTree = screen?.componentTree ?? MOCK_SCREEN_TREES[screen?.component ?? '']
+
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="relative">
@@ -57,9 +38,31 @@ export function PhoneFrame({ screen }: PhoneFrameProps) {
             </div>
 
             {/* Screen content area */}
-            <div className="flex-1 rounded-b-[36px] bg-mokkoi-bg overflow-hidden">
-              {screen ? (
-                <PlaceholderScreen name={screen.name} />
+            <div className="flex-1 rounded-b-[36px] overflow-hidden" style={{ backgroundColor: '#0F172A' }}>
+              {screen && componentTree ? (
+                <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+                  <ScreenRenderer tree={componentTree} />
+                </div>
+              ) : screen ? (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">
+                  <div className="w-12 h-12 rounded-2xl bg-mokkoi-accent/10 flex items-center justify-center">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="1.5">
+                      <rect x="3" y="4" width="8" height="14" rx="2"/>
+                      <rect x="13" y="4" width="8" height="14" rx="2" opacity="0.4"/>
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[14px] font-medium text-mokkoi-text mb-1">{screen.name}</div>
+                    <div className="text-[12px] text-mokkoi-text-dim leading-relaxed">
+                      Waiting for component render<br />from Mokkoi MCP server
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 mt-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_infinite]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
+                  </div>
+                </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-mokkoi-text-dim text-[12px]">
                   No screen selected
