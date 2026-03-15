@@ -6,8 +6,26 @@ function rnStyleToCSS(style?: Record<string, unknown>): React.CSSProperties {
 
   const css: Record<string, unknown> = {}
 
+  // Expand shorthands first so longhands can override
+  if (style.margin !== undefined) {
+    css.marginTop = style.margin
+    css.marginRight = style.margin
+    css.marginBottom = style.margin
+    css.marginLeft = style.margin
+  }
+  if (style.padding !== undefined) {
+    css.paddingTop = style.padding
+    css.paddingRight = style.padding
+    css.paddingBottom = style.padding
+    css.paddingLeft = style.padding
+  }
+
   for (const [key, value] of Object.entries(style)) {
     switch (key) {
+      case 'margin':
+      case 'padding':
+        // Already expanded above
+        break
       case 'paddingHorizontal':
         css.paddingLeft = value
         css.paddingRight = value
@@ -46,7 +64,6 @@ const VIEW_BASE: React.CSSProperties = {
 }
 
 const TEXT_BASE: React.CSSProperties = {
-  margin: 0,
   padding: 0,
 }
 
@@ -56,7 +73,13 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
   }
 
   const style = rnStyleToCSS(node.style)
-  const children = node.children?.map((child, i) => renderNode(child, i))
+  const hasElementSiblings = node.children?.some(c => typeof c !== 'string') ?? false
+  const children = node.children?.map((child, i) => {
+    if (typeof child === 'string' && hasElementSiblings) {
+      return <span key={`t${i}`}>{child}</span>
+    }
+    return renderNode(child, i)
+  })
 
   switch (node.type) {
     case 'View':
@@ -93,12 +116,11 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const isSecure = node.props?.secureTextEntry as boolean | undefined
       const inputId = `input-${key}-${placeholder?.slice(0, 8) ?? ''}`
       return (
-        <>
+        <span key={key} style={{ display: 'contents' }}>
           {placeholderColor && (
-            <style>{`#${inputId}::placeholder { color: ${placeholderColor}; opacity: 1; }`}</style>
+            <style key={`${inputId}-style`}>{`#${inputId}::placeholder { color: ${placeholderColor}; opacity: 1; }`}</style>
           )}
           <input
-            key={key}
             id={inputId}
             type={isSecure ? 'password' : 'text'}
             placeholder={placeholder}
@@ -112,7 +134,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
               borderStyle: style.borderWidth ? 'solid' : undefined,
             }}
           />
-        </>
+        </span>
       )
     }
 
