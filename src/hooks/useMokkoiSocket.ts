@@ -54,6 +54,9 @@ export function useMokkoiSocket(url = 'ws://localhost:3100') {
 
       ws.onopen = () => {
         setStatus('connected')
+        // Request initial data from bridge
+        ws.send(JSON.stringify({ type: 'list_screens' }))
+        ws.send(JSON.stringify({ type: 'get_tokens' }))
       }
 
       ws.onmessage = (event) => {
@@ -61,28 +64,49 @@ export function useMokkoiSocket(url = 'ws://localhost:3100') {
           const message: MokkoiMessage = JSON.parse(event.data)
 
           switch (message.type) {
-            case 'screen_list': {
+            case 'connected': {
+              // Bridge confirmed connection
+              break
+            }
+            case 'screen_list':
+            case 'screen_list_response': {
               const payload = message.payload as ScreenListPayload
-              setScreens(payload.screens)
-              if (payload.screens.length > 0 && !payload.screens.find(s => s.id === selectedScreenId)) {
-                setSelectedScreenId(payload.screens[0].id)
+              if (payload.screens) {
+                setScreens(payload.screens)
+                if (payload.screens.length > 0 && !payload.screens.find(s => s.id === selectedScreenId)) {
+                  setSelectedScreenId(payload.screens[0].id)
+                }
               }
               break
             }
-            case 'screen_update': {
+            case 'screen_update':
+            case 'screen_update_response': {
               const payload = message.payload as ScreenUpdatePayload
-              setScreens(prev =>
-                prev.map(s =>
-                  s.id === payload.screenId
-                    ? { ...s, name: payload.name, component: payload.component, updatedAt: Date.now() }
-                    : s
+              if (payload.screenId) {
+                setScreens(prev =>
+                  prev.map(s =>
+                    s.id === payload.screenId
+                      ? { ...s, name: payload.name, component: payload.component, updatedAt: Date.now() }
+                      : s
+                  )
                 )
-              )
+              }
+              // Re-fetch screen list after updates
+              ws.send(JSON.stringify({ type: 'list_screens' }))
               break
             }
-            case 'token_update': {
+            case 'token_update':
+            case 'token_update_response': {
               const payload = message.payload as TokenUpdatePayload
-              setTokens(payload.tokens)
+              if (payload.tokens) {
+                setTokens(payload.tokens)
+              }
+              break
+            }
+            case 'resource_updated': {
+              // MCP server notified a resource changed — re-fetch
+              ws.send(JSON.stringify({ type: 'list_screens' }))
+              ws.send(JSON.stringify({ type: 'get_tokens' }))
               break
             }
           }
@@ -113,6 +137,12 @@ export function useMokkoiSocket(url = 'ws://localhost:3100') {
     }
   }, [connect])
 
+  const send = useCallback((type: string, payload?: Record<string, unknown>) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type, payload }))
+    }
+  }, [])
+
   const selectedScreen = screens.find(s => s.id === selectedScreenId) ?? screens[0]
 
   return {
@@ -122,5 +152,6 @@ export function useMokkoiSocket(url = 'ws://localhost:3100') {
     selectedScreen,
     selectedScreenId,
     setSelectedScreenId,
+    send,
   }
 }
