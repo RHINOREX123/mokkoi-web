@@ -14,7 +14,7 @@ function App() {
   } = useMokkoiSocket()
 
   return (
-    <div className="h-screen w-screen flex bg-mokkoi-bg">
+    <div className="app-shell h-screen w-screen flex bg-mokkoi-bg">
       <Sidebar
         screens={screens}
         selectedScreenId={selectedScreenId}

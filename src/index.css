@@ -16,6 +16,7 @@
   --color-mokkoi-error: #F87171;
 
   --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
@@ -28,6 +29,9 @@
 html, body, #root {
   height: 100%;
   width: 100%;
+}
+
+#root:has(.app-shell) {
   overflow: hidden;
 }
 
