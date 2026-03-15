@@ -470,7 +470,7 @@ export function LandingPage() {
               </svg>
             </div>
             <span className="text-[13px] text-[#4B5563]">
-              Built with love in India
+              Built with love
             </span>
           </div>
 
