@@ -341,7 +341,7 @@ export const homeScreenTree: ComponentNode = {
                 {
                   type: 'Text',
                   style: { fontSize: 20, fontWeight: '700', color: '#F8FAFC' },
-                  children: ['Sahil'],
+                  children: ['Alex'],
                 },
               ],
             },
@@ -531,12 +531,12 @@ export const profileScreenTree: ComponentNode = {
         {
           type: 'Text',
           style: { fontSize: 18, fontWeight: '700', color: '#F8FAFC', marginBottom: 4 },
-          children: ['Sahil Kumar'],
+          children: ['Alex Turner'],
         },
         {
           type: 'Text',
           style: { fontSize: 13, color: '#94A3B8', marginBottom: 28 },
-          children: ['sahil@mokkoi.dev'],
+          children: ['alex@mokkoi.dev'],
         },
 
         // Stats row
