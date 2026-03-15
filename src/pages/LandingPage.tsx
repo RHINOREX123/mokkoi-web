@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { PhoneFrame } from '../components/PhoneFrame'
-import { homeScreenTree, loginScreenTree, profileScreenTree } from '../data/mockScreens'
+import { homeScreenTree, loginScreenTree, profileScreenTree, chatScreenTree, dashboardScreenTree } from '../data/mockScreens'
 import type { Screen } from '../types/mokkoi'
 
 const DEMO_SCREENS: Screen[] = [
   { id: 'home', name: 'HomeScreen', component: 'HomeScreen', updatedAt: Date.now(), componentTree: homeScreenTree },
   { id: 'login', name: 'LoginScreen', component: 'LoginScreen', updatedAt: Date.now(), componentTree: loginScreenTree },
   { id: 'profile', name: 'ProfileScreen', component: 'ProfileScreen', updatedAt: Date.now(), componentTree: profileScreenTree },
+  { id: 'chat', name: 'ChatScreen', component: 'ChatScreen', updatedAt: Date.now(), componentTree: chatScreenTree },
+  { id: 'dashboard', name: 'DashboardScreen', component: 'DashboardScreen', updatedAt: Date.now(), componentTree: dashboardScreenTree },
 ]
 
 function useInView(threshold = 0.15) {
