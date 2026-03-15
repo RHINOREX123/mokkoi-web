@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { PhoneFrame } from '../components/PhoneFrame'
-import { homeScreenTree } from '../data/mockScreens'
+import { homeScreenTree, loginScreenTree, profileScreenTree } from '../data/mockScreens'
 import type { Screen } from '../types/mokkoi'
 
-const demoScreen: Screen = {
-  id: 'demo',
-  name: 'HomeScreen',
-  component: 'HomeScreen',
-  updatedAt: Date.now(),
-  componentTree: homeScreenTree,
-}
+const DEMO_SCREENS: Screen[] = [
+  { id: 'home', name: 'HomeScreen', component: 'HomeScreen', updatedAt: Date.now(), componentTree: homeScreenTree },
+  { id: 'login', name: 'LoginScreen', component: 'LoginScreen', updatedAt: Date.now(), componentTree: loginScreenTree },
+  { id: 'profile', name: 'ProfileScreen', component: 'ProfileScreen', updatedAt: Date.now(), componentTree: profileScreenTree },
+]
 
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null)
@@ -134,6 +132,72 @@ const STEPS = [
   },
 ]
 
+function PhoneCarousel({ visible, sectionRef }: { visible: boolean; sectionRef: React.RefObject<HTMLDivElement | null> }) {
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [phase, setPhase] = useState<'in' | 'out'>('in')
+  const [displayIndex, setDisplayIndex] = useState(0)
+
+  useEffect(() => {
+    if (!visible) return
+    const interval = setInterval(() => {
+      setPhase('out')
+      setTimeout(() => {
+        setDisplayIndex(prev => (prev + 1) % DEMO_SCREENS.length)
+        setActiveIndex(prev => (prev + 1) % DEMO_SCREENS.length)
+        setPhase('in')
+      }, 600)
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [visible])
+
+  return (
+    <section ref={sectionRef} className="relative py-16 flex flex-col items-center">
+      <div className="relative z-10">
+        {visible && (
+          <div className="fade-up delay-2">
+            <div className="relative">
+              <div className="absolute -inset-16 rounded-[60px] opacity-30 blur-3xl"
+                   style={{ background: 'radial-gradient(ellipse, rgba(129,140,248,0.15), transparent 70%)' }} />
+              <div className={phase === 'in' ? 'screen-enter' : 'screen-exit'}>
+                <PhoneFrame screen={DEMO_SCREENS[displayIndex]} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Carousel dots */}
+      {visible && (
+        <div className="relative z-10 flex items-center gap-2 mt-6">
+          {DEMO_SCREENS.map((s, i) => (
+            <button
+              key={s.id}
+              onClick={() => {
+                if (i === activeIndex) return
+                setPhase('out')
+                setTimeout(() => {
+                  setDisplayIndex(i)
+                  setActiveIndex(i)
+                  setPhase('in')
+                }, 600)
+              }}
+              className="transition-all duration-300 rounded-full"
+              style={{
+                width: i === activeIndex ? 24 : 8,
+                height: 8,
+                background: i === activeIndex ? '#818CF8' : 'rgba(129,140,248,0.25)',
+              }}
+              aria-label={`Show ${s.name}`}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-[#08090E] to-transparent" />
+    </section>
+  )
+}
+
 export function LandingPage() {
   const hero = useInView(0.1)
   const phone = useInView(0.1)
@@ -164,6 +228,16 @@ export function LandingPage() {
         .delay-4 { animation-delay: 0.4s; }
         .delay-5 { animation-delay: 0.5s; }
         .delay-6 { animation-delay: 0.6s; }
+        .screen-enter { animation: screenFadeIn 0.6s ease forwards; }
+        .screen-exit { animation: screenFadeOut 0.6s ease forwards; }
+        @keyframes screenFadeIn {
+          from { opacity: 0; transform: scale(0.97); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes screenFadeOut {
+          from { opacity: 1; transform: scale(1); }
+          to { opacity: 0; transform: scale(0.97); }
+        }
       `}</style>
 
       {/* ─── NAV ─── */}
@@ -258,22 +332,7 @@ export function LandingPage() {
       </section>
 
       {/* ─── PHONE DEMO ─── */}
-      <section ref={phone.ref} className="relative py-16 flex justify-center">
-        <div className="relative z-10">
-          {phone.visible && (
-            <div className="fade-up delay-2">
-              <div className="relative">
-                {/* Glow behind phone */}
-                <div className="absolute -inset-16 rounded-[60px] opacity-30 blur-3xl"
-                     style={{ background: 'radial-gradient(ellipse, rgba(129,140,248,0.15), transparent 70%)' }} />
-                <PhoneFrame screen={demoScreen} />
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Fade at bottom */}
-        <div className="absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t from-[#08090E] to-transparent" />
-      </section>
+      <PhoneCarousel visible={phone.visible} sectionRef={phone.ref} />
 
       {/* ─── FEATURES ─── */}
       <section ref={features.ref} className="relative py-24 px-6">
