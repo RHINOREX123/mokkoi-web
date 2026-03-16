@@ -87,3 +87,19 @@ body {
   border-color: rgba(99, 102, 241, 0.4);
   box-shadow: 0 4px 32px rgba(99, 102, 241, 0.15);
 }
+
+/* App main grid - side-by-side layout */
+.app-main-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 55% 45%;
+}
+
+@media (max-width: 768px) {
+  .app-main-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(400px, 1fr);
+    overflow-y: auto;
+  }
+}

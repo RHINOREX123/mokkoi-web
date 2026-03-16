@@ -26,9 +26,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt } = req.body ?? {}
+  const { prompt, currentScreen } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
+  }
+
+  // Build system prompt — add edit instructions if editing an existing screen
+  let systemPrompt = SYSTEM_PROMPT
+  if (currentScreen) {
+    systemPrompt += '\n\nIMPORTANT: A previous screen JSON is provided below the user\'s request. Modify it based on the user\'s request instead of creating from scratch. Keep the existing structure and only change what the user asks for. Preserve elements the user didn\'t mention.'
+  }
+
+  // Build user message — include current screen if editing
+  let userContent = prompt
+  if (currentScreen) {
+    userContent = `${prompt}\n\n--- CURRENT SCREEN JSON ---\n${JSON.stringify(currentScreen)}`
   }
 
   try {
@@ -42,8 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: prompt }],
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
       }),
     })
 

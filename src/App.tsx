@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
-import { ChatInput } from './components/ChatInput'
+import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { useMokkoiSocket } from './hooks/useMokkoiSocket'
 import type { ComponentNode } from './types/mokkoi'
 
@@ -9,6 +9,7 @@ interface GeneratedScreen {
   id: string
   name: string
   tree: ComponentNode
+  messages: ChatMessage[]
 }
 
 function App() {
@@ -26,24 +27,141 @@ function App() {
   const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
 
-  // Determine what tree to show
+  // Current active generated screen
   const activeGenerated = generatedScreens.find(s => s.id === activeGeneratedId)
   const generatedTree = activeGenerated?.tree
   const showingGenerated = !!activeGenerated
 
-  const handleScreenGenerated = useCallback((result: ComponentNode | '__generating__') => {
-    if (result === '__generating__') {
-      setIsGenerating(true)
-      setActiveGeneratedId(null)
-    } else {
-      setIsGenerating(false)
-      const id = crypto.randomUUID()
-      const name = `Screen ${generatedScreens.length + 1}`
-      const newScreen: GeneratedScreen = { id, name, tree: result }
-      setGeneratedScreens(prev => [...prev, newScreen])
-      setActiveGeneratedId(id)
+  // Messages for the active screen (or empty for new screen)
+  const activeMessages = activeGenerated?.messages ?? []
+
+  const handleSend = useCallback(async (prompt: string) => {
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: prompt,
+      timestamp: Date.now(),
     }
-  }, [generatedScreens.length])
+
+    // If we have an active generated screen, we're editing it
+    const editingScreenId = activeGeneratedId
+    const editingScreen = editingScreenId
+      ? generatedScreens.find(s => s.id === editingScreenId)
+      : null
+
+    if (editingScreen) {
+      // Append message to existing screen's chat
+      setGeneratedScreens(prev => prev.map(s =>
+        s.id === editingScreenId
+          ? { ...s, messages: [...s.messages, userMsg] }
+          : s
+      ))
+    } else {
+      // Creating a new screen — create entry with this first message
+      const newId = crypto.randomUUID()
+      const name = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
+      const newScreen: GeneratedScreen = {
+        id: newId,
+        name,
+        tree: { type: 'View', style: {}, children: [] },
+        messages: [userMsg],
+      }
+      setGeneratedScreens(prev => [...prev, newScreen])
+      setActiveGeneratedId(newId)
+      // Use newId for the rest of this call
+      setIsGenerating(true)
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        })
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData.error || 'Failed to generate screen')
+        }
+
+        const { tree } = await res.json()
+
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Generated your screen design',
+          timestamp: Date.now(),
+        }
+        setGeneratedScreens(prev => prev.map(s =>
+          s.id === newId
+            ? { ...s, tree, messages: [...s.messages, assistantMsg] }
+            : s
+        ))
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
+        const errorMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Error: ${errorMessage}`,
+          timestamp: Date.now(),
+        }
+        setGeneratedScreens(prev => prev.map(s =>
+          s.id === newId
+            ? { ...s, messages: [...s.messages, errorMsg] }
+            : s
+        ))
+      } finally {
+        setIsGenerating(false)
+      }
+      return
+    }
+
+    // Editing existing screen
+    setIsGenerating(true)
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          currentScreen: editingScreen?.tree,
+        }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || 'Failed to generate screen')
+      }
+
+      const { tree } = await res.json()
+
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: 'Updated your screen design',
+        timestamp: Date.now(),
+      }
+      setGeneratedScreens(prev => prev.map(s =>
+        s.id === editingScreenId
+          ? { ...s, tree, messages: [...s.messages, assistantMsg] }
+          : s
+      ))
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
+      const errorMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `Error: ${errorMessage}`,
+        timestamp: Date.now(),
+      }
+      setGeneratedScreens(prev => prev.map(s =>
+        s.id === editingScreenId
+          ? { ...s, messages: [...s.messages, errorMsg] }
+          : s
+      ))
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [activeGeneratedId, generatedScreens])
 
   // Combine demo screens + generated screens for tabs
   const allTabs = [
@@ -64,19 +182,15 @@ function App() {
 
   return (
     <div className="app-shell" style={{ height: '100vh', background: '#09090b', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Navbar with tabs on the right */}
+      {/* Navbar */}
       <nav
         style={{
-          height: 56,
+          height: 56, flexShrink: 0,
           borderBottom: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 24px',
-          justifyContent: 'space-between',
-          flexShrink: 0,
+          display: 'flex', alignItems: 'center',
+          padding: '0 24px', justifyContent: 'space-between',
           background: 'rgba(9,9,11,0.92)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         }}
       >
         {/* Left: logo */}
@@ -106,7 +220,7 @@ function App() {
           </span>
         </div>
 
-        {/* Right: screen tabs as small pills */}
+        {/* Right: screen tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {allTabs.map(tab => {
             const isActive = tab.id === activeTabId
@@ -139,23 +253,23 @@ function App() {
         </div>
       </nav>
 
-      {/* Scrollable content area - EVERYTHING CENTERED */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: '32px 24px',
-          scrollBehavior: 'smooth',
-        }}
-      >
-        {/* Phone frame - centered */}
-        <div style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-            <div style={{ width: 500, height: 500, borderRadius: '50%', background: 'rgba(129,140,248,0.03)', filter: 'blur(100px)' }} />
+      {/* Main content: side-by-side layout */}
+      <div className="app-main-grid">
+        {/* Left: Phone frame centered */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          {/* Background glow */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            <div style={{
+              width: 500, height: 500, borderRadius: '50%',
+              background: 'rgba(129,140,248,0.03)', filter: 'blur(100px)',
+            }} />
           </div>
           <div style={{ position: 'relative' }}>
             <PhoneFrame
@@ -166,9 +280,17 @@ function App() {
           </div>
         </div>
 
-        {/* Chat input - centered, 24px below phone */}
-        <div style={{ width: '100%', maxWidth: 600, marginTop: 24 }}>
-          <ChatInput onScreenGenerated={handleScreenGenerated} initialPrompt={initialPrompt} />
+        {/* Right: Chat panel */}
+        <div style={{
+          borderLeft: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex', flexDirection: 'column', minHeight: 0,
+        }}>
+          <ChatPanel
+            messages={activeMessages}
+            onSend={handleSend}
+            isGenerating={isGenerating}
+            initialPrompt={initialPrompt}
+          />
         </div>
       </div>
     </div>
