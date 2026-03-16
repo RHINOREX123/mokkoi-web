@@ -22,11 +22,11 @@ const useInView = (opts = {}) => {
 
 const SCREEN_KEYS = Object.keys(MOCK_SCREEN_TREES);
 const SCREEN_LABELS: Record<string, string> = {
-  home: 'Dashboard',
-  login: 'Login',
-  profile: 'Profile',
-  chat: 'Chat',
-  dashboard: 'Finance',
+  HomeScreen: 'Dashboard',
+  LoginScreen: 'Login',
+  ProfileScreen: 'Profile',
+  ChatScreen: 'Chat',
+  DashboardScreen: 'Finance',
 };
 
 /* ───────── component ───────── */
@@ -330,7 +330,7 @@ export default function LandingPage() {
                         <div className="w-16 h-4 rounded-full bg-black" />
                       </div>
                       <div className="px-1 pb-2 phone-screen" style={{ height: 340, overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
-                        <ScreenRenderer tree={MOCK_SCREEN_TREES['home']} />
+                        <ScreenRenderer tree={MOCK_SCREEN_TREES['HomeScreen']} />
                       </div>
                     </div>
                   </div>

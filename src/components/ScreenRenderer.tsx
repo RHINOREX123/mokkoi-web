@@ -72,6 +72,10 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
     return node
   }
 
+  if (!node || typeof node !== 'object') {
+    return null
+  }
+
   const style = rnStyleToCSS(node.style)
   const hasElementSiblings = node.children?.some(c => typeof c !== 'string') ?? false
   const children = node.children?.map((child, i) => {
@@ -175,5 +179,12 @@ interface ScreenRendererProps {
 }
 
 export function ScreenRenderer({ tree }: ScreenRendererProps) {
+  if (!tree) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>
+        No screen data
+      </div>
+    )
+  }
   return <>{renderNode(tree, 0)}</>
 }
