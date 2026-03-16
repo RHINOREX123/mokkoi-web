@@ -1,90 +1,134 @@
-import { useState } from 'react'
-import { Sidebar } from './components/Sidebar'
+import { useState, useCallback } from 'react'
 import { PhoneFrame } from './components/PhoneFrame'
-import { TokenPanel } from './components/TokenPanel'
 import { ChatInput } from './components/ChatInput'
 import { useMokkoiSocket } from './hooks/useMokkoiSocket'
 import type { ComponentNode } from './types/mokkoi'
 
+interface GeneratedScreen {
+  id: string
+  name: string
+  tree: ComponentNode
+}
+
 function App() {
   const {
     screens,
-    tokens,
-    status,
     selectedScreen,
     selectedScreenId,
     setSelectedScreenId,
   } = useMokkoiSocket()
 
-  const [generatedTree, setGeneratedTree] = useState<ComponentNode | undefined>()
+  const [generatedScreens, setGeneratedScreens] = useState<GeneratedScreen[]>([])
+  const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [showTokens, setShowTokens] = useState(true)
 
-  const handleScreenGenerated = (result: ComponentNode | '__generating__') => {
+  // Determine what tree to show
+  const activeGenerated = generatedScreens.find(s => s.id === activeGeneratedId)
+  const generatedTree = activeGenerated?.tree
+  const showingGenerated = !!activeGenerated
+
+  const handleScreenGenerated = useCallback((result: ComponentNode | '__generating__') => {
     if (result === '__generating__') {
       setIsGenerating(true)
-      setGeneratedTree(undefined)
+      setActiveGeneratedId(null)
     } else {
       setIsGenerating(false)
-      setGeneratedTree(result)
+      const id = crypto.randomUUID()
+      const name = `Screen ${generatedScreens.length + 1}`
+      const newScreen: GeneratedScreen = { id, name, tree: result }
+      setGeneratedScreens(prev => [...prev, newScreen])
+      setActiveGeneratedId(id)
+    }
+  }, [generatedScreens.length])
+
+  // Combine demo screens + generated screens for tabs
+  const allTabs = [
+    ...screens.map(s => ({ id: s.id, name: s.name, type: 'demo' as const })),
+    ...generatedScreens.map(s => ({ id: s.id, name: s.name, type: 'generated' as const })),
+  ]
+
+  const activeTabId = showingGenerated ? activeGeneratedId : selectedScreenId
+
+  const handleTabClick = (id: string, type: 'demo' | 'generated') => {
+    if (type === 'generated') {
+      setActiveGeneratedId(id)
+    } else {
+      setActiveGeneratedId(null)
+      setSelectedScreenId(id)
     }
   }
 
   return (
-    <div className="app-shell h-screen w-screen flex bg-[#06090F] overflow-hidden">
-      {/* Sidebar - hidden on small screens */}
-      <div className="hidden lg:block">
-        <Sidebar
-          screens={screens}
-          selectedScreenId={selectedScreenId}
-          onSelectScreen={setSelectedScreenId}
-          status={status}
-        />
-      </div>
-
-      {/* Center panel */}
-      <div className="flex-1 flex flex-col items-center min-w-0 overflow-hidden">
-        {/* Mobile header */}
-        <div className="lg:hidden flex items-center justify-between w-full px-4 py-3 border-b border-white/[0.06]">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold" style={{ background: 'linear-gradient(135deg, #818CF8, #6366F1)' }}>M</div>
-            <span className="text-[14px] font-semibold text-white">Mokkoi</span>
-          </div>
-          <span className="text-[11px] text-white/40 font-mono uppercase">Playground</span>
-        </div>
-
-        {/* Phone frame area */}
-        <div className="flex-1 flex items-center justify-center min-h-0 w-full px-4 py-4">
-          <div className="transform scale-[0.85] sm:scale-90 md:scale-95 lg:scale-100 origin-center">
-            <PhoneFrame
-              screen={selectedScreen}
-              generatedTree={generatedTree}
-              isGenerating={isGenerating}
-            />
-          </div>
-        </div>
-
-        {/* Chat input */}
-        <div className="w-full px-4 sm:px-6 pt-3 pb-4 border-t border-white/[0.04]">
-          <ChatInput onScreenGenerated={handleScreenGenerated} />
-        </div>
-      </div>
-
-      {/* Token panel - hidden on small screens, toggleable on medium */}
-      <div className="hidden xl:block">
-        <TokenPanel tokens={tokens} />
-      </div>
-
-      {/* Token toggle for medium screens */}
-      <button
-        onClick={() => setShowTokens(!showTokens)}
-        className="hidden lg:flex xl:hidden fixed right-4 top-4 z-10 items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[11px] text-white/50 hover:text-white/70 hover:bg-white/[0.08] transition-colors"
+    <div className="app-shell h-screen w-screen flex flex-col bg-[#06090F] overflow-hidden">
+      {/* Top nav bar - matching landing page style */}
+      <header
+        className="shrink-0 flex items-center justify-between px-6 h-16 border-b border-white/[0.05]"
+        style={{ background: 'rgba(6,9,15,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <circle cx="4" cy="4" r="2.5"/><circle cx="10" cy="10" r="2.5"/><line x1="6" y1="4" x2="13" y2="4" opacity="0.5"/><line x1="1" y1="10" x2="8" y2="10" opacity="0.5"/>
-        </svg>
-        Tokens
-      </button>
+        <a href="/" className="flex items-center gap-2.5 no-underline">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-extrabold"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)' }}
+          >
+            M
+          </div>
+          <span className="text-lg font-bold text-[#f1f5f9] tracking-tight">Mokkoi</span>
+        </a>
+
+        <div className="flex items-center gap-4">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-white/30">
+            Playground
+          </span>
+        </div>
+      </header>
+
+      {/* Screen tabs - fixed below header */}
+      <div className="shrink-0 flex flex-wrap items-center justify-center gap-2 px-4 py-3 max-w-[640px] mx-auto">
+        {allTabs.map(tab => {
+          const isActive = tab.id === activeTabId
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabClick(tab.id, tab.type)}
+              className={`
+                px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 cursor-pointer border
+                ${isActive
+                  ? 'bg-mokkoi-accent/15 text-mokkoi-accent border-mokkoi-accent/30 shadow-[0_0_12px_rgba(99,102,241,0.15)]'
+                  : 'bg-white/[0.03] text-white/40 border-white/[0.06] hover:bg-white/[0.06] hover:text-white/60'
+                }
+              `}
+            >
+              {tab.name}
+            </button>
+          )
+        })}
+        {isGenerating && (
+          <div className="px-3.5 py-1.5 rounded-full text-[12px] font-medium bg-mokkoi-accent/10 text-mokkoi-accent/60 border border-mokkoi-accent/20 flex items-center gap-2">
+            <span className="inline-flex gap-0.5">
+              <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
+              <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
+              <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
+            </span>
+            Generating...
+          </div>
+        )}
+      </div>
+
+      {/* Phone frame - fills remaining space, centered */}
+      <div className="flex-1 flex items-center justify-center min-h-0 px-4">
+        <div className="transform scale-[0.58] sm:scale-[0.62] md:scale-[0.68] lg:scale-[0.75] origin-center">
+          <PhoneFrame
+            screen={showingGenerated ? undefined : selectedScreen}
+            generatedTree={generatedTree}
+            isGenerating={isGenerating}
+          />
+        </div>
+      </div>
+
+      {/* Chat input - fixed at bottom, centered and prominent */}
+      <div className="shrink-0 w-full max-w-[600px] mx-auto px-4 pb-5 pt-3">
+        <ChatInput onScreenGenerated={handleScreenGenerated} />
+      </div>
     </div>
   )
 }

@@ -18,8 +18,9 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
 
   return (
     <div className="relative">
-      {/* Ambient glow */}
-      <div className="absolute -inset-8 rounded-[60px] bg-mokkoi-accent/[0.03] blur-2xl" />
+      {/* Ambient glow - layered for depth */}
+      <div className="absolute -inset-12 rounded-[80px] bg-mokkoi-accent/[0.06] blur-3xl" />
+      <div className="absolute -inset-6 rounded-[60px] bg-mokkoi-accent/[0.04] blur-xl" />
 
       {/* Phone chassis */}
       <div

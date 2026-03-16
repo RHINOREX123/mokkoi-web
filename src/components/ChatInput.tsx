@@ -71,7 +71,7 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
       }
       setMessages(prev => [...prev, errorMsg])
       setIsGenerating(false)
-      onScreenGenerated('__generating__') // reset to no screen
+      onScreenGenerated('__generating__')
     }
   }
 
@@ -83,14 +83,14 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
   }
 
   return (
-    <div className="flex flex-col w-full max-w-[420px] mx-auto">
+    <div className="flex flex-col w-full">
       {/* Chat history */}
       {messages.length > 0 && (
-        <div className="mb-3 max-h-[140px] overflow-y-auto px-1 space-y-2 scrollbar-thin">
+        <div className="mb-3 max-h-[160px] overflow-y-auto px-1 space-y-2 scrollbar-thin">
           {messages.map(msg => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
-                className={`max-w-[85%] px-3 py-1.5 rounded-xl text-[12px] leading-relaxed ${
+                className={`max-w-[80%] px-3.5 py-2 rounded-xl text-[13px] leading-relaxed ${
                   msg.role === 'user'
                     ? 'bg-mokkoi-accent/15 text-mokkoi-accent rounded-br-sm'
                     : msg.content.startsWith('Error:')
@@ -104,11 +104,11 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
           ))}
           {isGenerating && (
             <div className="flex justify-start">
-              <div className="px-3 py-1.5 rounded-xl rounded-bl-sm bg-mokkoi-surface text-mokkoi-text-dim text-[12px] flex items-center gap-1.5">
+              <div className="px-3.5 py-2 rounded-xl rounded-bl-sm bg-mokkoi-surface text-mokkoi-text-dim text-[13px] flex items-center gap-2">
                 <span className="inline-flex gap-0.5">
-                  <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
-                  <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-                  <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
                 </span>
                 <span className="ml-1">Generating...</span>
               </div>
@@ -118,8 +118,8 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
         </div>
       )}
 
-      {/* Input bar */}
-      <div className="relative flex items-center gap-2 rounded-2xl bg-mokkoi-surface/80 border border-mokkoi-border-subtle backdrop-blur-sm px-4 py-2 transition-colors focus-within:border-mokkoi-accent/30 focus-within:bg-mokkoi-surface">
+      {/* Input bar - prominent, full width */}
+      <div className="relative flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] px-5 py-3 transition-all duration-200 focus-within:border-mokkoi-accent/40 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_20px_rgba(99,102,241,0.08)]">
         <input
           type="text"
           value={input}
@@ -127,17 +127,27 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           placeholder="Describe your screen..."
           disabled={isGenerating}
-          className="flex-1 bg-transparent text-[13px] text-mokkoi-text placeholder:text-mokkoi-text-dim outline-none disabled:opacity-50"
+          className="flex-1 bg-transparent text-[14px] text-mokkoi-text placeholder:text-white/25 outline-none disabled:opacity-50"
         />
         <button
           onClick={handleSend}
           disabled={!input.trim() || isGenerating}
-          className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center bg-mokkoi-accent/20 text-mokkoi-accent transition-all hover:bg-mokkoi-accent/30 disabled:opacity-30 disabled:hover:bg-mokkoi-accent/20 disabled:cursor-not-allowed"
+          className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed"
+          style={{
+            background: input.trim() && !isGenerating
+              ? 'linear-gradient(135deg, #6366f1, #818cf8)'
+              : 'rgba(255,255,255,0.06)',
+          }}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 8h10M9 4l4 4-4 4" />
           </svg>
         </button>
+      </div>
+
+      {/* Hint text */}
+      <div className="mt-2 text-center text-[11px] text-white/20">
+        Press Enter to send &middot; AI generates a mobile screen from your description
       </div>
     </div>
   )
