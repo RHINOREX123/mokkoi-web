@@ -31,7 +31,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 export function TokenPanel({ tokens }: TokenPanelProps) {
   return (
-    <aside className="w-[300px] min-w-[300px] h-full border-l border-mokkoi-border-subtle bg-mokkoi-bg overflow-y-auto">
+    <aside className="w-[280px] min-w-[280px] h-full border-l border-white/[0.06] bg-[#06090F] overflow-y-auto">
       <div className="px-5 pt-6 pb-2">
         <h2 className="text-[13px] font-semibold text-mokkoi-text tracking-[-0.2px]">
           Design Tokens

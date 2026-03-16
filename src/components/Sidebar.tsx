@@ -26,7 +26,7 @@ export function Sidebar({ screens, selectedScreenId, onSelectScreen, status }: S
   const { color, label } = statusConfig[status]
 
   return (
-    <aside className="w-[250px] min-w-[250px] h-full flex flex-col border-r border-mokkoi-border-subtle bg-mokkoi-bg">
+    <aside className="w-[240px] min-w-[240px] h-full flex flex-col border-r border-white/[0.06] bg-[#06090F]">
       {/* Logo */}
       <div className="px-5 pt-6 pb-5">
         <div className="flex items-center gap-2.5">

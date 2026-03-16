@@ -44,7 +44,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
 
           {/* Screen content area */}
           <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
-          <div className="flex-1 rounded-b-[36px] overflow-hidden phone-screen" style={{ backgroundColor: '#0F172A', overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+          <div className="flex-1 rounded-b-[36px] overflow-hidden phone-screen" style={{ backgroundColor: '#0C1322', overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
             {isGenerating ? (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">
                 <div className="w-12 h-12 rounded-2xl bg-mokkoi-accent/10 flex items-center justify-center">
