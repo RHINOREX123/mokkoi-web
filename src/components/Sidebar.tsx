@@ -9,12 +9,6 @@ interface SidebarProps {
   status: ConnectionStatus
 }
 
-const statusConfig = {
-  connected: { color: 'bg-mokkoi-success', label: 'Live' },
-  connecting: { color: 'bg-mokkoi-warning', label: 'Connecting' },
-  disconnected: { color: 'bg-mokkoi-error', label: 'Offline' },
-} as const
-
 function formatTime(timestamp: number): string {
   const diff = Date.now() - timestamp
   if (diff < 60000) return 'just now'
@@ -22,8 +16,7 @@ function formatTime(timestamp: number): string {
   return `${Math.floor(diff / 3600000)}h ago`
 }
 
-export function Sidebar({ screens, selectedScreenId, onSelectScreen, status }: SidebarProps) {
-  const { color, label } = statusConfig[status]
+export function Sidebar({ screens, selectedScreenId, onSelectScreen }: SidebarProps) {
 
   return (
     <aside className="w-[240px] min-w-[240px] h-full flex flex-col border-r border-white/[0.06] bg-[#06090F]">
@@ -43,12 +36,11 @@ export function Sidebar({ screens, selectedScreenId, onSelectScreen, status }: S
         </div>
       </div>
 
-      {/* Connection status */}
+      {/* Playground label */}
       <div className="px-5 pb-4">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-mokkoi-surface/50">
-          <span className={`w-1.5 h-1.5 rounded-full ${color} ${status === 'connecting' ? 'animate-pulse' : ''}`} />
           <span className="text-[11px] font-medium tracking-wide uppercase text-mokkoi-text-dim font-mono">
-            {label}
+            Playground
           </span>
         </div>
       </div>

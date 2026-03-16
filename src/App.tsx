@@ -50,10 +50,7 @@ function App() {
             <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold" style={{ background: 'linear-gradient(135deg, #818CF8, #6366F1)' }}>M</div>
             <span className="text-[14px] font-semibold text-white">Mokkoi</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${status === 'connected' ? 'bg-emerald-400' : status === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-400'}`} />
-            <span className="text-[11px] text-white/40 font-mono uppercase">{status === 'connected' ? 'Live' : status === 'connecting' ? 'Connecting' : 'Offline'}</span>
-          </div>
+          <span className="text-[11px] text-white/40 font-mono uppercase">Playground</span>
         </div>
 
         {/* Phone frame area */}
