@@ -17,10 +17,7 @@ function App() {
   const initialPrompt = searchParams.get('prompt') || undefined
 
   const {
-    screens,
     selectedScreen,
-    selectedScreenId,
-    setSelectedScreenId,
   } = useMokkoiSocket()
 
   const [generatedScreens, setGeneratedScreens] = useState<GeneratedScreen[]>([])
@@ -147,23 +144,6 @@ function App() {
     }
   }, [activeGeneratedId, generatedScreens])
 
-  // Combine demo screens + generated screens for tabs
-  const allTabs = [
-    ...screens.map(s => ({ id: s.id, name: s.name, type: 'demo' as const })),
-    ...generatedScreens.map(s => ({ id: s.id, name: s.name, type: 'generated' as const })),
-  ]
-
-  const activeTabId = showingGenerated ? activeGeneratedId : selectedScreenId
-
-  const handleTabClick = (id: string, type: 'demo' | 'generated') => {
-    if (type === 'generated') {
-      setActiveGeneratedId(id)
-    } else {
-      setActiveGeneratedId(null)
-      setSelectedScreenId(id)
-    }
-  }
-
   const startDragging = () => {
     isDragging.current = true
     document.body.style.cursor = 'col-resize'
@@ -210,26 +190,8 @@ function App() {
           </span>
         </div>
 
-        {/* Right: screen tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {allTabs.map(tab => {
-            const isActive = tab.id === activeTabId
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabClick(tab.id, tab.type)}
-                className={`
-                  px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-200 cursor-pointer border
-                  ${isActive
-                    ? 'bg-mokkoi-accent/15 text-mokkoi-accent border-mokkoi-accent/30 shadow-[0_0_12px_rgba(99,102,241,0.15)]'
-                    : 'bg-white/[0.03] text-white/40 border-white/[0.06] hover:bg-white/[0.06] hover:text-white/60'
-                  }
-                `}
-              >
-                {tab.name}
-              </button>
-            )
-          })}
+        {/* Right: generating indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {isGenerating && (
             <div className="px-3 py-1 rounded-full text-[11px] font-medium bg-mokkoi-accent/10 text-mokkoi-accent/60 border border-mokkoi-accent/20 flex items-center gap-1.5">
               <span className="inline-flex gap-0.5">
@@ -270,7 +232,7 @@ function App() {
           </div>
           <div style={{
             position: 'relative',
-            transform: 'scale(0.58)',
+            transform: 'scale(0.75)',
             transformOrigin: 'center center',
             maxHeight: 'calc(100vh - 80px)',
           }}>

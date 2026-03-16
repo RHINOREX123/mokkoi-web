@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
       }),
@@ -87,8 +87,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       tree = JSON.parse(jsonText)
     } catch (jsonErr) {
-      console.error('Failed to parse Claude response as JSON:', jsonText.slice(0, 500))
-      return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${jsonText.slice(0, 100)}` })
+      // Attempt to repair truncated JSON by closing open brackets/braces
+      console.warn('Initial JSON parse failed, attempting repair...')
+      let repaired = jsonText
+      // Count unclosed braces and brackets
+      let openBraces = 0, openBrackets = 0
+      let inString = false, escaped = false
+      for (const ch of repaired) {
+        if (escaped) { escaped = false; continue }
+        if (ch === '\\') { escaped = true; continue }
+        if (ch === '"') { inString = !inString; continue }
+        if (inString) continue
+        if (ch === '{') openBraces++
+        else if (ch === '}') openBraces--
+        else if (ch === '[') openBrackets++
+        else if (ch === ']') openBrackets--
+      }
+      // Close any open strings, then brackets/braces
+      if (inString) repaired += '"'
+      // Trim trailing comma or colon that would make JSON invalid
+      repaired = repaired.replace(/[,:\s]+$/, '')
+      for (let i = 0; i < openBrackets; i++) repaired += ']'
+      for (let i = 0; i < openBraces; i++) repaired += '}'
+      try {
+        tree = JSON.parse(repaired)
+        console.log('JSON repair succeeded')
+      } catch (repairErr) {
+        console.error('JSON repair also failed. Raw start:', jsonText.slice(0, 500))
+        return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${jsonText.slice(0, 100)}` })
+      }
     }
 
     return res.status(200).json({ tree })
