@@ -181,7 +181,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell" style={{ height: '100vh', background: '#09090b', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="app-shell" style={{ height: '100vh', background: '#000000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Navbar */}
       <nav
         style={{
@@ -189,7 +189,7 @@ function App() {
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', alignItems: 'center',
           padding: '0 24px', justifyContent: 'space-between',
-          background: 'rgba(9,9,11,0.92)',
+          background: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         }}
       >
@@ -259,7 +259,7 @@ function App() {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           position: 'relative', overflow: 'hidden',
-          background: '#09090b',
+          background: '#000000',
         }}>
           {/* Background glow */}
           <div style={{
@@ -285,7 +285,7 @@ function App() {
         <div style={{
           borderLeft: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', flexDirection: 'column', minHeight: 0,
-          background: '#0f1118',
+          background: '#0a0a0a',
         }}>
           <ChatPanel
             messages={activeMessages}

@@ -19,7 +19,7 @@ function formatTime(timestamp: number): string {
 export function Sidebar({ screens, selectedScreenId, onSelectScreen }: SidebarProps) {
 
   return (
-    <aside className="w-[240px] min-w-[240px] h-full flex flex-col border-r border-white/[0.06] bg-[#09090b]">
+    <aside className="w-[240px] min-w-[240px] h-full flex flex-col border-r border-white/[0.06] bg-[#000000]">
       {/* Logo */}
       <div className="px-5 pt-6 pb-5">
         <div className="flex items-center gap-2.5">

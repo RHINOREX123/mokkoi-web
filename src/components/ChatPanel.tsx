@@ -78,7 +78,7 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
         color: 'rgba(255,255,255,0.5)',
         letterSpacing: '0.04em',
         textTransform: 'uppercase' as const,
-        background: '#161922',
+        background: '#0f0f12',
       }}>
         Chat
       </div>
@@ -199,7 +199,7 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
       </div>
 
       {/* Input bar - always visible at bottom */}
-      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', background: '#121520' }}>
+      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', background: '#0c0c0e' }}>
         <div className="chat-input-bar relative transition-all duration-200">
           <div className="flex items-center gap-3 px-5" style={{ height: 56 }}>
             <div className="flex-1 relative">

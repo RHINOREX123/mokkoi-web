@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-mokkoi-bg: #09090b;
+  --color-mokkoi-bg: #000000;
   --color-mokkoi-surface: rgba(255, 255, 255, 0.04);
   --color-mokkoi-surface-hover: rgba(255, 255, 255, 0.06);
   --color-mokkoi-border: rgba(255, 255, 255, 0.08);
@@ -42,7 +42,7 @@ body, #root {
 }
 
 body {
-  background-color: #09090b;
+  background-color: #000000;
   color: #F1F5F9;
   font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;

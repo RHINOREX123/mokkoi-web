@@ -22,14 +22,14 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
 
   return (
     <div className="relative">
-      {/* Ambient glow - layered for depth */}
-      <div className="absolute -inset-12 rounded-[80px] bg-mokkoi-accent/[0.06] blur-3xl" />
-      <div className="absolute -inset-6 rounded-[60px] bg-mokkoi-accent/[0.04] blur-xl" />
-
       {/* Phone chassis */}
       <div
-        className="relative rounded-[48px] p-[3px] bg-gradient-to-b from-white/[0.12] to-white/[0.04]"
-        style={{ width: PHONE_W, height: PHONE_H }}
+        className="relative rounded-[48px]"
+        style={{
+          width: PHONE_W, height: PHONE_H,
+          border: '2px solid rgba(255,255,255,0.12)',
+          boxShadow: '0 0 40px rgba(99,102,241,0.08), 0 0 80px rgba(99,102,241,0.04)',
+        }}
       >
         {/* Inner bezel */}
         <div className="w-full h-full rounded-[46px] bg-black p-3 flex flex-col overflow-hidden">

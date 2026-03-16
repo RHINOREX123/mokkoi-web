@@ -258,14 +258,14 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div style={{ background: '#09090b', color: '#e2e8f0', minHeight: '100vh', fontFamily: "'Outfit', 'DM Sans', system-ui, sans-serif", overflowX: 'hidden' as const }}>
+    <div style={{ background: '#000000', color: '#e2e8f0', minHeight: '100vh', fontFamily: "'Outfit', 'DM Sans', system-ui, sans-serif", overflowX: 'hidden' as const }}>
       {/* Google Fonts */}
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
-        body { background: #09090b; }
+        body { background: #000000; }
         ::selection { background: #6366f1; color: #fff; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
