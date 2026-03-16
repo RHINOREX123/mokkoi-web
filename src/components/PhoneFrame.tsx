@@ -10,6 +10,10 @@ interface PhoneFrameProps {
   isGenerating?: boolean
 }
 
+const PHONE_SCALE = 0.82
+const PHONE_W = Math.round(393 * PHONE_SCALE) + 6
+const PHONE_H = Math.round(852 * PHONE_SCALE) + 6
+
 export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFrameProps) {
   // Use AI-generated tree, or fall back to sidebar-selected screen
   const componentTree = generatedTree ?? screen?.componentTree ?? MOCK_SCREEN_TREES[screen?.component ?? '']
@@ -25,16 +29,16 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
       {/* Phone chassis */}
       <div
         className="relative rounded-[48px] p-[3px] bg-gradient-to-b from-white/[0.12] to-white/[0.04]"
-        style={{ width: 393 * 0.55 + 6, height: 852 * 0.55 + 6 }}
+        style={{ width: PHONE_W, height: PHONE_H }}
       >
         {/* Inner bezel */}
         <div className="w-full h-full rounded-[46px] bg-black p-3 flex flex-col overflow-hidden">
           {/* Status bar */}
           <div className="flex items-center justify-between px-5 pt-1 pb-2 shrink-0">
-            <span className="text-[10px] font-semibold text-white/80 font-mono">9:41</span>
-            <div className="w-[72px] h-[22px] rounded-full bg-black" />
+            <span className="text-[11px] font-semibold text-white/80 font-mono">9:41</span>
+            <div className="w-[90px] h-[28px] rounded-full bg-black" />
             <div className="flex items-center gap-1">
-              <svg width="12" height="10" viewBox="0 0 12 10" fill="white" opacity="0.7">
+              <svg width="14" height="12" viewBox="0 0 12 10" fill="white" opacity="0.7">
                 <rect x="0" y="6" width="2" height="4" rx="0.5"/>
                 <rect x="3" y="4" width="2" height="6" rx="0.5"/>
                 <rect x="6" y="2" width="2" height="8" rx="0.5"/>
@@ -43,9 +47,17 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
             </div>
           </div>
 
-          {/* Screen content area */}
+          {/* Screen content area - scrollable like a real phone */}
           <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
-          <div className="flex-1 rounded-b-[36px] overflow-hidden phone-screen" style={{ backgroundColor: '#0a0a0a', overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+          <div
+            className="flex-1 rounded-b-[36px] overflow-hidden phone-screen"
+            style={{
+              backgroundColor: '#0F172A',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+            }}
+          >
             {isGenerating ? (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">
                 <div className="w-12 h-12 rounded-2xl bg-mokkoi-accent/10 flex items-center justify-center">
@@ -66,7 +78,16 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
                 </div>
               </div>
             ) : showContent ? (
-              <div className="phone-screen" style={{ width: '100%', height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+              <div
+                className="phone-screen"
+                style={{
+                  width: '100%',
+                  minHeight: '100%',
+                  overflowY: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                }}
+              >
                 <ScreenRenderer tree={(generatedTree ?? componentTree)!} />
               </div>
             ) : screen ? (
@@ -107,7 +128,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
 
           {/* Home indicator */}
           <div className="flex justify-center pt-2 pb-1 shrink-0">
-            <div className="w-[100px] h-[4px] rounded-full bg-white/20" />
+            <div className="w-[120px] h-[4px] rounded-full bg-white/20" />
           </div>
         </div>
       </div>
