@@ -19,27 +19,34 @@ const PLACEHOLDERS = [
   'Describe your dream screen...',
   "Let's build something cool...",
   'What screen do you need?',
-  'Tell me your app idea...',
 ]
 
 const EXAMPLE_CARDS = [
-  { emoji: '\u{1F3CB}\uFE0F', title: 'Fitness Dashboard', desc: 'Activity rings, step counter, calories', prompt: 'A fitness dashboard with activity rings, step counter, and calorie tracker' },
-  { emoji: '\u{1F510}', title: 'Login Screen', desc: 'Email, password, social auth buttons', prompt: 'A login screen with email, password fields and social auth buttons for Google and Apple' },
-  { emoji: '\u{1F4AC}', title: 'Chat Interface', desc: 'Message bubbles, input bar, avatars', prompt: 'A chat interface with message bubbles, user avatars, and a message input bar' },
-  { emoji: '\u{1F6D2}', title: 'Product Page', desc: 'Images, price, reviews, add to cart', prompt: 'An e-commerce product page with product image, price, star reviews, and add to cart button' },
+  { emoji: '\u{1F3CB}\uFE0F', title: 'Fitness Dashboard', desc: 'Activity rings & step counter', prompt: 'A fitness dashboard with activity rings, step counter, and calorie tracker' },
+  { emoji: '\u{1F510}', title: 'Login Screen', desc: 'Email, password & social auth', prompt: 'A login screen with email, password fields and social auth buttons for Google and Apple' },
+  { emoji: '\u{1F4AC}', title: 'Chat Interface', desc: 'Message bubbles & avatars', prompt: 'A chat interface with message bubbles, user avatars, and a message input bar' },
+  { emoji: '\u{1F6D2}', title: 'Product Page', desc: 'Images, price & reviews', prompt: 'An e-commerce product page with product image, price, star reviews, and add to cart button' },
 ]
 
 const QUICK_SUGGESTIONS = [
   'Make it darker',
-  'Add more content',
-  'Change colors',
-  'Make it minimal',
+  'Add more sections',
+  'Change accent color',
+  'Add bottom tabs',
+  'Export code',
+]
+
+const GENERATING_STEPS = [
+  { text: 'Understanding your design...', icon: 'brain' },
+  { text: 'Creating components...', icon: 'build' },
+  { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
 export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
+  const [genStep, setGenStep] = useState(0)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const initialPromptHandled = useRef(false)
 
@@ -54,6 +61,18 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
     }, 3000)
     return () => clearInterval(interval)
   }, [])
+
+  // Multi-step generating progress
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenStep(0)
+      return
+    }
+    setGenStep(0)
+    const t1 = setTimeout(() => setGenStep(1), 2000)
+    const t2 = setTimeout(() => setGenStep(2), 4000)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [isGenerating])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -131,26 +150,32 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
                 <button
                   key={card.title}
                   onClick={() => onSend(card.prompt)}
+                  className="example-card"
                   style={{
                     background: 'rgba(255,255,255,0.03)',
                     border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 12,
-                    padding: '14px 14px',
+                    borderRadius: 16,
+                    padding: '16px 14px',
                     textAlign: 'left',
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    transition: 'all 0.25s ease',
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
                     e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'
                   }}
                   onMouseLeave={e => {
                     e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
                     e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = 'none'
                   }}
                 >
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>{card.emoji}</div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#F1F5F9', marginBottom: 4 }}>
-                    {card.emoji} {card.title}
+                    {card.title}
                   </div>
                   <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.4 }}>
                     {card.desc}
@@ -245,9 +270,9 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
           </div>
         ))}
 
-        {/* Generating indicator */}
+        {/* Multi-step generating indicator */}
         {isGenerating && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <div style={{
               width: 24, height: 24, borderRadius: 6, flexShrink: 0,
               background: 'linear-gradient(135deg, #6366f1, #818cf8)',
@@ -257,17 +282,35 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
               M
             </div>
             <div style={{
-              padding: '10px 14px',
+              padding: '12px 16px',
               borderRadius: '14px 14px 14px 4px',
               background: 'rgba(255,255,255,0.04)',
-              display: 'flex', alignItems: 'center', gap: 8,
+              display: 'flex', flexDirection: 'column', gap: 8,
+              minWidth: 200,
             }}>
-              <span className="inline-flex gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
-              </span>
-              <span style={{ fontSize: 13, color: '#556480', marginLeft: 4 }}>Generating...</span>
+              {GENERATING_STEPS.map((step, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  opacity: i <= genStep ? 1 : 0.3,
+                  transition: 'opacity 0.3s ease',
+                }}>
+                  {i < genStep ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <circle cx="7" cy="7" r="7" fill="rgba(52,211,153,0.2)" />
+                      <path d="M4 7l2 2 4-4" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : i === genStep ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" className="animate-spin" style={{ animationDuration: '1.5s' }}>
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                    </svg>
+                  ) : (
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.15)' }} />
+                  )}
+                  <span style={{ fontSize: 12, color: i <= genStep ? '#94a3b8' : '#3e4a5e' }}>
+                    {step.text}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

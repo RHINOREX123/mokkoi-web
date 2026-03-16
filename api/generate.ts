@@ -31,16 +31,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
 
-  // Build system prompt — add edit instructions if editing an existing screen
-  let systemPrompt = SYSTEM_PROMPT
-  if (currentScreen) {
-    systemPrompt += '\n\nIMPORTANT: A previous screen JSON is provided below the user\'s request. Modify it based on the user\'s request instead of creating from scratch. Keep the existing structure and only change what the user asks for. Preserve elements the user didn\'t mention.'
-  }
-
   // Build user message — include current screen if editing
-  let userContent = prompt
+  let userContent: string
   if (currentScreen) {
-    userContent = `${prompt}\n\n--- CURRENT SCREEN JSON ---\n${JSON.stringify(currentScreen)}`
+    userContent = `Here is the current screen JSON that the user wants to modify:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user's edit request: ${prompt}\n\nModify the existing screen based on their request. Keep unchanged parts the same. Return the complete modified JSON.`
+  } else {
+    userContent = prompt
   }
 
   try {
@@ -54,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
-        system: systemPrompt,
+        system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }],
       }),
     })
@@ -65,25 +61,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'Failed to generate screen' })
     }
 
-    const data = await response.json()
+    let data: any
+    try {
+      data = await response.json()
+    } catch (parseErr) {
+      console.error('Failed to parse Anthropic response as JSON')
+      return res.status(502).json({ error: 'Invalid response from AI service' })
+    }
+
     const text: string = data.content?.[0]?.text ?? ''
     console.log('Claude raw response length:', text.length)
-    console.log('Claude raw response (first 200 chars):', text.slice(0, 200))
+    console.log('Claude raw response (first 300 chars):', text.slice(0, 300))
+
+    if (!text) {
+      return res.status(502).json({ error: 'Empty response from AI service' })
+    }
 
     // Strip markdown code blocks if Claude wrapped the JSON
     let jsonText = text.trim()
-    if (jsonText.startsWith('```')) {
-      // Remove opening ```json or ``` and closing ```
-      jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    // Remove ```json ... ``` or ``` ... ``` wrappers
+    jsonText = jsonText.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    jsonText = jsonText.trim()
+
+    let tree: any
+    try {
+      tree = JSON.parse(jsonText)
+    } catch (jsonErr) {
+      console.error('Failed to parse Claude response as JSON:', jsonText.slice(0, 500))
+      return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${jsonText.slice(0, 100)}` })
     }
 
-    // Parse the JSON from Claude's response
-    const tree = JSON.parse(jsonText)
     return res.status(200).json({ tree })
   } catch (err) {
     console.error('Generate error:', err)
     const message = err instanceof Error ? err.message : String(err)
-    console.error('Generate error detail:', message)
     return res.status(500).json({ error: `Failed to generate screen: ${message}` })
   }
 }

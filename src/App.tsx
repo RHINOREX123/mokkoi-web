@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
@@ -27,6 +27,32 @@ function App() {
   const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
 
+  // Resizable panel
+  const [splitRatio, setSplitRatio] = useState(0.55)
+  const isDragging = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      let ratio = (e.clientX - rect.left) / rect.width
+      ratio = Math.max(0.3, Math.min(0.7, ratio))
+      setSplitRatio(ratio)
+    }
+    const handleMouseUp = () => {
+      isDragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
+
   // Current active generated screen
   const activeGenerated = generatedScreens.find(s => s.id === activeGeneratedId)
   const generatedTree = activeGenerated?.tree
@@ -49,81 +75,39 @@ function App() {
       ? generatedScreens.find(s => s.id === editingScreenId)
       : null
 
+    let targetId: string
+
     if (editingScreen) {
-      // Append message to existing screen's chat
+      // Editing existing screen — append message
+      targetId = editingScreenId!
       setGeneratedScreens(prev => prev.map(s =>
-        s.id === editingScreenId
+        s.id === targetId
           ? { ...s, messages: [...s.messages, userMsg] }
           : s
       ))
     } else {
-      // Creating a new screen — create entry with this first message
-      const newId = crypto.randomUUID()
+      // Creating a new screen
+      targetId = crypto.randomUUID()
       const name = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
       const newScreen: GeneratedScreen = {
-        id: newId,
+        id: targetId,
         name,
         tree: { type: 'View', style: {}, children: [] },
         messages: [userMsg],
       }
       setGeneratedScreens(prev => [...prev, newScreen])
-      setActiveGeneratedId(newId)
-      // Use newId for the rest of this call
-      setIsGenerating(true)
-
-      try {
-        const res = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt }),
-        })
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}))
-          throw new Error(errData.error || 'Failed to generate screen')
-        }
-
-        const { tree } = await res.json()
-
-        const assistantMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: 'Generated your screen design',
-          timestamp: Date.now(),
-        }
-        setGeneratedScreens(prev => prev.map(s =>
-          s.id === newId
-            ? { ...s, tree, messages: [...s.messages, assistantMsg] }
-            : s
-        ))
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
-        const errorMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Error: ${errorMessage}`,
-          timestamp: Date.now(),
-        }
-        setGeneratedScreens(prev => prev.map(s =>
-          s.id === newId
-            ? { ...s, messages: [...s.messages, errorMsg] }
-            : s
-        ))
-      } finally {
-        setIsGenerating(false)
-      }
-      return
+      setActiveGeneratedId(targetId)
     }
 
-    // Editing existing screen
     setIsGenerating(true)
+
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          currentScreen: editingScreen?.tree,
+          ...(editingScreen ? { currentScreen: editingScreen.tree } : {}),
         }),
       })
 
@@ -137,11 +121,11 @@ function App() {
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: 'Updated your screen design',
+        content: editingScreen ? 'Updated your screen design' : 'Generated your screen design',
         timestamp: Date.now(),
       }
       setGeneratedScreens(prev => prev.map(s =>
-        s.id === editingScreenId
+        s.id === targetId
           ? { ...s, tree, messages: [...s.messages, assistantMsg] }
           : s
       ))
@@ -154,7 +138,7 @@ function App() {
         timestamp: Date.now(),
       }
       setGeneratedScreens(prev => prev.map(s =>
-        s.id === editingScreenId
+        s.id === targetId
           ? { ...s, messages: [...s.messages, errorMsg] }
           : s
       ))
@@ -178,6 +162,12 @@ function App() {
       setActiveGeneratedId(null)
       setSelectedScreenId(id)
     }
+  }
+
+  const startDragging = () => {
+    isDragging.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
   }
 
   return (
@@ -253,10 +243,16 @@ function App() {
         </div>
       </nav>
 
-      {/* Main content: side-by-side layout */}
-      <div className="app-main-grid">
-        {/* Left: Phone frame centered — pure dark background */}
+      {/* Main content: side-by-side layout with draggable divider */}
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1, minHeight: 0, display: 'flex', position: 'relative',
+        }}
+      >
+        {/* Left: Phone frame centered */}
         <div style={{
+          width: `${splitRatio * 100}%`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           position: 'relative', overflow: 'hidden',
           background: '#000000',
@@ -272,7 +268,12 @@ function App() {
               background: 'rgba(129,140,248,0.03)', filter: 'blur(100px)',
             }} />
           </div>
-          <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'relative',
+            transform: 'scale(0.58)',
+            transformOrigin: 'center center',
+            maxHeight: 'calc(100vh - 80px)',
+          }}>
             <PhoneFrame
               screen={showingGenerated ? undefined : selectedScreen}
               generatedTree={generatedTree}
@@ -281,9 +282,41 @@ function App() {
           </div>
         </div>
 
-        {/* Right: Chat panel — slightly lighter/elevated */}
+        {/* Draggable divider */}
+        <div
+          onMouseDown={startDragging}
+          style={{
+            width: 4,
+            cursor: 'col-resize',
+            background: 'rgba(255,255,255,0.06)',
+            position: 'relative',
+            flexShrink: 0,
+            transition: 'background 0.2s',
+            zIndex: 10,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }}
+          onMouseLeave={e => { if (!isDragging.current) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+        >
+          {/* Drag handle dots */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex', flexDirection: 'column', gap: 3,
+            pointerEvents: 'none',
+          }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{
+                width: 3, height: 3, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.3)',
+              }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Right: Chat panel */}
         <div style={{
-          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          width: `${(1 - splitRatio) * 100}%`,
+          borderLeft: 'none',
           display: 'flex', flexDirection: 'column', minHeight: 0,
           background: '#0a0a0a',
         }}>

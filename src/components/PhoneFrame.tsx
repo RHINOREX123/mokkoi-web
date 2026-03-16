@@ -13,6 +13,41 @@ interface PhoneFrameProps {
 const PHONE_W = 261
 const PHONE_H = 560
 
+function ShimmerSkeleton() {
+  return (
+    <div style={{ width: '100%', height: '100%', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Header shimmer */}
+      <div className="shimmer-bar" style={{ width: '60%', height: 20, borderRadius: 8 }} />
+      <div className="shimmer-bar" style={{ width: '40%', height: 14, borderRadius: 6, opacity: 0.6 }} />
+
+      {/* Card shimmer */}
+      <div style={{ marginTop: 8, borderRadius: 12, overflow: 'hidden' }}>
+        <div className="shimmer-bar" style={{ width: '100%', height: 120, borderRadius: 12 }} />
+      </div>
+
+      {/* List items */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+        {[0.9, 0.7, 0.8, 0.5].map((w, i) => (
+          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div className="shimmer-bar" style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0 }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="shimmer-bar" style={{ width: `${w * 100}%`, height: 12, borderRadius: 6 }} />
+              <div className="shimmer-bar" style={{ width: `${w * 60}%`, height: 10, borderRadius: 5, opacity: 0.5 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom bar shimmer */}
+      <div style={{ marginTop: 'auto', display: 'flex', gap: 8, justifyContent: 'space-around' }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} className="shimmer-bar" style={{ width: 32, height: 32, borderRadius: 8 }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFrameProps) {
   // Use AI-generated tree, or fall back to sidebar-selected screen
   const componentTree = generatedTree ?? screen?.componentTree ?? MOCK_SCREEN_TREES[screen?.component ?? '']
@@ -20,13 +55,14 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
   const showContent = generatedTree || (screen && componentTree)
 
   return (
-    <div className="relative" style={{ maxHeight: 'calc(100vh - 120px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
       {/* Phone chassis */}
       <div
         className="relative rounded-[48px]"
         style={{
           width: PHONE_W, height: PHONE_H,
-          maxHeight: 'calc(100vh - 140px)',
           border: '2px solid rgba(255,255,255,0.15)',
           boxShadow: '0 0 60px rgba(99,102,241,0.06)',
         }}
@@ -59,24 +95,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
             }}
           >
             {isGenerating ? (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">
-                <div className="w-12 h-12 rounded-2xl bg-mokkoi-accent/10 flex items-center justify-center">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="1.5" className="animate-spin" style={{ animationDuration: '3s' }}>
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                  </svg>
-                </div>
-                <div className="text-center">
-                  <div className="text-[14px] font-medium text-mokkoi-text mb-1">Generating...</div>
-                  <div className="text-[12px] text-mokkoi-text-dim leading-relaxed">
-                    Creating your screen design
-                  </div>
-                </div>
-                <div className="flex gap-1.5 mt-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_infinite]" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
-                </div>
-              </div>
+              <ShimmerSkeleton />
             ) : showContent ? (
               <div
                 className="phone-screen"
