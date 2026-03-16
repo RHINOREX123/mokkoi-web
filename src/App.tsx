@@ -283,7 +283,7 @@ function App() {
 
         {/* Right: Chat panel — slightly lighter/elevated */}
         <div style={{
-          borderLeft: '1px solid rgba(255,255,255,0.06)',
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
           display: 'flex', flexDirection: 'column', minHeight: 0,
           background: '#0a0a0a',
         }}>

@@ -10,9 +10,8 @@ interface PhoneFrameProps {
   isGenerating?: boolean
 }
 
-const PHONE_SCALE = 0.65
-const PHONE_W = Math.round(393 * PHONE_SCALE) + 6
-const PHONE_H = Math.round(852 * PHONE_SCALE) + 6
+const PHONE_W = 261
+const PHONE_H = 560
 
 export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFrameProps) {
   // Use AI-generated tree, or fall back to sidebar-selected screen
@@ -21,14 +20,15 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
   const showContent = generatedTree || (screen && componentTree)
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ maxHeight: 'calc(100vh - 120px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       {/* Phone chassis */}
       <div
         className="relative rounded-[48px]"
         style={{
           width: PHONE_W, height: PHONE_H,
-          border: '2px solid rgba(255,255,255,0.12)',
-          boxShadow: '0 0 40px rgba(99,102,241,0.08), 0 0 80px rgba(99,102,241,0.04)',
+          maxHeight: 'calc(100vh - 140px)',
+          border: '2px solid rgba(255,255,255,0.15)',
+          boxShadow: '0 0 60px rgba(99,102,241,0.06)',
         }}
       >
         {/* Inner bezel */}
