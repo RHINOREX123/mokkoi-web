@@ -137,8 +137,9 @@ export default function LandingPage() {
                 <div className="w-28 h-6 rounded-full bg-black" />
               </div>
               {/* screen */}
-              <div className="relative px-1 pb-4" style={{ height: 500, overflow: 'hidden' }}>
-                <div className={`absolute inset-0 px-1 transition-all duration-400 ${phase === 'in' ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.97]'}`}>
+              <div className="relative px-1 pb-4" style={{ height: 500, overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+                <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
+                <div className={`phone-screen absolute inset-0 px-1 transition-all duration-400 ${phase === 'in' ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.97]'}`} style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
                   <ScreenRenderer tree={MOCK_SCREEN_TREES[SCREEN_KEYS[activeScreen]]} />
                 </div>
               </div>
@@ -328,7 +329,7 @@ export default function LandingPage() {
                       <div className="flex justify-center pt-2 pb-1">
                         <div className="w-16 h-4 rounded-full bg-black" />
                       </div>
-                      <div className="px-1 pb-2 overflow-hidden" style={{ height: 340 }}>
+                      <div className="px-1 pb-2 phone-screen" style={{ height: 340, overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
                         <ScreenRenderer tree={MOCK_SCREEN_TREES['home']} />
                       </div>
                     </div>
