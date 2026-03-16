@@ -74,3 +74,16 @@ body {
   background: rgba(129, 140, 248, 0.25);
   color: #fff;
 }
+
+/* Chat input bar */
+.chat-input-bar {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.5);
+}
+
+.chat-input-bar:focus-within {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 32px rgba(99, 102, 241, 0.15);
+}

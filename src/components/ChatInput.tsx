@@ -151,8 +151,8 @@ export function ChatInput({ onScreenGenerated, initialPrompt }: ChatInputProps) 
         </div>
       )}
 
-      {/* Input bar - larger, more prominent */}
-      <div className="relative rounded-2xl bg-white/[0.04] border border-white/[0.1] shadow-[0_4px_32px_rgba(0,0,0,0.5)] transition-all duration-200 focus-within:border-mokkoi-accent/40 focus-within:shadow-[0_4px_32px_rgba(99,102,241,0.15)]">
+      {/* Input bar - premium styling */}
+      <div className="chat-input-bar relative transition-all duration-200">
         <div className="flex items-center gap-3 px-5" style={{ height: 56 }}>
           <div className="flex-1 relative">
             <input

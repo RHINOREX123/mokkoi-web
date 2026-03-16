@@ -64,10 +64,10 @@ function App() {
 
   return (
     <div className="app-shell h-screen w-screen flex flex-col bg-[#09090b]">
-      {/* Top nav bar */}
+      {/* Fixed navbar */}
       <header
         className="shrink-0 flex items-center px-6 h-14 border-b border-white/[0.05] z-10"
-        style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+        style={{ background: 'rgba(9,9,11,0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
         <a href="/" className="flex items-center gap-2.5 no-underline">
           <div
@@ -78,16 +78,19 @@ function App() {
           </div>
           <span className="text-[16px] font-bold text-[#f1f5f9] tracking-tight">Mokkoi</span>
         </a>
-        <div className="mx-3 h-4 w-px bg-white/10" />
-        <span className="text-[11px] font-mono uppercase tracking-wider text-white/30">
+        <span className="mx-2.5 text-[14px] text-white/15 font-light select-none">&middot;</span>
+        <span
+          className="text-[11px] font-semibold uppercase tracking-[0.14em] px-2.5 py-1 rounded-md"
+          style={{ color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)' }}
+        >
           Playground
         </span>
       </header>
 
       {/* Scrollable main content */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Screen tabs */}
-        <div className="shrink-0 w-full flex flex-wrap items-center justify-center gap-2 px-6 py-3">
+      <div className="flex-1 overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
+        {/* Screen tabs - centered */}
+        <div className="w-full flex flex-wrap items-center justify-center gap-2 px-6 pt-5 pb-4">
           {allTabs.map(tab => {
             const isActive = tab.id === activeTabId
             return (
@@ -118,9 +121,8 @@ function App() {
           )}
         </div>
 
-        {/* Phone frame - large and prominent */}
-        <div className="flex items-center justify-center px-4 py-8 relative">
-          {/* Subtle radial background glow for depth */}
+        {/* Phone frame - centered with glow */}
+        <div className="flex items-center justify-center px-4 relative">
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-[500px] h-[500px] rounded-full bg-mokkoi-accent/[0.03] blur-[100px]" />
           </div>
@@ -133,8 +135,8 @@ function App() {
           </div>
         </div>
 
-        {/* Chat input - below phone with proper spacing */}
-        <div className="w-full max-w-[600px] mx-auto px-6 pb-8 pt-4">
+        {/* Chat input - centered below phone, 24px gap */}
+        <div className="w-full max-w-[600px] mx-auto px-6 pt-6 pb-10">
           <ChatInput onScreenGenerated={handleScreenGenerated} initialPrompt={initialPrompt} />
         </div>
       </div>
