@@ -108,7 +108,7 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Header */}
       <div style={{
-        padding: '14px 20px',
+        padding: '10px 20px',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
         fontSize: 16,
         fontWeight: 600,

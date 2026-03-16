@@ -232,7 +232,7 @@ function App() {
           </div>
           <div style={{
             position: 'relative',
-            transform: 'scale(0.75)',
+            transform: 'scale(0.85)',
             transformOrigin: 'center center',
             maxHeight: 'calc(100vh - 80px)',
           }}>
