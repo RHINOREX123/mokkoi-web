@@ -10,26 +10,50 @@ interface ChatMessage {
 
 interface ChatInputProps {
   onScreenGenerated: (tree: ComponentNode | '__generating__') => void
+  initialPrompt?: string
 }
 
-export function ChatInput({ onScreenGenerated }: ChatInputProps) {
+const PLACEHOLDERS = [
+  'A fitness dashboard with activity rings...',
+  'A login screen with social auth...',
+  'A chat interface with message bubbles...',
+  'An e-commerce product page...',
+  'A settings page with toggle switches...',
+]
+
+export function ChatInput({ onScreenGenerated, initialPrompt }: ChatInputProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [placeholderIdx, setPlaceholderIdx] = useState(0)
+  const [placeholderVisible, setPlaceholderVisible] = useState(true)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const initialPromptHandled = useRef(false)
+
+  // Cycle placeholder text
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderVisible(false)
+      setTimeout(() => {
+        setPlaceholderIdx((i) => (i + 1) % PLACEHOLDERS.length)
+        setPlaceholderVisible(true)
+      }, 300)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSend = async () => {
-    const text = input.trim()
-    if (!text || isGenerating) return
+  const handleSend = async (text?: string) => {
+    const prompt = (text ?? input).trim()
+    if (!prompt || isGenerating) return
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: text,
+      content: prompt,
       timestamp: Date.now(),
     }
 
@@ -42,7 +66,7 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({ prompt }),
       })
 
       if (!res.ok) {
@@ -75,6 +99,15 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
     }
   }
 
+  // Handle initial prompt from URL
+  useEffect(() => {
+    if (initialPrompt && !initialPromptHandled.current) {
+      initialPromptHandled.current = true
+      handleSend(initialPrompt)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt])
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -83,7 +116,7 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
   }
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full max-w-[600px] mx-auto">
       {/* Chat history */}
       {messages.length > 0 && (
         <div className="mb-3 max-h-[160px] overflow-y-auto px-1 space-y-2 scrollbar-thin">
@@ -118,31 +151,39 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
         </div>
       )}
 
-      {/* Input bar - prominent, ChatGPT/Lovable style */}
-      <div className="relative rounded-2xl bg-[#0f1525] border border-white/[0.12] shadow-[0_2px_20px_rgba(0,0,0,0.4)] transition-all duration-200 focus-within:border-mokkoi-accent/40 focus-within:shadow-[0_2px_24px_rgba(99,102,241,0.12)]">
-        <div className="flex items-center gap-3 px-5 py-4">
-          <input
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe your screen..."
-            disabled={isGenerating}
-            className="flex-1 bg-transparent text-[14px] text-mokkoi-text placeholder:text-white/30 outline-none disabled:opacity-50"
-          />
+      {/* Input bar - larger, more prominent */}
+      <div className="relative rounded-2xl bg-white/[0.04] border border-white/[0.1] shadow-[0_4px_32px_rgba(0,0,0,0.5)] transition-all duration-200 focus-within:border-mokkoi-accent/40 focus-within:shadow-[0_4px_32px_rgba(99,102,241,0.15)]">
+        <div className="flex items-center gap-3 px-5" style={{ height: 56 }}>
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isGenerating}
+              className="w-full bg-transparent text-[16px] text-mokkoi-text outline-none disabled:opacity-50"
+              style={{ caretColor: '#818cf8' }}
+            />
+            {!input && (
+              <span
+                className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none text-[16px] text-white/25 transition-opacity duration-300"
+                style={{ opacity: placeholderVisible ? 1 : 0 }}
+              >
+                {PLACEHOLDERS[placeholderIdx]}
+              </span>
+            )}
+          </div>
           <button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim() || isGenerating}
-            className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+            className="shrink-0 h-10 px-5 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed text-[14px] font-semibold text-white"
             style={{
               background: input.trim() && !isGenerating
                 ? 'linear-gradient(135deg, #6366f1, #818cf8)'
                 : 'rgba(255,255,255,0.06)',
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 8h10M9 4l4 4-4 4" />
-            </svg>
+            Generate
           </button>
         </div>
       </div>

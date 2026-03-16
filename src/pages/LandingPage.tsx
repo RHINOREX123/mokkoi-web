@@ -2,32 +2,35 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 /* ─── tiny helpers ─── */
-function useInView(threshold = 0.15) {
+function FadeIn({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // If already in viewport on mount, show immediately
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight && rect.bottom > 0) {
+      setVisible(true);
+      return;
+    }
     const io = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setVisible(true); io.disconnect(); } },
-      { threshold },
+      { threshold: 0.1 },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [threshold]);
-  return { ref, visible };
-}
+  }, []);
 
-function FadeIn({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const { ref, visible } = useInView();
   return (
     <div
       ref={ref}
       className={className}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(28px)',
-        transition: `opacity 0.7s cubic-bezier(.16,1,.3,1) ${delay}s, transform 0.7s cubic-bezier(.16,1,.3,1) ${delay}s`,
+        transform: visible ? 'translateY(0)' : 'translateY(24px)',
+        transition: `opacity 0.6s cubic-bezier(.16,1,.3,1) ${delay}s, transform 0.6s cubic-bezier(.16,1,.3,1) ${delay}s`,
       }}
     >
       {children}
@@ -66,7 +69,7 @@ function PhonePreview({ children, scale = 1 }: { children: React.ReactNode; scal
       height: 580 * scale,
       borderRadius: 36 * scale,
       border: `${2 * scale}px solid rgba(255,255,255,.12)`,
-      background: '#0c1222',
+      background: '#0a0a0a',
       overflow: 'hidden',
       position: 'relative',
       boxShadow: '0 25px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.05), inset 0 1px 0 rgba(255,255,255,.05)',
@@ -115,7 +118,7 @@ function PhonePreview({ children, scale = 1 }: { children: React.ReactNode; scal
 /* ─── Mock Screen Content ─── */
 function MockHomeScreen() {
   return (
-    <div style={{ padding: '52px 18px 24px', background: 'linear-gradient(180deg, #0f172a 0%, #0c1222 100%)', minHeight: '100%' }}>
+    <div style={{ padding: '52px 18px 24px', background: 'linear-gradient(180deg, #0a0a0a 0%, #000000 100%)', minHeight: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <div style={{ color: '#94a3b8', fontSize: 13 }}>Good morning 👋</div>
@@ -164,7 +167,7 @@ function MockHomeScreen() {
 
 function MockLoginScreen() {
   return (
-    <div style={{ padding: '72px 24px 24px', background: 'linear-gradient(180deg, #0f172a 0%, #0c1222 100%)', minHeight: '100%', display: 'flex', flexDirection: 'column' as const }}>
+    <div style={{ padding: '72px 24px 24px', background: 'linear-gradient(180deg, #0a0a0a 0%, #000000 100%)', minHeight: '100%', display: 'flex', flexDirection: 'column' as const }}>
       <div style={{ textAlign: 'center' as const, marginBottom: 36 }}>
         <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #6366f1, #818cf8)', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>✦</div>
         <div style={{ color: '#f1f5f9', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Welcome Back</div>
@@ -195,7 +198,7 @@ function MockLoginScreen() {
 
 function MockChatScreen() {
   return (
-    <div style={{ padding: '48px 14px 24px', background: 'linear-gradient(180deg, #0f172a 0%, #0c1222 100%)', minHeight: '100%', display: 'flex', flexDirection: 'column' as const }}>
+    <div style={{ padding: '48px 14px 24px', background: 'linear-gradient(180deg, #0a0a0a 0%, #000000 100%)', minHeight: '100%', display: 'flex', flexDirection: 'column' as const }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,.06)' }}>
         <div style={{ width: 34, height: 34, borderRadius: 17, background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 600 }}>AI</div>
         <div>
@@ -246,6 +249,7 @@ const SCREENS = [
 export default function LandingPage() {
   const navigate = useNavigate();
   const [activeScreen, setActiveScreen] = useState(0);
+  const [heroPrompt, setHeroPrompt] = useState('');
 
   // Cycle screens
   useEffect(() => {
@@ -254,14 +258,14 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div style={{ background: '#080d19', color: '#e2e8f0', minHeight: '100vh', fontFamily: "'Outfit', 'DM Sans', system-ui, sans-serif", overflowX: 'hidden' as const }}>
+    <div style={{ background: '#09090b', color: '#e2e8f0', minHeight: '100vh', fontFamily: "'Outfit', 'DM Sans', system-ui, sans-serif", overflowX: 'hidden' as const }}>
       {/* Google Fonts */}
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
-        body { background: #080d19; }
+        body { background: #09090b; }
         ::selection { background: #6366f1; color: #fff; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -293,7 +297,7 @@ export default function LandingPage() {
         left: 0,
         right: 0,
         zIndex: 100,
-        background: 'rgba(8,13,25,.8)',
+        background: 'rgba(9,9,11,.8)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderBottom: '1px solid rgba(255,255,255,.05)',
@@ -345,7 +349,7 @@ export default function LandingPage() {
               onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,.4)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
             >
-              Open App →
+              Start Building →
             </button>
           </div>
 
@@ -365,7 +369,7 @@ export default function LandingPage() {
               fontFamily: 'inherit',
             }}
           >
-            Open App →
+            Start Building →
           </button>
         </div>
       </nav>
@@ -422,7 +426,7 @@ export default function LandingPage() {
               maxWidth: 800,
               margin: '0 auto 24px',
             }}>
-              AI agents design your{' '}
+              Build{' '}
               <span style={{
                 background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 40%, #a78bfa 100%)',
                 WebkitBackgroundClip: 'text',
@@ -431,6 +435,7 @@ export default function LandingPage() {
               }}>
                 mobile screens
               </span>
+              {' '}with AI
             </h1>
           </FadeIn>
 
@@ -444,44 +449,102 @@ export default function LandingPage() {
               maxWidth: 560,
               margin: '0 auto 40px',
             }}>
-              The MCP server where Claude Code, Cursor, and AI agents generate production-ready React Native screens with live visual preview.
+              Describe any screen. Get production-ready React Native code instantly. Free and open source.
             </p>
           </FadeIn>
 
-          {/* CTAs */}
+          {/* Hero prompt input */}
           <FadeIn delay={0.2}>
-            <div className="landing-hero-ctas" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, flexWrap: 'wrap' as const }}>
-              <button
-                onClick={() => navigate('/app')}
+            <div style={{ maxWidth: 600, margin: '0 auto' }}>
+              <div
                 style={{
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '14px 32px',
-                  color: '#fff',
-                  fontSize: 16,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all .25s',
-                  fontFamily: 'inherit',
-                  boxShadow: '0 4px 24px rgba(99,102,241,.25)',
+                  position: 'relative',
+                  borderRadius: 16,
+                  background: 'rgba(255,255,255,.04)',
+                  border: '1px solid rgba(255,255,255,.1)',
+                  boxShadow: '0 4px 32px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03)',
+                  transition: 'border-color .2s, box-shadow .2s',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,102,241,.4)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(99,102,241,.25)'; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,.4)'; e.currentTarget.style.boxShadow = '0 4px 32px rgba(99,102,241,.12), 0 0 0 1px rgba(99,102,241,.2)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)'; e.currentTarget.style.boxShadow = '0 4px 32px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03)'; }}
               >
-                Try the Playground →
-              </button>
-              <div className="landing-hero-code-block" style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                background: 'rgba(255,255,255,.03)',
-                border: '1px solid rgba(255,255,255,.08)',
-                borderRadius: 10,
-                padding: '10px 16px',
-              }}>
-                <code style={{ color: '#a5b4fc', fontSize: 14, fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>npx mokkoi-mcp-server</code>
-                <CopyButton text="npx mokkoi-mcp-server" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px 14px 20px' }}>
+                  <input
+                    type="text"
+                    value={heroPrompt}
+                    onChange={(e) => setHeroPrompt(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && heroPrompt.trim()) { navigate(`/app?prompt=${encodeURIComponent(heroPrompt.trim())}`); } }}
+                    placeholder="Describe a mobile screen..."
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      color: '#f1f5f9',
+                      fontSize: 16,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    onClick={() => { if (heroPrompt.trim()) navigate(`/app?prompt=${encodeURIComponent(heroPrompt.trim())}`); }}
+                    style={{
+                      background: heroPrompt.trim() ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,.06)',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '10px 20px',
+                      color: '#fff',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: heroPrompt.trim() ? 'pointer' : 'default',
+                      transition: 'all .2s',
+                      fontFamily: 'inherit',
+                      opacity: heroPrompt.trim() ? 1 : 0.5,
+                    }}
+                  >
+                    Generate
+                  </button>
+                </div>
+              </div>
+
+              {/* Suggestion chips */}
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, justifyContent: 'center', gap: 8, marginTop: 16 }}>
+                {['Fitness Dashboard', 'Login Screen', 'Chat Interface', 'E-commerce Product', 'Settings Page'].map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => navigate(`/app?prompt=${encodeURIComponent(chip)}`)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,.1)',
+                      borderRadius: 100,
+                      padding: '6px 14px',
+                      color: '#94a3b8',
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      transition: 'all .2s',
+                      fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,.4)'; e.currentTarget.style.color = '#c7d2fe'; e.currentTarget.style.background = 'rgba(99,102,241,.08)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)'; e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
+              {/* npx command as secondary CTA */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+                <div className="landing-hero-code-block" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  background: 'rgba(255,255,255,.03)',
+                  border: '1px solid rgba(255,255,255,.08)',
+                  borderRadius: 10,
+                  padding: '10px 16px',
+                }}>
+                  <code style={{ color: '#a5b4fc', fontSize: 14, fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>npx mokkoi-mcp-server</code>
+                  <CopyButton text="npx mokkoi-mcp-server" />
+                </div>
               </div>
             </div>
           </FadeIn>
@@ -820,7 +883,7 @@ export default function LandingPage() {
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,102,241,.4)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(99,102,241,.25)'; }}
               >
-                Try the Playground →
+                Start Building →
               </button>
             </div>
           </FadeIn>
@@ -925,7 +988,7 @@ export default function LandingPage() {
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
               >
-                Open the Playground →
+                Start Building →
               </button>
               <a
                 href="https://www.npmjs.com/package/mokkoi-mcp-server"

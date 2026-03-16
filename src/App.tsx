@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatInput } from './components/ChatInput'
 import { useMokkoiSocket } from './hooks/useMokkoiSocket'
@@ -11,6 +12,9 @@ interface GeneratedScreen {
 }
 
 function App() {
+  const [searchParams] = useSearchParams()
+  const initialPrompt = searchParams.get('prompt') || undefined
+
   const {
     screens,
     selectedScreen,
@@ -59,11 +63,11 @@ function App() {
   }
 
   return (
-    <div className="app-shell h-screen w-screen flex flex-col bg-[#06090F] overflow-hidden">
+    <div className="app-shell h-screen w-screen flex flex-col bg-[#09090b] overflow-hidden">
       {/* Top nav bar - matching landing page style */}
       <header
         className="shrink-0 flex items-center px-6 h-14 border-b border-white/[0.05]"
-        style={{ background: 'rgba(6,9,15,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+        style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
         <a href="/" className="flex items-center gap-2.5 no-underline">
           <div
@@ -129,7 +133,7 @@ function App() {
 
       {/* Chat input - fixed at bottom, centered and prominent */}
       <div className="shrink-0 w-full max-w-[600px] self-center px-6 pb-5 pt-3">
-        <ChatInput onScreenGenerated={handleScreenGenerated} />
+        <ChatInput onScreenGenerated={handleScreenGenerated} initialPrompt={initialPrompt} />
       </div>
     </div>
   )

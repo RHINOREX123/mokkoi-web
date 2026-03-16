@@ -28,7 +28,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
         style={{ width: 393 * 0.55 + 6, height: 852 * 0.55 + 6 }}
       >
         {/* Inner bezel */}
-        <div className="w-full h-full rounded-[46px] bg-[#0a0a0a] p-3 flex flex-col overflow-hidden">
+        <div className="w-full h-full rounded-[46px] bg-black p-3 flex flex-col overflow-hidden">
           {/* Status bar */}
           <div className="flex items-center justify-between px-5 pt-1 pb-2 shrink-0">
             <span className="text-[10px] font-semibold text-white/80 font-mono">9:41</span>
@@ -45,7 +45,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
 
           {/* Screen content area */}
           <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
-          <div className="flex-1 rounded-b-[36px] overflow-hidden phone-screen" style={{ backgroundColor: '#0C1322', overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+          <div className="flex-1 rounded-b-[36px] overflow-hidden phone-screen" style={{ backgroundColor: '#0a0a0a', overflowY: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
             {isGenerating ? (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">
                 <div className="w-12 h-12 rounded-2xl bg-mokkoi-accent/10 flex items-center justify-center">
