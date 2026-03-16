@@ -255,10 +255,11 @@ function App() {
 
       {/* Main content: side-by-side layout */}
       <div className="app-main-grid">
-        {/* Left: Phone frame centered */}
+        {/* Left: Phone frame centered — pure dark background */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           position: 'relative', overflow: 'hidden',
+          background: '#09090b',
         }}>
           {/* Background glow */}
           <div style={{
@@ -280,10 +281,11 @@ function App() {
           </div>
         </div>
 
-        {/* Right: Chat panel */}
+        {/* Right: Chat panel — slightly lighter/elevated */}
         <div style={{
           borderLeft: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', flexDirection: 'column', minHeight: 0,
+          background: '#0f1118',
         }}>
           <ChatPanel
             messages={activeMessages}

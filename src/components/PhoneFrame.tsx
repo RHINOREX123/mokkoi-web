@@ -10,7 +10,7 @@ interface PhoneFrameProps {
   isGenerating?: boolean
 }
 
-const PHONE_SCALE = 0.82
+const PHONE_SCALE = 0.65
 const PHONE_W = Math.round(393 * PHONE_SCALE) + 6
 const PHONE_H = Math.round(852 * PHONE_SCALE) + 6
 

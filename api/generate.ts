@@ -67,12 +67,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const data = await response.json()
     const text: string = data.content?.[0]?.text ?? ''
+    console.log('Claude raw response length:', text.length)
+    console.log('Claude raw response (first 200 chars):', text.slice(0, 200))
+
+    // Strip markdown code blocks if Claude wrapped the JSON
+    let jsonText = text.trim()
+    if (jsonText.startsWith('```')) {
+      // Remove opening ```json or ``` and closing ```
+      jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
 
     // Parse the JSON from Claude's response
-    const tree = JSON.parse(text)
+    const tree = JSON.parse(jsonText)
     return res.status(200).json({ tree })
   } catch (err) {
     console.error('Generate error:', err)
-    return res.status(500).json({ error: 'Failed to generate screen' })
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Generate error detail:', message)
+    return res.status(500).json({ error: `Failed to generate screen: ${message}` })
   }
 }
