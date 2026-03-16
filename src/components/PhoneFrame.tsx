@@ -1,22 +1,20 @@
-import type { Screen } from '../types/mokkoi'
+import type { Screen, ComponentNode } from '../types/mokkoi'
 import { ScreenRenderer } from './ScreenRenderer'
 import { MOCK_SCREEN_TREES } from '../data/mockScreens'
 
 interface PhoneFrameProps {
   screen: Screen | undefined
-  /** Key from MOCK_SCREEN_TREES to display (from chat-generated screen) */
-  generatedScreenKey?: string
+  /** Component tree from AI-generated screen */
+  generatedTree?: ComponentNode
   /** Whether a screen is currently being generated */
   isGenerating?: boolean
 }
 
-export function PhoneFrame({ screen, generatedScreenKey, isGenerating }: PhoneFrameProps) {
-  // If chat generated a screen, show that mock tree
-  const chatTree = generatedScreenKey ? MOCK_SCREEN_TREES[generatedScreenKey] : undefined
-  // Otherwise fall back to sidebar-selected screen
-  const componentTree = chatTree ?? screen?.componentTree ?? MOCK_SCREEN_TREES[screen?.component ?? '']
+export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFrameProps) {
+  // Use AI-generated tree, or fall back to sidebar-selected screen
+  const componentTree = generatedTree ?? screen?.componentTree ?? MOCK_SCREEN_TREES[screen?.component ?? '']
 
-  const showContent = chatTree || (screen && componentTree)
+  const showContent = generatedTree || (screen && componentTree)
 
   return (
     <div className="relative">
@@ -67,7 +65,7 @@ export function PhoneFrame({ screen, generatedScreenKey, isGenerating }: PhoneFr
               </div>
             ) : showContent ? (
               <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
-                <ScreenRenderer tree={(chatTree ?? componentTree)!} />
+                <ScreenRenderer tree={(generatedTree ?? componentTree)!} />
               </div>
             ) : screen ? (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">

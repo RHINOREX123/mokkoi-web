@@ -4,6 +4,7 @@ import { PhoneFrame } from './components/PhoneFrame'
 import { TokenPanel } from './components/TokenPanel'
 import { ChatInput } from './components/ChatInput'
 import { useMokkoiSocket } from './hooks/useMokkoiSocket'
+import type { ComponentNode } from './types/mokkoi'
 
 function App() {
   const {
@@ -15,16 +16,16 @@ function App() {
     setSelectedScreenId,
   } = useMokkoiSocket()
 
-  const [generatedScreenKey, setGeneratedScreenKey] = useState<string | undefined>()
+  const [generatedTree, setGeneratedTree] = useState<ComponentNode | undefined>()
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const handleScreenGenerated = (screenKey: string) => {
-    if (screenKey === '__generating__') {
+  const handleScreenGenerated = (result: ComponentNode | '__generating__') => {
+    if (result === '__generating__') {
       setIsGenerating(true)
-      setGeneratedScreenKey(undefined)
+      setGeneratedTree(undefined)
     } else {
       setIsGenerating(false)
-      setGeneratedScreenKey(screenKey)
+      setGeneratedTree(result)
     }
   }
 
@@ -42,7 +43,7 @@ function App() {
         <div className="flex-1 flex items-center justify-center min-h-0">
           <PhoneFrame
             screen={selectedScreen}
-            generatedScreenKey={generatedScreenKey}
+            generatedTree={generatedTree}
             isGenerating={isGenerating}
           />
         </div>

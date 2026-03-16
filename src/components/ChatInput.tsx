@@ -1,29 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
+import type { ComponentNode } from '../types/mokkoi'
 
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  screenKey?: string
   timestamp: number
 }
 
-const MOCK_SCREEN_KEYS = ['HomeScreen', 'LoginScreen', 'ProfileScreen', 'ChatScreen', 'DashboardScreen']
-
-const SCREEN_LABELS: Record<string, string> = {
-  HomeScreen: 'Home Screen',
-  LoginScreen: 'Login Screen',
-  ProfileScreen: 'Profile Screen',
-  ChatScreen: 'Chat Screen',
-  DashboardScreen: 'Dashboard Screen',
-}
-
-function pickRandomScreen(): string {
-  return MOCK_SCREEN_KEYS[Math.floor(Math.random() * MOCK_SCREEN_KEYS.length)]
-}
-
 interface ChatInputProps {
-  onScreenGenerated: (screenKey: string) => void
+  onScreenGenerated: (tree: ComponentNode | '__generating__') => void
 }
 
 export function ChatInput({ onScreenGenerated }: ChatInputProps) {
@@ -36,7 +22,7 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim()
     if (!text || isGenerating) return
 
@@ -52,20 +38,41 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
     setIsGenerating(true)
     onScreenGenerated('__generating__')
 
-    // Mock: after 2s delay, pick a random screen
-    setTimeout(() => {
-      const screenKey = pickRandomScreen()
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || 'Failed to generate screen')
+      }
+
+      const { tree } = await res.json()
+
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: `Generated ${SCREEN_LABELS[screenKey]}`,
-        screenKey,
+        content: 'Generated your screen design',
         timestamp: Date.now(),
       }
       setMessages(prev => [...prev, assistantMsg])
       setIsGenerating(false)
-      onScreenGenerated(screenKey)
-    }, 2000)
+      onScreenGenerated(tree)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
+      const errorMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `Error: ${errorMessage}`,
+        timestamp: Date.now(),
+      }
+      setMessages(prev => [...prev, errorMsg])
+      setIsGenerating(false)
+      onScreenGenerated('__generating__') // reset to no screen
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -86,7 +93,9 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
                 className={`max-w-[85%] px-3 py-1.5 rounded-xl text-[12px] leading-relaxed ${
                   msg.role === 'user'
                     ? 'bg-mokkoi-accent/15 text-mokkoi-accent rounded-br-sm'
-                    : 'bg-mokkoi-surface text-mokkoi-text-muted rounded-bl-sm'
+                    : msg.content.startsWith('Error:')
+                      ? 'bg-red-500/10 text-red-400 rounded-bl-sm'
+                      : 'bg-mokkoi-surface text-mokkoi-text-muted rounded-bl-sm'
                 }`}
               >
                 {msg.content}
