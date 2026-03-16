@@ -118,35 +118,37 @@ export function ChatInput({ onScreenGenerated }: ChatInputProps) {
         </div>
       )}
 
-      {/* Input bar - prominent, full width */}
-      <div className="relative flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] px-5 py-3 transition-all duration-200 focus-within:border-mokkoi-accent/40 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_20px_rgba(99,102,241,0.08)]">
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Describe your screen..."
-          disabled={isGenerating}
-          className="flex-1 bg-transparent text-[14px] text-mokkoi-text placeholder:text-white/25 outline-none disabled:opacity-50"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || isGenerating}
-          className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-25 disabled:cursor-not-allowed"
-          style={{
-            background: input.trim() && !isGenerating
-              ? 'linear-gradient(135deg, #6366f1, #818cf8)'
-              : 'rgba(255,255,255,0.06)',
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 8h10M9 4l4 4-4 4" />
-          </svg>
-        </button>
+      {/* Input bar - prominent, ChatGPT/Lovable style */}
+      <div className="relative rounded-2xl bg-[#0f1525] border border-white/[0.12] shadow-[0_2px_20px_rgba(0,0,0,0.4)] transition-all duration-200 focus-within:border-mokkoi-accent/40 focus-within:shadow-[0_2px_24px_rgba(99,102,241,0.12)]">
+        <div className="flex items-center gap-3 px-5 py-4">
+          <input
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe your screen..."
+            disabled={isGenerating}
+            className="flex-1 bg-transparent text-[14px] text-mokkoi-text placeholder:text-white/30 outline-none disabled:opacity-50"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || isGenerating}
+            className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+            style={{
+              background: input.trim() && !isGenerating
+                ? 'linear-gradient(135deg, #6366f1, #818cf8)'
+                : 'rgba(255,255,255,0.06)',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 8h10M9 4l4 4-4 4" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Hint text */}
-      <div className="mt-2 text-center text-[11px] text-white/20">
+      <div className="mt-2.5 text-center text-[11px] text-white/20">
         Press Enter to send &middot; AI generates a mobile screen from your description
       </div>
     </div>

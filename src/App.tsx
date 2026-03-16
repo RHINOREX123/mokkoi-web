@@ -62,28 +62,26 @@ function App() {
     <div className="app-shell h-screen w-screen flex flex-col bg-[#06090F] overflow-hidden">
       {/* Top nav bar - matching landing page style */}
       <header
-        className="shrink-0 flex items-center justify-between px-6 h-16 border-b border-white/[0.05]"
+        className="shrink-0 flex items-center px-6 h-14 border-b border-white/[0.05]"
         style={{ background: 'rgba(6,9,15,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
       >
         <a href="/" className="flex items-center gap-2.5 no-underline">
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-extrabold"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[12px] font-extrabold"
             style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)' }}
           >
             M
           </div>
-          <span className="text-lg font-bold text-[#f1f5f9] tracking-tight">Mokkoi</span>
+          <span className="text-[16px] font-bold text-[#f1f5f9] tracking-tight">Mokkoi</span>
         </a>
-
-        <div className="flex items-center gap-4">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-white/30">
-            Playground
-          </span>
-        </div>
+        <div className="mx-3 h-4 w-px bg-white/10" />
+        <span className="text-[11px] font-mono uppercase tracking-wider text-white/30">
+          Playground
+        </span>
       </header>
 
-      {/* Screen tabs - fixed below header */}
-      <div className="shrink-0 flex flex-wrap items-center justify-center gap-2 px-4 py-3 max-w-[640px] mx-auto">
+      {/* Screen tabs - centered below header */}
+      <div className="shrink-0 w-full flex flex-wrap items-center justify-center gap-2 px-6 py-3">
         {allTabs.map(tab => {
           const isActive = tab.id === activeTabId
           return (
@@ -114,9 +112,13 @@ function App() {
         )}
       </div>
 
-      {/* Phone frame - fills remaining space, centered */}
-      <div className="flex-1 flex items-center justify-center min-h-0 px-4">
-        <div className="transform scale-[0.58] sm:scale-[0.62] md:scale-[0.68] lg:scale-[0.75] origin-center">
+      {/* Phone frame - fills remaining space, centered with background glow */}
+      <div className="flex-1 flex items-center justify-center min-h-0 px-4 relative">
+        {/* Subtle radial background glow for depth */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-[500px] h-[500px] rounded-full bg-mokkoi-accent/[0.03] blur-[100px]" />
+        </div>
+        <div className="relative transform scale-[0.58] sm:scale-[0.62] md:scale-[0.68] lg:scale-[0.75] origin-center">
           <PhoneFrame
             screen={showingGenerated ? undefined : selectedScreen}
             generatedTree={generatedTree}
@@ -126,7 +128,7 @@ function App() {
       </div>
 
       {/* Chat input - fixed at bottom, centered and prominent */}
-      <div className="shrink-0 w-full max-w-[600px] mx-auto px-4 pb-5 pt-3">
+      <div className="shrink-0 w-full max-w-[600px] self-center px-6 pb-5 pt-3">
         <ChatInput onScreenGenerated={handleScreenGenerated} />
       </div>
     </div>
