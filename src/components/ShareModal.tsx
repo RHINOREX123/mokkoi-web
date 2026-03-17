@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, Check, Link2, Mail } from 'lucide-react'
+import { X, Check, Link2 } from 'lucide-react'
+import { FaWhatsapp, FaTelegramPlane, FaLinkedinIn } from 'react-icons/fa'
+import { FaXTwitter } from 'react-icons/fa6'
+import { HiOutlineMail } from 'react-icons/hi'
 import { supabase } from '../lib/supabase'
 
 interface ShareModalProps {
@@ -52,32 +55,32 @@ export function ShareModal({ projectId, projectName, isOpen, onClose }: ShareMod
   const socialButtons = [
     {
       label: 'WhatsApp',
-      color: '#25D366',
-      letter: 'W',
+      bg: '#25D366',
+      icon: <FaWhatsapp size={20} color="#fff" />,
       href: `https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`,
     },
     {
       label: 'Telegram',
-      color: '#2AABEE',
-      letter: 'T',
+      bg: '#0088cc',
+      icon: <FaTelegramPlane size={20} color="#fff" />,
       href: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`,
     },
     {
       label: 'X',
-      color: '#fff',
-      letter: '𝕏',
+      bg: '#000000',
+      icon: <FaXTwitter size={20} color="#fff" />,
       href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent('Check out my design on Mokkoi')}`,
     },
     {
       label: 'LinkedIn',
-      color: '#0A66C2',
-      letter: 'in',
+      bg: '#0A66C2',
+      icon: <FaLinkedinIn size={20} color="#fff" />,
       href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
     },
     {
       label: 'Email',
-      color: '#94a3b8',
-      letter: null,
+      bg: '#6B7280',
+      icon: <HiOutlineMail size={20} color="#fff" />,
       href: `mailto:?subject=${encodeURIComponent('Check out my Mokkoi design')}&body=${encodeURIComponent(shareUrl)}`,
     },
   ]
@@ -220,27 +223,24 @@ export function ShareModal({ projectId, projectName, isOpen, onClose }: ShareMod
                   rel="noopener noreferrer"
                   title={`Share on ${btn.label}`}
                   style={{
-                    width: 40, height: 40, borderRadius: '50%',
+                    width: 44, height: 44, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    color: btn.color,
-                    fontSize: btn.label === 'LinkedIn' ? 12 : 16,
-                    fontWeight: 800,
+                    background: btn.bg,
+                    border: 'none',
                     textDecoration: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
+                    e.currentTarget.style.filter = 'brightness(1.2)'
                     e.currentTarget.style.transform = 'scale(1.1)'
                   }}
                   onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                    e.currentTarget.style.filter = 'brightness(1)'
                     e.currentTarget.style.transform = 'scale(1)'
                   }}
                 >
-                  {btn.letter === null ? <Mail size={18} /> : btn.letter}
+                  {btn.icon}
                 </a>
               ))}
             </div>
