@@ -3,6 +3,7 @@ import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
+import { ShareModal } from './components/ShareModal'
 import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2 } from 'lucide-react'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
 import type { ComponentNode } from './types/mokkoi'
@@ -94,6 +95,7 @@ function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [focusTrigger, setFocusTrigger] = useState(0)
   const [showEditSubmenu, setShowEditSubmenu] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
   const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -230,9 +232,8 @@ function App() {
     navigate('/projects')
   }
 
-  const handleShareCopy = async () => {
-    await navigator.clipboard.writeText(window.location.href)
-    setToastMessage('Link copied!')
+  const handleShareCopy = () => {
+    setShowShareModal(true)
     setShowHamburgerMenu(false)
   }
 
@@ -693,14 +694,9 @@ function App() {
     setActiveGeneratedId(screenId)
   }
 
-  // Share: copy current URL + show toast
-  const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      setShowShareToast(true)
-    } catch {
-      // fallback
-    }
+  // Open share modal
+  const handleShare = () => {
+    setShowShareModal(true)
   }
 
   // Project name editing
@@ -757,7 +753,7 @@ function App() {
     { id: 'zoom-out', label: 'Zoom Out', shortcut: '-', icon: <ZoomOut size={16} />, group: 'Canvas', action: zoomOut },
     { id: 'reset-zoom', label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: <Maximize2 size={16} />, group: 'Canvas', action: resetZoom },
     { id: 'export-code', label: 'Export Code', shortcut: 'Ctrl+E', icon: <Download size={16} />, group: 'Project', action: () => { if (generatedTree) setShowCodeExport(true) } },
-    { id: 'share', label: 'Copy Share Link', icon: <Share2 size={16} />, group: 'Project', action: handleShare },
+    { id: 'share', label: 'Share Project', icon: <Share2 size={16} />, group: 'Project', action: handleShare },
     { id: 'rename-project', label: 'Rename Project', icon: <Pencil size={16} />, group: 'Project', action: () => setIsEditingName(true) },
     { id: 'upload-ref', label: 'Upload Reference Image', icon: <Upload size={16} />, group: 'Canvas', action: () => fileInputRef.current?.click() },
     { id: 'go-projects', label: 'Go to All Projects', icon: <ArrowLeft size={16} />, group: 'Navigation', action: () => navigate('/projects') },
@@ -1551,6 +1547,14 @@ function App() {
         commands={commands}
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
+      />
+
+      {/* Share Modal */}
+      <ShareModal
+        projectId={projectId || ''}
+        projectName={projectName}
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
       />
     </div>
   )
