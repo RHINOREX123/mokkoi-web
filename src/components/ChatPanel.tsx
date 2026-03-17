@@ -21,6 +21,8 @@ interface ChatPanelProps {
   onFlowScreenClick?: (screenName: string) => void
   /** Whether any screens have been generated (hides example cards) */
   hasScreens?: boolean
+  /** Name of the currently selected screen on canvas */
+  selectedScreenName?: string
 }
 
 const PLACEHOLDERS = [
@@ -52,7 +54,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -402,6 +404,20 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
       {/* Input bar */}
       <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', background: '#0c0c0e' }}>
+        {/* Selected screen indicator */}
+        {selectedScreenName && (
+          <div style={{
+            marginBottom: 8,
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 11, color: '#818cf8', fontWeight: 500,
+          }}>
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: '#818cf8', flexShrink: 0,
+            }} />
+            Editing: {selectedScreenName}
+          </div>
+        )}
         {/* Attached image preview */}
         {attachedImage && (
           <div style={{
