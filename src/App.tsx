@@ -644,22 +644,34 @@ function App() {
     handleSend('Make this screen lighter with a light theme')
   }, [activeGeneratedId, handleSend])
 
-  // Preview in new tab
+  // Preview in new tab — show the rendered screen, not raw code
   const handlePreviewNewTab = useCallback(() => {
-    if (!activeGenerated?.tree) return
-    const code = convertTreeToJSX(activeGenerated.tree)
+    if (!activeGeneratedId) return
+    const el = phoneFrameRefs.current.get(activeGeneratedId)
+    if (!el) { setToastMessage('No screen to preview'); return }
+    // Grab the already-rendered HTML inside the phone frame
+    const renderedContent = el.querySelector('.phone-screen')?.innerHTML || el.innerHTML
+    // Collect all stylesheets from the current page
+    const styles = Array.from(document.styleSheets).map(sheet => {
+      try { return Array.from(sheet.cssRules).map(r => r.cssText).join('\n') } catch { return '' }
+    }).join('\n')
+    const screenName = activeGenerated?.name || 'Screen'
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${activeGenerated.name} - Mokkoi Preview</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F172A;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:-apple-system,system-ui,sans-serif}</style>
+<title>${screenName} - Mokkoi Preview</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0A0A0A;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:-apple-system,system-ui,sans-serif}
+${styles}
+</style>
 </head><body>
-<div style="width:390px;min-height:844px;background:#0F172A;overflow:auto">
-<pre style="color:#94a3b8;font-size:11px;padding:16px;white-space:pre-wrap">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+<div style="width:390px;min-height:844px;background:#0F172A;overflow:auto;border-radius:24px;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+${renderedContent}
 </div></body></html>`
     const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank')
-  }, [activeGenerated])
+  }, [activeGeneratedId, activeGenerated])
 
   // Show QR Code
   const handleShowQrCode = useCallback(() => {
@@ -683,19 +695,71 @@ function App() {
     if (!activeGeneratedId) return
     const el = phoneFrameRefs.current.get(activeGeneratedId)
     if (!el) { setToastMessage('Could not capture screen'); return }
+    const screenName = activeGenerated?.name || 'screen'
     try {
       const canvas = await html2canvas(el, {
-        backgroundColor: '#000',
+        backgroundColor: '#0A0A0A',
         scale: 2,
         useCORS: true,
+        allowTaint: true,
+        logging: false,
       })
-      const link = document.createElement('a')
-      link.download = `${activeGenerated?.name || 'screen'}.png`
-      link.href = canvas.toDataURL('image/png')
-      link.click()
-      setToastMessage('Image downloaded!')
+      canvas.toBlob(blob => {
+        if (!blob) { setToastMessage('Failed to generate image'); return }
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${screenName}.png`
+        a.click()
+        URL.revokeObjectURL(url)
+        setToastMessage('Image downloaded!')
+      }, 'image/png')
     } catch {
-      setToastMessage('Failed to capture image')
+      // Fallback: use SVG foreignObject approach
+      try {
+        const content = el.innerHTML
+        const width = el.offsetWidth
+        const height = el.offsetHeight
+        const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * 2}" height="${height * 2}">
+          <foreignObject width="100%" height="100%" style="transform:scale(2);transform-origin:0 0">
+            <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;background:#0A0A0A;overflow:hidden">
+              ${content}
+            </div>
+          </foreignObject>
+        </svg>`
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+        const url = URL.createObjectURL(svgBlob)
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = width * 2
+          canvas.height = height * 2
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.fillStyle = '#0A0A0A'
+            ctx.fillRect(0, 0, canvas.width, canvas.height)
+            ctx.drawImage(img, 0, 0)
+          }
+          canvas.toBlob(pngBlob => {
+            if (!pngBlob) { setToastMessage('Failed to generate image'); return }
+            const dlUrl = URL.createObjectURL(pngBlob)
+            const a = document.createElement('a')
+            a.href = dlUrl
+            a.download = `${screenName}.png`
+            a.click()
+            URL.revokeObjectURL(dlUrl)
+            setToastMessage('Image downloaded!')
+          }, 'image/png')
+          URL.revokeObjectURL(url)
+        }
+        img.onerror = () => {
+          setToastMessage('Failed to capture image — try right-clicking the screen instead')
+          URL.revokeObjectURL(url)
+        }
+        img.src = url
+      } catch {
+        setToastMessage('Failed to capture image — try right-clicking the screen instead')
+      }
     }
   }, [activeGeneratedId, activeGenerated])
 
@@ -1077,14 +1141,24 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
                     marginLeft: 4,
                   }}>
                     {[
-                      { label: 'Undo', icon: <Undo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Z' },
-                      { label: 'Redo', icon: <Redo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Y' },
-                      { label: 'Copy', icon: <ClipboardCopy size={14} color="#94a3b8" />, shortcut: 'Ctrl+C' },
-                      { label: 'Paste', icon: <Clipboard size={14} color="#94a3b8" />, shortcut: 'Ctrl+V' },
+                      { label: 'Undo', icon: <Undo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Z', action: () => { setToastMessage('Undo — coming soon'); } },
+                      { label: 'Redo', icon: <Redo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Y', action: () => { setToastMessage('Redo — coming soon'); } },
+                      { label: 'Copy', icon: <ClipboardCopy size={14} color="#94a3b8" />, shortcut: 'Ctrl+C', action: () => {
+                        if (activeGenerated?.tree) {
+                          const code = convertTreeToJSX(activeGenerated.tree)
+                          navigator.clipboard.writeText(code).then(
+                            () => setToastMessage('Code copied!'),
+                            () => setToastMessage('Failed to copy code')
+                          )
+                        } else {
+                          setToastMessage('No screen selected to copy')
+                        }
+                      }},
+                      { label: 'Paste', icon: <Clipboard size={14} color="#94a3b8" />, shortcut: 'Ctrl+V', action: () => { setToastMessage('Paste — coming soon'); } },
                     ].map(item => (
                       <button
                         key={item.label}
-                        onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false); setShowEditSubmenu(false) }}
+                        onClick={() => { item.action(); setShowHamburgerMenu(false); setShowEditSubmenu(false) }}
                         style={{ ...hamburgerItemStyle, fontSize: 12, padding: '7px 10px', justifyContent: 'space-between' }}
                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
