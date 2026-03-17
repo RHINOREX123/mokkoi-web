@@ -800,91 +800,59 @@ function App() {
     setToastMessage('Resized to iPad (768×1024)')
   }, [])
 
-  // Download as image
+  // Download as image — clone element to avoid transform/zoom issues, then html2canvas
   const handleDownloadImage = useCallback(async () => {
     if (!activeGeneratedId) return
-    // Try ref first, then DOM fallback
-    let el: HTMLElement | null = phoneFrameRefs.current.get(activeGeneratedId) ?? null
+    const el = document.querySelector(`[data-screen-id="${activeGeneratedId}"]`) as HTMLElement | null
+      ?? phoneFrameRefs.current.get(activeGeneratedId) ?? null
     if (!el) {
-      el = document.querySelector(`[data-screen-id="${activeGeneratedId}"]`)
-    }
-    if (!el) {
-      console.error('Download image: no element found for screen', activeGeneratedId)
       setToastMessage('Could not find screen to capture')
       return
     }
     const screenName = activeGenerated?.name || 'screen'
-    console.log('Capturing element:', el, 'innerHTML length:', el.innerHTML?.length)
     setToastMessage('Capturing screenshot...')
+
+    // Clone element and strip transforms so html2canvas gets a clean render
+    const clone = el.cloneNode(true) as HTMLElement
+    clone.style.transform = 'none'
+    clone.style.position = 'fixed'
+    clone.style.top = '0'
+    clone.style.left = '0'
+    clone.style.zIndex = '-9999'
+    clone.style.opacity = '1'
+    clone.style.pointerEvents = 'none'
+    clone.style.boxShadow = 'none'
+    document.body.appendChild(clone)
+
     try {
-      const canvas = await html2canvas(el, {
+      const canvas = await html2canvas(clone, {
         backgroundColor: '#0A0A0A',
         scale: 2,
         useCORS: true,
         allowTaint: true,
         logging: false,
+        width: clone.offsetWidth,
+        height: clone.offsetHeight,
+        windowWidth: clone.offsetWidth,
+        windowHeight: clone.offsetHeight,
       })
-      console.log('Canvas captured:', canvas.width, 'x', canvas.height)
       canvas.toBlob(blob => {
         if (!blob) { setToastMessage('Failed to generate image'); return }
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
         a.download = `${screenName}.png`
+        document.body.appendChild(a)
         a.click()
+        document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        setToastMessage('Image downloaded!')
+        setToastMessage('Screenshot saved!')
       }, 'image/png')
     } catch (err) {
       console.error('html2canvas failed:', err)
-      // Fallback: use SVG foreignObject approach
-      try {
-        setToastMessage('Trying alternative capture...')
-        const content = el.innerHTML
-        const width = el.offsetWidth
-        const height = el.offsetHeight
-        const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * 2}" height="${height * 2}">
-          <foreignObject width="100%" height="100%" style="transform:scale(2);transform-origin:0 0">
-            <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;background:#0A0A0A;overflow:hidden">
-              ${content}
-            </div>
-          </foreignObject>
-        </svg>`
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
-        const url = URL.createObjectURL(svgBlob)
-        const img = new Image()
-        img.onload = () => {
-          const cvs = document.createElement('canvas')
-          cvs.width = width * 2
-          cvs.height = height * 2
-          const ctx = cvs.getContext('2d')
-          if (ctx) {
-            ctx.fillStyle = '#0A0A0A'
-            ctx.fillRect(0, 0, cvs.width, cvs.height)
-            ctx.drawImage(img, 0, 0)
-          }
-          cvs.toBlob(pngBlob => {
-            if (!pngBlob) { setToastMessage('Failed to generate image'); return }
-            const dlUrl = URL.createObjectURL(pngBlob)
-            const a = document.createElement('a')
-            a.href = dlUrl
-            a.download = `${screenName}.png`
-            a.click()
-            URL.revokeObjectURL(dlUrl)
-            setToastMessage('Image downloaded!')
-          }, 'image/png')
-          URL.revokeObjectURL(url)
-        }
-        img.onerror = () => {
-          console.error('SVG fallback also failed')
-          setToastMessage('Failed to capture image — try right-clicking the screen instead')
-          URL.revokeObjectURL(url)
-        }
-        img.src = url
-      } catch (fallbackErr) {
-        console.error('SVG fallback error:', fallbackErr)
-        setToastMessage(`Failed to capture: ${fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error'}`)
-      }
+      setToastMessage(`Screenshot failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      document.body.removeChild(clone)
     }
   }, [activeGeneratedId, activeGenerated])
 
