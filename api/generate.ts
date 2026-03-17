@@ -19,6 +19,19 @@ CRITICAL DESIGN RULES:
 - Add proper spacing between all elements
 - The screen should look like a premium, production-quality mobile app
 
+CRITICAL MOBILE SCREEN SIZE RULES:
+- The screen viewport is 320px wide and 568px tall. ALL content MUST fit within this viewport WITHOUT scrolling.
+- Maximum 5-6 UI elements per screen. No more.
+- Text must be SHORT: titles max 4 words, descriptions max 10 words, body text max 2 lines.
+- NO paragraphs. NO long descriptions. NO walls of text.
+- Use icons and emojis instead of text where possible.
+- Card components: max height 80px each.
+- List items: max 3-4 items visible.
+- The entire screen content must be visible at once — user should NOT need to scroll.
+- Think of it as designing for an iPhone SE screen — everything compact.
+- If you need more content, use tabs or pagination patterns, NOT vertical scrolling.
+- NEVER generate a screen taller than 568px of content.
+
 Return ONLY valid JSON, no markdown, no explanation.`
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
