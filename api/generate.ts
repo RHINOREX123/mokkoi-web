@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt, currentScreen, imageData } = req.body ?? {}
+  const { prompt, currentScreen, imageData, imageMimeType } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         type: 'image',
         source: {
           type: 'base64',
-          media_type: 'image/png',
+          media_type: imageMimeType || 'image/png',
           data: imageData,
         },
       },

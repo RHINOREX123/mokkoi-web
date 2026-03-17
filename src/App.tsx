@@ -45,18 +45,37 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
-  // Pan state
+  // Pan state — Figma-style translate-based panning
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
   const panStart = useRef({ x: 0, y: 0 })
-  const scrollStart = useRef({ x: 0, y: 0 })
+  const panOffsetStart = useRef({ x: 0, y: 0 })
+  const isSpaceHeld = useRef(false)
 
-  // Prevent browser-level Ctrl+scroll zoom on the entire page
+  // Prevent browser-level Ctrl+scroll zoom + spacebar pan shortcut
   useEffect(() => {
     const preventBrowserZoom = (e: WheelEvent) => {
       if (e.ctrlKey) e.preventDefault()
     }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        e.preventDefault()
+        isSpaceHeld.current = true
+      }
+    }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        isSpaceHeld.current = false
+      }
+    }
     document.addEventListener('wheel', preventBrowserZoom, { passive: false })
-    return () => document.removeEventListener('wheel', preventBrowserZoom)
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keyup', handleKeyUp)
+    return () => {
+      document.removeEventListener('wheel', preventBrowserZoom)
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keyup', handleKeyUp)
+    }
   }, [])
 
   useEffect(() => {
@@ -97,7 +116,7 @@ function App() {
     : -1
   const isInFlow = flowScreens.length > 1
 
-  const handleSend = useCallback(async (prompt: string, imageData?: string) => {
+  const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string) => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -225,7 +244,7 @@ function App() {
         body: JSON.stringify({
           prompt,
           ...(editingScreen ? { currentScreen: editingScreen.tree } : {}),
-          ...(imageData ? { imageData } : {}),
+          ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
         }),
       })
 
@@ -288,7 +307,8 @@ function App() {
     reader.onload = () => {
       const result = reader.result as string
       const base64 = result.split(',')[1]
-      handleSend('Recreate this screen design', base64)
+      const mimeType = file.type || 'image/png'
+      handleSend('Recreate this screen design', base64, mimeType)
     }
     reader.readAsDataURL(file)
   }
@@ -299,7 +319,7 @@ function App() {
   // Zoom handlers
   const zoomIn = () => setZoomLevel(z => Math.min(200, z + 10))
   const zoomOut = () => setZoomLevel(z => Math.max(25, z - 10))
-  const resetZoom = () => setZoomLevel(100)
+  const resetZoom = () => { setZoomLevel(100); resetPan() }
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -309,27 +329,29 @@ function App() {
     }
   }, [])
 
-  // Pan handlers
+  // Pan handlers — Figma-style: hand tool, middle mouse, or spacebar+drag
+  const canPan = (e: React.MouseEvent) =>
+    activeTool === 'pan' || e.button === 1 || isSpaceHeld.current
+
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (activeTool !== 'pan') return
+    if (!canPan(e)) return
+    // Prevent middle-click auto-scroll
+    if (e.button === 1) e.preventDefault()
     isPanning.current = true
     panStart.current = { x: e.clientX, y: e.clientY }
-    const canvas = canvasRef.current
-    if (canvas) {
-      scrollStart.current = { x: canvas.scrollLeft, y: canvas.scrollTop }
-    }
+    panOffsetStart.current = { ...panOffset }
     document.body.style.cursor = 'grabbing'
     document.body.style.userSelect = 'none'
   }
 
   const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning.current || activeTool !== 'pan') return
-    const canvas = canvasRef.current
-    if (!canvas) return
+    if (!isPanning.current) return
     const dx = e.clientX - panStart.current.x
     const dy = e.clientY - panStart.current.y
-    canvas.scrollLeft = scrollStart.current.x - dx
-    canvas.scrollTop = scrollStart.current.y - dy
+    setPanOffset({
+      x: panOffsetStart.current.x + dx,
+      y: panOffsetStart.current.y + dy,
+    })
   }
 
   const handleCanvasMouseUp = () => {
@@ -337,6 +359,8 @@ function App() {
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
   }
+
+  const resetPan = () => setPanOffset({ x: 0, y: 0 })
 
   // Toolbar button helper
   const tbBtn = (id: string, icon: React.ReactNode, tooltip: string, onClick?: () => void) => {
@@ -571,14 +595,15 @@ function App() {
           style={{
             width: `${(1 - splitRatio) * 100}%`,
             position: 'relative',
-            overflow: 'auto',
+            overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#E8E8E8',
             backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)',
             backgroundSize: '24px 24px',
-            cursor: activeTool === 'pan' ? (isPanning.current ? 'grabbing' : 'grab') : 'default',
+            backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
+            cursor: (activeTool === 'pan' || isSpaceHeld.current) ? 'grab' : 'default',
           }}
         >
           {/* Canvas content based on state */}
@@ -587,6 +612,7 @@ function App() {
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
               pointerEvents: 'none', userSelect: 'none',
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
             }}>
               <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>
                 Your designs will appear here
@@ -601,9 +627,9 @@ function App() {
               overflowY: 'hidden',
               maxWidth: '100%',
               scrollbarWidth: 'none',
-              transform: `scale(${zoomLevel / 100})`,
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel / 100})`,
               transformOrigin: 'center center',
-              transition: 'transform 0.15s ease-out',
+              transition: isPanning.current ? 'none' : 'transform 0.15s ease-out',
             }}>
               {flowScreens.map((screen, idx) => (
                 <div
@@ -650,9 +676,9 @@ function App() {
             <div style={{
               position: 'relative',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-              transform: `scale(${(zoomLevel / 100) * 0.85})`,
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${(zoomLevel / 100) * 0.85})`,
               transformOrigin: 'center center',
-              transition: 'transform 0.15s ease-out',
+              transition: isPanning.current ? 'none' : 'transform 0.15s ease-out',
               maxHeight: 'calc(100vh - 80px)',
             }}>
               <div style={{

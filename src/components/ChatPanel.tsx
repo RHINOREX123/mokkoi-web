@@ -13,7 +13,7 @@ export interface ChatMessage {
 
 interface ChatPanelProps {
   messages: ChatMessage[]
-  onSend: (prompt: string, imageData?: string) => void
+  onSend: (prompt: string, imageData?: string, imageMimeType?: string) => void
   onExportCode?: () => void
   isGenerating: boolean
   initialPrompt?: string
@@ -103,8 +103,9 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
     if ((!prompt && !attachedImage) || isGenerating) return
     setInput('')
     const imgData = attachedImage?.data ?? undefined
+    const imgMimeType = attachedImage?.mediaType ?? undefined
     setAttachedImage(null)
-    onSend(prompt, imgData)
+    onSend(prompt, imgData, imgMimeType)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
