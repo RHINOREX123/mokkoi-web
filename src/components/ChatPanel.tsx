@@ -7,6 +7,8 @@ export interface ChatMessage {
   timestamp: number
   /** Base64 image data for screenshot messages */
   imageData?: string
+  /** Screen names for flow messages (clickable links) */
+  flowScreenNames?: string[]
 }
 
 interface ChatPanelProps {
@@ -15,6 +17,8 @@ interface ChatPanelProps {
   onExportCode?: () => void
   isGenerating: boolean
   initialPrompt?: string
+  /** Callback when user clicks a screen name in a flow message */
+  onFlowScreenClick?: (screenName: string) => void
 }
 
 const PLACEHOLDERS = [
@@ -29,6 +33,7 @@ const EXAMPLE_CARDS = [
   { emoji: '\u{1F510}', title: 'Login Screen', desc: 'Email, password & social auth', prompt: 'A login screen with email, password fields and social auth buttons for Google and Apple' },
   { emoji: '\u{1F4AC}', title: 'Chat Interface', desc: 'Message bubbles & avatars', prompt: 'A chat interface with message bubbles, user avatars, and a message input bar' },
   { emoji: '\u{1F6D2}', title: 'Product Page', desc: 'Images, price & reviews', prompt: 'An e-commerce product page with product image, price, star reviews, and add to cart button' },
+  { emoji: '\u{1F504}', title: 'App Flow', desc: 'Complete onboarding or checkout flow', prompt: 'Create a complete onboarding flow for a mobile app with welcome, sign up, profile setup, preferences, and home screen' },
 ]
 
 const QUICK_SUGGESTIONS = [
@@ -45,7 +50,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -136,7 +141,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
   // Check if the last message is an assistant (non-error) message — show suggestions
   const lastMsg = messages[messages.length - 1]
-  const showSuggestions = lastMsg?.role === 'assistant' && !lastMsg.content.startsWith('Error:') && !isGenerating
+  const showSuggestions = lastMsg?.role === 'assistant' && !lastMsg.content.startsWith('Error:') && !lastMsg.flowScreenNames && !isGenerating
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -177,7 +182,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
               gridTemplateColumns: '1fr 1fr',
               gap: 10,
             }}>
-              {EXAMPLE_CARDS.map(card => (
+              {EXAMPLE_CARDS.map((card, idx) => (
                 <button
                   key={card.title}
                   onClick={() => onSend(card.prompt)}
@@ -190,6 +195,8 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                     textAlign: 'left',
                     cursor: 'pointer',
                     transition: 'all 0.25s ease',
+                    // 5th card spans full width
+                    ...(idx === 4 ? { gridColumn: '1 / -1' } : {}),
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
@@ -278,6 +285,41 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                   </div>
                 )}
                 {msg.content}
+
+                {/* Flow screen names as clickable links */}
+                {msg.flowScreenNames && msg.flowScreenNames.length > 0 && (
+                  <div style={{
+                    display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10,
+                  }}>
+                    {msg.flowScreenNames.map(name => (
+                      <button
+                        key={name}
+                        onClick={() => onFlowScreenClick?.(name)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 10,
+                          fontSize: 11,
+                          fontWeight: 500,
+                          color: '#a5b4fc',
+                          background: 'rgba(99,102,241,0.12)',
+                          border: '1px solid rgba(99,102,241,0.25)',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'rgba(99,102,241,0.25)'
+                          e.currentTarget.style.borderColor = 'rgba(99,102,241,0.5)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'rgba(99,102,241,0.12)'
+                          e.currentTarget.style.borderColor = 'rgba(99,102,241,0.25)'
+                        }}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

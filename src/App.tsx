@@ -11,6 +11,20 @@ interface GeneratedScreen {
   name: string
   tree: ComponentNode
   messages: ChatMessage[]
+  /** If this screen is part of a flow, all screens in the flow share the same flowId */
+  flowId?: string
+}
+
+const FLOW_KEYWORDS = [
+  'flow', 'onboarding', 'walkthrough', 'multi-screen', 'complete app',
+  'full app', 'series of screens', 'connected screens', 'user journey',
+  'navigation flow', 'multi screen', 'multiple screens', 'screen flow',
+  'app flow', 'checkout flow', 'signup flow', 'sign up flow',
+]
+
+function isFlowPrompt(prompt: string): boolean {
+  const lower = prompt.toLowerCase()
+  return FLOW_KEYWORDS.some(kw => lower.includes(kw))
 }
 
 function App() {
@@ -60,6 +74,27 @@ function App() {
   // Messages for the active screen (or empty for new screen)
   const activeMessages = activeGenerated?.messages ?? []
 
+  // Flow navigation: get sibling screens if active screen is part of a flow
+  const activeFlowId = activeGenerated?.flowId
+  const flowScreens = activeFlowId
+    ? generatedScreens.filter(s => s.flowId === activeFlowId)
+    : []
+  const flowIndex = activeFlowId
+    ? flowScreens.findIndex(s => s.id === activeGeneratedId)
+    : -1
+  const isInFlow = flowScreens.length > 1
+
+  const handleFlowPrev = () => {
+    if (isInFlow && flowIndex > 0) {
+      setActiveGeneratedId(flowScreens[flowIndex - 1].id)
+    }
+  }
+  const handleFlowNext = () => {
+    if (isInFlow && flowIndex < flowScreens.length - 1) {
+      setActiveGeneratedId(flowScreens[flowIndex + 1].id)
+    }
+  }
+
   const handleSend = useCallback(async (prompt: string, imageData?: string) => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -69,12 +104,92 @@ function App() {
       imageData,
     }
 
+    // Detect flow requests
+    const flowRequest = isFlowPrompt(prompt) && !imageData
+
     // If we have an active generated screen, we're editing it
     const editingScreenId = activeGeneratedId
     const editingScreen = editingScreenId
       ? generatedScreens.find(s => s.id === editingScreenId)
       : null
 
+    // Don't use flow mode when editing an existing screen
+    if (flowRequest && !editingScreen) {
+      // === FLOW GENERATION ===
+      const placeholderId = crypto.randomUUID()
+      const placeholderName = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
+      const placeholderScreen: GeneratedScreen = {
+        id: placeholderId,
+        name: placeholderName,
+        tree: { type: 'View', style: {}, children: [] },
+        messages: [userMsg],
+      }
+      setGeneratedScreens(prev => [...prev, placeholderScreen])
+      setActiveGeneratedId(placeholderId)
+      setIsGenerating(true)
+
+      try {
+        const res = await fetch('/api/generate-flow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        })
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData.error || 'Failed to generate flow')
+        }
+
+        const { screens } = await res.json()
+        const flowId = crypto.randomUUID()
+        const screenNames = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { name: string }) => s.name)
+
+        // Create flow screens
+        const flowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }, i: number) => ({
+          id: crypto.randomUUID(),
+          name: s.name,
+          tree: s.tree,
+          flowId,
+          messages: i === 0
+            ? [
+                userMsg,
+                {
+                  id: crypto.randomUUID(),
+                  role: 'assistant' as const,
+                  content: `Generated a flow with ${screens.length} screens: ${screenNames.join(' → ')}`,
+                  timestamp: Date.now(),
+                  flowScreenNames: screenNames,
+                },
+              ]
+            : [],
+        }))
+
+        // Replace placeholder with flow screens
+        setGeneratedScreens(prev => {
+          const withoutPlaceholder = prev.filter(s => s.id !== placeholderId)
+          return [...withoutPlaceholder, ...flowScreens]
+        })
+        setActiveGeneratedId(flowScreens[0].id)
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
+        const errorMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Error: ${errorMessage}`,
+          timestamp: Date.now(),
+        }
+        setGeneratedScreens(prev => prev.map(s =>
+          s.id === placeholderId
+            ? { ...s, messages: [...s.messages, errorMsg] }
+            : s
+        ))
+      } finally {
+        setIsGenerating(false)
+      }
+      return
+    }
+
+    // === SINGLE SCREEN GENERATION (original logic) ===
     let targetId: string
 
     if (editingScreen) {
@@ -147,6 +262,14 @@ function App() {
       setIsGenerating(false)
     }
   }, [activeGeneratedId, generatedScreens])
+
+  // Handle clicking a screen name in a flow message
+  const handleFlowScreenClick = (screenName: string) => {
+    const screen = generatedScreens.find(s => s.name === screenName && s.flowId)
+    if (screen) {
+      setActiveGeneratedId(screen.id)
+    }
+  }
 
   const startDragging = () => {
     isDragging.current = true
@@ -322,6 +445,7 @@ function App() {
           </div>
           <div style={{
             position: 'relative',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
             transform: 'scale(0.85)',
             transformOrigin: 'center center',
             maxHeight: 'calc(100vh - 80px)',
@@ -331,6 +455,57 @@ function App() {
               generatedTree={generatedTree}
               isGenerating={isGenerating}
             />
+
+            {/* Flow navigation arrows — only shown when active screen is part of a flow */}
+            {isInFlow && !isGenerating && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 16,
+                padding: '8px 16px',
+                borderRadius: 20,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}>
+                <button
+                  onClick={handleFlowPrev}
+                  disabled={flowIndex <= 0}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: flowIndex > 0 ? 'pointer' : 'not-allowed',
+                    background: flowIndex > 0 ? 'rgba(99,102,241,0.15)' : 'transparent',
+                    color: flowIndex > 0 ? '#a5b4fc' : '#334155',
+                    border: '1px solid',
+                    borderColor: flowIndex > 0 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  ← Previous
+                </button>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                  Screen {flowIndex + 1} of {flowScreens.length}
+                </span>
+                <button
+                  onClick={handleFlowNext}
+                  disabled={flowIndex >= flowScreens.length - 1}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: flowIndex < flowScreens.length - 1 ? 'pointer' : 'not-allowed',
+                    background: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.15)' : 'transparent',
+                    color: flowIndex < flowScreens.length - 1 ? '#a5b4fc' : '#334155',
+                    border: '1px solid',
+                    borderColor: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -378,6 +553,7 @@ function App() {
             onExportCode={() => generatedTree && setShowCodeExport(true)}
             isGenerating={isGenerating}
             initialPrompt={initialPrompt}
+            onFlowScreenClick={handleFlowScreenClick}
           />
         </div>
       </div>
