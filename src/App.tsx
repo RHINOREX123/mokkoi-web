@@ -96,6 +96,7 @@ function App() {
   const [showEditSubmenu, setShowEditSubmenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
+  const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Resizable panel — left is chat (28%), right is canvas (72%)
   const [splitRatio, setSplitRatio] = useState(0.28)
@@ -274,6 +275,7 @@ function App() {
   // Prevent browser-level Ctrl+scroll zoom + spacebar pan shortcut
   useEffect(() => {
     const preventBrowserZoom = (e: WheelEvent) => {
+      // Prevent browser zoom on Ctrl+scroll globally
       if (e.ctrlKey) e.preventDefault()
     }
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -297,8 +299,8 @@ function App() {
           setFocusTrigger(t => t + 1)
           return
         }
-        if (e.key === '=' || e.key === '+') { e.preventDefault(); setZoomLevel(z => Math.min(200, z + 10)); return }
-        if (e.key === '-') { e.preventDefault(); setZoomLevel(z => Math.max(25, z - 10)); return }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); setZoomLevel(z => Math.min(300, z + 5)); return }
+        if (e.key === '-') { e.preventDefault(); setZoomLevel(z => Math.max(25, z - 5)); return }
         if ((e.ctrlKey || e.metaKey) && e.key === '0') { e.preventDefault(); setZoomLevel(100); setPanOffset({ x: 0, y: 0 }); return }
         if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); if (hasTreeRef.current) setShowCodeExport(true); return }
       }
@@ -596,32 +598,63 @@ function App() {
   const hasScreens = generatedScreens.length > 0
 
   // Zoom handlers
-  const zoomIn = () => setZoomLevel(z => Math.min(200, z + 10))
-  const zoomOut = () => setZoomLevel(z => Math.max(25, z - 10))
+  const zoomIn = () => setZoomLevel(z => Math.min(300, z + 5))
+  const zoomOut = () => setZoomLevel(z => Math.max(25, z - 5))
   const resetZoom = () => { setZoomLevel(100); resetPan() }
 
-  const handleCanvasWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
+  // Canvas wheel handler — attached natively with { passive: false } so preventDefault works
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const handleWheel = (e: WheelEvent) => {
+      // Prevent ALL default wheel behavior on canvas (no browser scroll)
       e.preventDefault()
-      const delta = e.deltaY > 0 ? -10 : 10
-      setZoomLevel(z => Math.min(200, Math.max(25, z + delta)))
+      e.stopPropagation()
+
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom toward mouse cursor position
+        const rect = el.getBoundingClientRect()
+        const mx = e.clientX - rect.left - rect.width / 2
+        const my = e.clientY - rect.top - rect.height / 2
+
+        setZoomLevel(prevZoom => {
+          const delta = e.deltaY > 0 ? -5 : 5
+          const newZoom = Math.min(300, Math.max(25, prevZoom + delta))
+          const scaleFactor = newZoom / prevZoom
+          setPanOffset(prev => ({
+            x: mx - scaleFactor * (mx - prev.x),
+            y: my - scaleFactor * (my - prev.y),
+          }))
+          return newZoom
+        })
+      } else if (e.shiftKey) {
+        // Shift + scroll = horizontal pan
+        setPanOffset(prev => ({ ...prev, x: prev.x - e.deltaY }))
+      } else {
+        // Regular scroll = vertical pan (+ honor deltaX for trackpad horizontal)
+        setPanOffset(prev => ({
+          x: prev.x - e.deltaX,
+          y: prev.y - e.deltaY,
+        }))
+      }
     }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
   }, [])
 
   // Pan handlers — Figma-style: hand tool, middle mouse, or spacebar+drag
-  // Works ANYWHERE on canvas (empty space, phones, reference images)
-  const shouldPan = (e: React.MouseEvent) =>
-    activeTool === 'pan' || e.button === 1 || isSpaceHeld.current
-
+  // Middle-click and spacebar ALWAYS pan regardless of active tool
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (!shouldPan(e)) return
-    if (e.button === 1) e.preventDefault()
-    isPanning.current = true
-    didPan.current = false
-    panStart.current = { x: e.clientX, y: e.clientY }
-    panOffsetStart.current = { ...panOffset }
-    document.body.style.cursor = 'grabbing'
-    document.body.style.userSelect = 'none'
+    // Middle-click and spacebar always start pan, regardless of tool
+    if (e.button === 1 || isSpaceHeld.current || activeTool === 'pan') {
+      if (e.button === 1) e.preventDefault()
+      isPanning.current = true
+      didPan.current = false
+      panStart.current = { x: e.clientX, y: e.clientY }
+      panOffsetStart.current = { ...panOffset }
+      document.body.style.cursor = 'grabbing'
+      document.body.style.userSelect = 'none'
+    }
   }
 
   const resetPan = () => setPanOffset({ x: 0, y: 0 })
@@ -794,22 +827,31 @@ function App() {
               </button>
               <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
 
-              {/* Edit submenu */}
-              <div style={{ position: 'relative' }}>
+              {/* Edit submenu — opens on hover to the right */}
+              <div
+                style={{ position: 'relative' }}
+                onMouseEnter={() => { if (editSubmenuTimer.current) { clearTimeout(editSubmenuTimer.current); editSubmenuTimer.current = null } setShowEditSubmenu(true) }}
+                onMouseLeave={() => { editSubmenuTimer.current = setTimeout(() => setShowEditSubmenu(false), 200) }}
+              >
                 <button
-                  onClick={() => setShowEditSubmenu(s => !s)}
-                  style={{ ...hamburgerItemStyle, justifyContent: 'space-between' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  style={{ ...hamburgerItemStyle, justifyContent: 'space-between', background: showEditSubmenu ? 'rgba(255,255,255,0.06)' : 'transparent' }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <Pencil size={16} color="#94a3b8" />
                     Edit
                   </span>
-                  <ChevronRight size={14} color="#555" style={{ transform: showEditSubmenu ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                  <ChevronRight size={14} color="#555" />
                 </button>
                 {showEditSubmenu && (
-                  <div style={{ padding: '2px 0 2px 20px' }}>
+                  <div style={{
+                    position: 'absolute', left: '100%', top: 0,
+                    background: '#1A1A1A',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 12, padding: 4,
+                    boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+                    zIndex: 101, minWidth: 200,
+                    marginLeft: 4,
+                  }}>
                     {[
                       { label: 'Undo', icon: <Undo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Z' },
                       { label: 'Redo', icon: <Redo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Y' },
@@ -1247,7 +1289,6 @@ function App() {
         <div
           ref={canvasRef}
           className="canvas-side"
-          onWheel={handleCanvasWheel}
           onMouseDown={handleCanvasMouseDown}
           onClick={handleCanvasClick}
           style={{
