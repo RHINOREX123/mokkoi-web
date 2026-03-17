@@ -31,14 +31,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt, currentScreen } = req.body ?? {}
+  const { prompt, currentScreen, imageData } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
 
-  // Build user message — include current screen if editing
-  let userContent: string
-  if (currentScreen) {
+  // Build user message — include current screen if editing, or image if attached
+  let userContent: string | Array<{ type: string; [key: string]: unknown }>
+  if (imageData && typeof imageData === 'string') {
+    // Screenshot-to-screen: send image with text prompt
+    const textPrompt = currentScreen
+      ? `Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${prompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
+      : `Analyze this screenshot and recreate it as a React Native component tree JSON. The user says: ${prompt}\n\nRecreate this design faithfully using the supported component types. Match the layout, colors, typography, and spacing as closely as possible. Remember: ALL backgrounds must be dark theme. Return ONLY valid JSON.`
+    userContent = [
+      {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/png',
+          data: imageData,
+        },
+      },
+      { type: 'text', text: textPrompt },
+    ]
+  } else if (currentScreen) {
     userContent = `Here is the current screen JSON that the user wants to modify:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user's edit request: ${prompt}\n\nModify the existing screen based on their request. Keep unchanged parts the same. Return the complete modified JSON.`
   } else {
     userContent = prompt

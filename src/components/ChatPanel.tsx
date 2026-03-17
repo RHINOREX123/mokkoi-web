@@ -5,11 +5,13 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: number
+  /** Base64 image data for screenshot messages */
+  imageData?: string
 }
 
 interface ChatPanelProps {
   messages: ChatMessage[]
-  onSend: (prompt: string) => void
+  onSend: (prompt: string, imageData?: string) => void
   onExportCode?: () => void
   isGenerating: boolean
   initialPrompt?: string
@@ -48,7 +50,9 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
   const [genStep, setGenStep] = useState(0)
+  const [attachedImage, setAttachedImage] = useState<{ data: string; name: string; mediaType: string } | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const initialPromptHandled = useRef(false)
 
   // Cycle placeholder text
@@ -88,10 +92,12 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
   }, [initialPrompt, onSend])
 
   const handleSend = () => {
-    const prompt = input.trim()
-    if (!prompt || isGenerating) return
+    const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')
+    if ((!prompt && !attachedImage) || isGenerating) return
     setInput('')
-    onSend(prompt)
+    const imgData = attachedImage?.data ?? undefined
+    setAttachedImage(null)
+    onSend(prompt, imgData)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -101,12 +107,48 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
     }
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      // result is "data:image/png;base64,AAAA..."
+      const base64 = result.split(',')[1]
+      const mediaType = file.type || 'image/png'
+      setAttachedImage({ data: base64, name: file.name, mediaType })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSuggestionClick = (s: string) => {
+    if (s === 'Export code') {
+      if (onExportCode) {
+        onExportCode()
+      }
+      return
+    }
+    onSend(s)
+  }
+
   // Check if the last message is an assistant (non-error) message — show suggestions
   const lastMsg = messages[messages.length - 1]
   const showSuggestions = lastMsg?.role === 'assistant' && !lastMsg.content.startsWith('Error:') && !isGenerating
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".png,.jpg,.jpeg,.webp"
+        style={{ display: 'none' }}
+        onChange={handleFileSelect}
+      />
+
       {/* Messages area - scrollable */}
       <div style={{
         flex: 1,
@@ -220,6 +262,21 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                   ),
                 }}
               >
+                {/* Show attached image thumbnail in user messages */}
+                {msg.imageData && (
+                  <div style={{ marginBottom: 8 }}>
+                    <img
+                      src={`data:image/png;base64,${msg.imageData}`}
+                      alt="Attached screenshot"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: 120,
+                        borderRadius: 8,
+                        border: '1px solid rgba(255,255,255,0.1)',
+                      }}
+                    />
+                  </div>
+                )}
                 {msg.content}
               </div>
             </div>
@@ -230,7 +287,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                 {QUICK_SUGGESTIONS.map(s => (
                   <button
                     key={s}
-                    onClick={() => s === 'Export code' && onExportCode ? onExportCode() : onSend(s)}
+                    onClick={() => handleSuggestionClick(s)}
                     style={{
                       padding: '5px 12px',
                       borderRadius: 20,
@@ -309,11 +366,55 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
       {/* Input bar */}
       <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', background: '#0c0c0e' }}>
+        {/* Attached image preview */}
+        {attachedImage && (
+          <div style={{
+            marginBottom: 10,
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '8px 12px',
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12,
+          }}>
+            <img
+              src={`data:${attachedImage.mediaType};base64,${attachedImage.data}`}
+              alt="Attached"
+              style={{
+                width: 48, height: 48, borderRadius: 8,
+                objectFit: 'cover',
+                border: '1px solid rgba(255,255,255,0.1)',
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: '#F1F5F9', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {attachedImage.name}
+              </div>
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                Screenshot attached — will recreate as screen
+              </div>
+            </div>
+            <button
+              onClick={() => setAttachedImage(null)}
+              style={{
+                width: 24, height: 24, borderRadius: 6,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: '#94A3B8', fontSize: 14, cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              &times;
+            </button>
+          </div>
+        )}
+
         <div className="chat-input-bar relative transition-all duration-200">
           <div className="flex items-center gap-2 px-4" style={{ height: 56 }}>
             {/* Attachment button */}
             <button
               title="Attach screenshot"
+              onClick={() => fileInputRef.current?.click()}
               className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 cursor-pointer"
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
@@ -334,7 +435,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                 className="w-full bg-transparent text-[14px] text-mokkoi-text outline-none disabled:opacity-50"
                 style={{ caretColor: '#818cf8' }}
               />
-              {!input && (
+              {!input && !attachedImage && (
                 <span
                   className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none text-[14px] text-white/25 transition-opacity duration-300"
                   style={{ opacity: placeholderVisible ? 1 : 0 }}
@@ -342,30 +443,35 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                   {PLACEHOLDERS[placeholderIdx]}
                 </span>
               )}
+              {!input && attachedImage && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none text-[14px] text-white/25">
+                  Describe the screen, or press Generate
+                </span>
+              )}
             </div>
 
             {/* Generate button */}
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isGenerating}
+              disabled={(!input.trim() && !attachedImage) || isGenerating}
               className="shrink-0 flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed text-[13px] font-semibold text-white"
               style={{
                 padding: '8px 20px',
                 borderRadius: 10,
-                background: input.trim() && !isGenerating
+                background: (input.trim() || attachedImage) && !isGenerating
                   ? 'linear-gradient(135deg, #6366f1, #818cf8)'
                   : 'rgba(255,255,255,0.06)',
-                boxShadow: input.trim() && !isGenerating
+                boxShadow: (input.trim() || attachedImage) && !isGenerating
                   ? '0 2px 12px rgba(99,102,241,0.2)'
                   : 'none',
               }}
               onMouseEnter={e => {
-                if (input.trim() && !isGenerating) {
+                if ((input.trim() || attachedImage) && !isGenerating) {
                   e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,0.35)'
                 }
               }}
               onMouseLeave={e => {
-                if (input.trim() && !isGenerating) {
+                if ((input.trim() || attachedImage) && !isGenerating) {
                   e.currentTarget.style.boxShadow = '0 2px 12px rgba(99,102,241,0.2)'
                 }
               }}

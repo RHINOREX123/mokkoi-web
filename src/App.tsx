@@ -60,12 +60,13 @@ function App() {
   // Messages for the active screen (or empty for new screen)
   const activeMessages = activeGenerated?.messages ?? []
 
-  const handleSend = useCallback(async (prompt: string) => {
+  const handleSend = useCallback(async (prompt: string, imageData?: string) => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content: prompt,
       timestamp: Date.now(),
+      imageData,
     }
 
     // If we have an active generated screen, we're editing it
@@ -107,6 +108,7 @@ function App() {
         body: JSON.stringify({
           prompt,
           ...(editingScreen ? { currentScreen: editingScreen.tree } : {}),
+          ...(imageData ? { imageData } : {}),
         }),
       })
 
