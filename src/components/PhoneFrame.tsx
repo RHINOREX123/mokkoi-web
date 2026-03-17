@@ -1,9 +1,7 @@
-import type { Screen, ComponentNode } from '../types/mokkoi'
+import type { ComponentNode } from '../types/mokkoi'
 import { ScreenRenderer } from './ScreenRenderer'
-import { MOCK_SCREEN_TREES } from '../data/mockScreens'
 
 interface PhoneFrameProps {
-  screen: Screen | undefined
   /** Component tree from AI-generated screen */
   generatedTree?: ComponentNode
   /** Whether a screen is currently being generated */
@@ -48,12 +46,7 @@ function ShimmerSkeleton() {
   )
 }
 
-export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFrameProps) {
-  // Use AI-generated tree, or fall back to sidebar-selected screen
-  const componentTree = generatedTree ?? screen?.componentTree ?? MOCK_SCREEN_TREES[screen?.component ?? '']
-
-  const showContent = generatedTree || (screen && componentTree)
-
+export function PhoneFrame({ generatedTree, isGenerating }: PhoneFrameProps) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -83,7 +76,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
             </div>
           </div>
 
-          {/* Screen content area - scrollable like a real phone */}
+          {/* Screen content area */}
           <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
           <div
             className="flex-1 rounded-b-[36px] overflow-hidden phone-screen"
@@ -97,7 +90,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
           >
             {isGenerating ? (
               <ShimmerSkeleton />
-            ) : showContent ? (
+            ) : generatedTree ? (
               <div
                 className="phone-screen"
                 style={{
@@ -108,27 +101,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
                   scrollbarWidth: 'none',
                 }}
               >
-                <ScreenRenderer tree={(generatedTree ?? componentTree)!} />
-              </div>
-            ) : screen ? (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-6">
-                <div className="w-12 h-12 rounded-2xl bg-mokkoi-accent/10 flex items-center justify-center">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="1.5">
-                    <rect x="3" y="4" width="8" height="14" rx="2"/>
-                    <rect x="13" y="4" width="8" height="14" rx="2" opacity="0.4"/>
-                  </svg>
-                </div>
-                <div className="text-center">
-                  <div className="text-[14px] font-medium text-mokkoi-text mb-1">{screen.name}</div>
-                  <div className="text-[12px] text-mokkoi-text-dim leading-relaxed">
-                    Waiting for component render<br />from Mokkoi MCP server
-                  </div>
-                </div>
-                <div className="flex gap-1.5 mt-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_infinite]" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-mokkoi-accent/40 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
-                </div>
+                <ScreenRenderer tree={generatedTree} />
               </div>
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6">

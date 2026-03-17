@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
-import { useMokkoiSocket } from './hooks/useMokkoiSocket'
 import type { ComponentNode } from './types/mokkoi'
 
 interface GeneratedScreen {
@@ -31,17 +30,13 @@ function App() {
   const [searchParams] = useSearchParams()
   const initialPrompt = searchParams.get('prompt') || undefined
 
-  const {
-    selectedScreen,
-  } = useMokkoiSocket()
-
   const [generatedScreens, setGeneratedScreens] = useState<GeneratedScreen[]>([])
   const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [showCodeExport, setShowCodeExport] = useState(false)
 
-  // Resizable panel
-  const [splitRatio, setSplitRatio] = useState(0.55)
+  // Resizable panel — left is chat (38%), right is canvas (62%)
+  const [splitRatio, setSplitRatio] = useState(0.38)
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -50,7 +45,7 @@ function App() {
       if (!isDragging.current || !containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
       let ratio = (e.clientX - rect.left) / rect.width
-      ratio = Math.max(0.3, Math.min(0.7, ratio))
+      ratio = Math.max(0.25, Math.min(0.55, ratio))
       setSplitRatio(ratio)
     }
     const handleMouseUp = () => {
@@ -83,17 +78,6 @@ function App() {
     ? flowScreens.findIndex(s => s.id === activeGeneratedId)
     : -1
   const isInFlow = flowScreens.length > 1
-
-  const handleFlowPrev = () => {
-    if (isInFlow && flowIndex > 0) {
-      setActiveGeneratedId(flowScreens[flowIndex - 1].id)
-    }
-  }
-  const handleFlowNext = () => {
-    if (isInFlow && flowIndex < flowScreens.length - 1) {
-      setActiveGeneratedId(flowScreens[flowIndex + 1].id)
-    }
-  }
 
   const handleSend = useCallback(async (prompt: string, imageData?: string) => {
     const userMsg: ChatMessage = {
@@ -145,7 +129,7 @@ function App() {
         const screenNames = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { name: string }) => s.name)
 
         // Create flow screens
-        const flowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }, i: number) => ({
+        const newFlowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }, i: number) => ({
           id: crypto.randomUUID(),
           name: s.name,
           tree: s.tree,
@@ -156,7 +140,7 @@ function App() {
                 {
                   id: crypto.randomUUID(),
                   role: 'assistant' as const,
-                  content: `Generated a flow with ${screens.length} screens: ${screenNames.join(' → ')}`,
+                  content: `Generated a flow with ${screens.length} screens: ${screenNames.join(' \u2192 ')}`,
                   timestamp: Date.now(),
                   flowScreenNames: screenNames,
                 },
@@ -167,9 +151,9 @@ function App() {
         // Replace placeholder with flow screens
         setGeneratedScreens(prev => {
           const withoutPlaceholder = prev.filter(s => s.id !== placeholderId)
-          return [...withoutPlaceholder, ...flowScreens]
+          return [...withoutPlaceholder, ...newFlowScreens]
         })
-        setActiveGeneratedId(flowScreens[0].id)
+        setActiveGeneratedId(newFlowScreens[0].id)
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
         const errorMsg: ChatMessage = {
@@ -277,6 +261,9 @@ function App() {
     document.body.style.userSelect = 'none'
   }
 
+  // Determine canvas state
+  const hasScreens = generatedScreens.length > 0
+
   return (
     <div className="app-shell" style={{ height: '100vh', background: '#000000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Navbar */}
@@ -291,7 +278,7 @@ function App() {
           gap: 12,
         }}
       >
-        {/* Left: logo */}
+        {/* Left: logo + Design Studio */}
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
           <div
             style={{
@@ -306,9 +293,8 @@ function App() {
           <span style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>Mokkoi</span>
         </a>
 
-        {/* Center: Design Studio label */}
         <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 14, userSelect: 'none', flexShrink: 0 }}>|</span>
-        <span style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0', flexShrink: 0 }}>Design Studio</span>
+        <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b', flexShrink: 0 }}>Design Studio</span>
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
@@ -418,135 +404,23 @@ function App() {
         </div>
       </nav>
 
-      {/* Main content: side-by-side layout with draggable divider */}
+      {/* Main content: LEFT = Chat, RIGHT = Canvas */}
       <div
         ref={containerRef}
+        className="main-panels"
         style={{
           flex: 1, minHeight: 0, display: 'flex', position: 'relative',
         }}
       >
-        {/* Left: Phone frame centered */}
-        <div style={{
-          width: `${splitRatio * 100}%`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative', overflow: 'hidden',
-          background: '#000000',
-        }}>
-          {/* Background glow */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'none',
-          }}>
-            <div style={{
-              width: 500, height: 500, borderRadius: '50%',
-              background: 'rgba(129,140,248,0.03)', filter: 'blur(100px)',
-            }} />
-          </div>
-          <div style={{
-            position: 'relative',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-            transform: 'scale(0.85)',
-            transformOrigin: 'center center',
-            maxHeight: 'calc(100vh - 80px)',
-          }}>
-            <PhoneFrame
-              screen={showingGenerated ? undefined : selectedScreen}
-              generatedTree={generatedTree}
-              isGenerating={isGenerating}
-            />
-
-            {/* Flow navigation arrows — only shown when active screen is part of a flow */}
-            {isInFlow && !isGenerating && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 16,
-                padding: '8px 16px',
-                borderRadius: 20,
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}>
-                <button
-                  onClick={handleFlowPrev}
-                  disabled={flowIndex <= 0}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: 12,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: flowIndex > 0 ? 'pointer' : 'not-allowed',
-                    background: flowIndex > 0 ? 'rgba(99,102,241,0.15)' : 'transparent',
-                    color: flowIndex > 0 ? '#a5b4fc' : '#334155',
-                    border: '1px solid',
-                    borderColor: flowIndex > 0 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  ← Previous
-                </button>
-                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                  Screen {flowIndex + 1} of {flowScreens.length}
-                </span>
-                <button
-                  onClick={handleFlowNext}
-                  disabled={flowIndex >= flowScreens.length - 1}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: 12,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: flowIndex < flowScreens.length - 1 ? 'pointer' : 'not-allowed',
-                    background: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.15)' : 'transparent',
-                    color: flowIndex < flowScreens.length - 1 ? '#a5b4fc' : '#334155',
-                    border: '1px solid',
-                    borderColor: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  Next →
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Draggable divider */}
+        {/* LEFT: Chat panel */}
         <div
-          onMouseDown={startDragging}
+          className="chat-side"
           style={{
-            width: 4,
-            cursor: 'col-resize',
-            background: 'rgba(255,255,255,0.06)',
-            position: 'relative',
-            flexShrink: 0,
-            transition: 'background 0.2s',
-            zIndex: 10,
+            width: `${splitRatio * 100}%`,
+            display: 'flex', flexDirection: 'column', minHeight: 0,
+            background: '#0A0A0A',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }}
-          onMouseLeave={e => { if (!isDragging.current) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
         >
-          {/* Drag handle dots */}
-          <div style={{
-            position: 'absolute', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            display: 'flex', flexDirection: 'column', gap: 3,
-            pointerEvents: 'none',
-          }}>
-            {[0,1,2].map(i => (
-              <div key={i} style={{
-                width: 3, height: 3, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.3)',
-              }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Right: Chat panel */}
-        <div style={{
-          width: `${(1 - splitRatio) * 100}%`,
-          borderLeft: 'none',
-          display: 'flex', flexDirection: 'column', minHeight: 0,
-          background: '#0a0a0a',
-        }}>
           <ChatPanel
             messages={activeMessages}
             onSend={handleSend}
@@ -556,7 +430,216 @@ function App() {
             onFlowScreenClick={handleFlowScreenClick}
           />
         </div>
+
+        {/* Draggable divider */}
+        <div
+          onMouseDown={startDragging}
+          style={{
+            width: 1,
+            cursor: 'col-resize',
+            background: 'rgba(255,255,255,0.06)',
+            position: 'relative',
+            flexShrink: 0,
+            transition: 'background 0.2s',
+            zIndex: 10,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.width = '3px' }}
+          onMouseLeave={e => { if (!isDragging.current) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.width = '1px' } }}
+        />
+
+        {/* RIGHT: Canvas */}
+        <div
+          className="canvas-side"
+          style={{
+            width: `${(1 - splitRatio) * 100}%`,
+            position: 'relative',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#050505',
+            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
+        >
+          {/* Canvas content based on state */}
+          {!hasScreens && !isGenerating ? (
+            /* EMPTY STATE — no screens generated yet */
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+              pointerEvents: 'none', userSelect: 'none',
+            }}>
+              {/* Phone outline icon */}
+              <svg width="48" height="72" viewBox="0 0 48 72" fill="none" style={{ opacity: 0.2 }}>
+                <rect x="2" y="2" width="44" height="68" rx="10" stroke="white" strokeWidth="2" strokeDasharray="4 3" />
+                <rect x="18" y="60" width="12" height="3" rx="1.5" fill="white" opacity="0.3" />
+                <rect x="16" y="6" width="16" height="4" rx="2" fill="white" opacity="0.2" />
+              </svg>
+              <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>
+                Your designs will appear here
+              </span>
+            </div>
+          ) : isInFlow && !isGenerating ? (
+            /* FLOW MODE — multiple smaller phone frames in a horizontal row */
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 32,
+              padding: '0 40px',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              maxWidth: '100%',
+              scrollbarWidth: 'none',
+            }}>
+              {flowScreens.map((screen, idx) => (
+                <div
+                  key={screen.id}
+                  onClick={() => setActiveGeneratedId(screen.id)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transform: 'scale(0.65)',
+                    transformOrigin: 'center center',
+                    transition: 'transform 0.2s',
+                  }}
+                >
+                  <div style={{
+                    borderRadius: 52,
+                    boxShadow: screen.id === activeGeneratedId
+                      ? '0 0 30px rgba(99,102,241,0.3), 0 0 60px rgba(99,102,241,0.1)'
+                      : '0 0 30px rgba(0,0,0,0.3)',
+                    border: screen.id === activeGeneratedId
+                      ? '2px solid rgba(99,102,241,0.5)'
+                      : '2px solid transparent',
+                    transition: 'all 0.25s',
+                  }}>
+                    <PhoneFrame
+                      generatedTree={screen.tree}
+                      isGenerating={false}
+                    />
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 500,
+                    color: screen.id === activeGeneratedId ? '#a5b4fc' : '#64748b',
+                    textAlign: 'center',
+                    maxWidth: 120,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    transition: 'color 0.2s',
+                  }}>
+                    {idx + 1}. {screen.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* SINGLE SCREEN or generating — one phone frame centered */
+            <div style={{
+              position: 'relative',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+              transform: 'scale(0.85)',
+              transformOrigin: 'center center',
+              maxHeight: 'calc(100vh - 80px)',
+            }}>
+              {/* Subtle glow behind phone */}
+              {showingGenerated && !isGenerating && (
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: 300, height: 400, borderRadius: '50%',
+                  background: 'rgba(99,102,241,0.06)',
+                  filter: 'blur(80px)',
+                  pointerEvents: 'none',
+                }} />
+              )}
+              <div style={{
+                borderRadius: 52,
+                boxShadow: showingGenerated && !isGenerating
+                  ? '0 0 40px rgba(99,102,241,0.15), 0 0 80px rgba(99,102,241,0.05)'
+                  : 'none',
+                border: showingGenerated && !isGenerating
+                  ? '2px solid rgba(99,102,241,0.2)'
+                  : '2px solid transparent',
+                transition: 'all 0.3s',
+              }}>
+                <PhoneFrame
+                  generatedTree={generatedTree}
+                  isGenerating={isGenerating}
+                />
+              </div>
+
+              {/* Flow navigation arrows — only shown when active screen is part of a flow */}
+              {isInFlow && !isGenerating && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 16,
+                  padding: '8px 16px',
+                  borderRadius: 20,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}>
+                  <button
+                    onClick={() => { if (flowIndex > 0) setActiveGeneratedId(flowScreens[flowIndex - 1].id) }}
+                    disabled={flowIndex <= 0}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      cursor: flowIndex > 0 ? 'pointer' : 'not-allowed',
+                      background: flowIndex > 0 ? 'rgba(99,102,241,0.15)' : 'transparent',
+                      color: flowIndex > 0 ? '#a5b4fc' : '#334155',
+                      border: '1px solid',
+                      borderColor: flowIndex > 0 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    \u2190 Previous
+                  </button>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    Screen {flowIndex + 1} of {flowScreens.length}
+                  </span>
+                  <button
+                    onClick={() => { if (flowIndex < flowScreens.length - 1) setActiveGeneratedId(flowScreens[flowIndex + 1].id) }}
+                    disabled={flowIndex >= flowScreens.length - 1}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      cursor: flowIndex < flowScreens.length - 1 ? 'pointer' : 'not-allowed',
+                      background: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.15)' : 'transparent',
+                      color: flowIndex < flowScreens.length - 1 ? '#a5b4fc' : '#334155',
+                      border: '1px solid',
+                      borderColor: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    Next \u2192
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Responsive styles */}
+      <style>{`
+        @media (max-width: 768px) {
+          .main-panels {
+            flex-direction: column !important;
+          }
+          .chat-side {
+            width: 100% !important;
+            height: 50% !important;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+          }
+          .canvas-side {
+            width: 100% !important;
+            height: 50% !important;
+          }
+        }
+      `}</style>
 
       {/* Code Export Modal */}
       {showCodeExport && generatedTree && (
