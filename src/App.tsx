@@ -6,6 +6,11 @@ import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
 import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2 } from 'lucide-react'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
+import { ScreenContextToolbar } from './components/ScreenContextToolbar'
+import { VariationsPanel, type VariationSettings } from './components/VariationsPanel'
+import { QrCodeModal } from './components/QrCodeModal'
+import { convertTreeToJSX } from './components/CodeExportModal'
+import html2canvas from 'html2canvas'
 import type { ComponentNode } from './types/mokkoi'
 import { supabase } from './lib/supabase'
 import type { User } from '@supabase/supabase-js'
@@ -96,6 +101,13 @@ function App() {
   const [focusTrigger, setFocusTrigger] = useState(0)
   const [showEditSubmenu, setShowEditSubmenu] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
+  const [showVariationsPanel, setShowVariationsPanel] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [qrUrl, setQrUrl] = useState('')
+  const [showDeleteScreenConfirm, setShowDeleteScreenConfirm] = useState(false)
+  const [editingScreenLabel, setEditingScreenLabel] = useState<string | null>(null)
+  const [editingScreenLabelValue, setEditingScreenLabelValue] = useState('')
+  const [isGeneratingVariations, setIsGeneratingVariations] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
   const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -107,6 +119,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const hasTreeRef = useRef(false)
+  const phoneFrameRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // Pan state — Figma-style translate-based panning
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
@@ -594,6 +607,211 @@ function App() {
     const [, mimeType, base64] = match
     handleSend('Recreate this screen design', base64, mimeType, true)
   }
+
+  // === Screen Context Toolbar Handlers ===
+
+  // Regenerate: re-send original prompt for the selected screen
+  const handleRegenerate = useCallback(() => {
+    if (!activeGenerated) return
+    // Find the original user message that generated this screen
+    const screenIdx = generatedScreens.findIndex(s => s.id === activeGeneratedId)
+    const screenName = activeGenerated.name
+    // Use the screen name as the regeneration prompt
+    handleSend(`Regenerate: ${screenName}`, undefined, undefined, false)
+  }, [activeGenerated, activeGeneratedId, generatedScreens, handleSend])
+
+  // Edit via chat: focus chat input with editing context
+  const handleEditViaChat = useCallback(() => {
+    setFocusTrigger(t => t + 1)
+  }, [])
+
+  // Change color scheme: pre-fill chat
+  const handleChangeColorScheme = useCallback(() => {
+    // We'll use a custom event to set the chat input text
+    const event = new CustomEvent('mokkoi-set-chat-input', {
+      detail: { text: 'Change the color scheme of this screen to ' }
+    })
+    window.dispatchEvent(event)
+    setFocusTrigger(t => t + 1)
+  }, [])
+
+  // Make darker / lighter
+  const handleMakeDarker = useCallback(() => {
+    if (!activeGeneratedId) return
+    handleSend('Make this screen darker with a dark theme')
+  }, [activeGeneratedId, handleSend])
+
+  const handleMakeLighter = useCallback(() => {
+    if (!activeGeneratedId) return
+    handleSend('Make this screen lighter with a light theme')
+  }, [activeGeneratedId, handleSend])
+
+  // Preview in new tab
+  const handlePreviewNewTab = useCallback(() => {
+    if (!activeGenerated?.tree) return
+    const code = convertTreeToJSX(activeGenerated.tree)
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${activeGenerated.name} - Mokkoi Preview</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F172A;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:-apple-system,system-ui,sans-serif}</style>
+</head><body>
+<div style="width:390px;min-height:844px;background:#0F172A;overflow:auto">
+<pre style="color:#94a3b8;font-size:11px;padding:16px;white-space:pre-wrap">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+</div></body></html>`
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  }, [activeGenerated])
+
+  // Show QR Code
+  const handleShowQrCode = useCallback(() => {
+    if (!projectId) return
+    const previewUrl = `${window.location.origin}/view/${projectId}`
+    setQrUrl(previewUrl)
+    setShowQrModal(true)
+  }, [projectId])
+
+  // Resize phone frame (these are visual-only hints for now)
+  const handleResizeMobile = useCallback(() => {
+    setToastMessage('Resized to iPhone 14 (390×844)')
+  }, [])
+
+  const handleResizeTablet = useCallback(() => {
+    setToastMessage('Resized to iPad (768×1024)')
+  }, [])
+
+  // Download as image
+  const handleDownloadImage = useCallback(async () => {
+    if (!activeGeneratedId) return
+    const el = phoneFrameRefs.current.get(activeGeneratedId)
+    if (!el) { setToastMessage('Could not capture screen'); return }
+    try {
+      const canvas = await html2canvas(el, {
+        backgroundColor: '#000',
+        scale: 2,
+        useCORS: true,
+      })
+      const link = document.createElement('a')
+      link.download = `${activeGenerated?.name || 'screen'}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+      setToastMessage('Image downloaded!')
+    } catch {
+      setToastMessage('Failed to capture image')
+    }
+  }, [activeGeneratedId, activeGenerated])
+
+  // Duplicate screen
+  const handleDuplicateScreen = useCallback(() => {
+    if (!activeGenerated) return
+    const newScreen: GeneratedScreen = {
+      id: crypto.randomUUID(),
+      name: `${activeGenerated.name} (copy)`,
+      tree: JSON.parse(JSON.stringify(activeGenerated.tree)),
+      flowId: activeGenerated.flowId,
+    }
+    setGeneratedScreens(prev => [...prev, newScreen])
+    setActiveGeneratedId(newScreen.id)
+    setToastMessage('Screen duplicated!')
+  }, [activeGenerated])
+
+  // Rename screen
+  const handleRenameScreen = useCallback(() => {
+    if (!activeGenerated) return
+    setEditingScreenLabel(activeGenerated.id)
+    setEditingScreenLabelValue(activeGenerated.name)
+  }, [activeGenerated])
+
+  const commitScreenRename = useCallback(() => {
+    if (!editingScreenLabel) return
+    const newName = editingScreenLabelValue.trim() || 'Untitled'
+    setGeneratedScreens(prev => prev.map(s =>
+      s.id === editingScreenLabel ? { ...s, name: newName } : s
+    ))
+    setEditingScreenLabel(null)
+  }, [editingScreenLabel, editingScreenLabelValue])
+
+  // Delete screen
+  const handleDeleteScreen = useCallback(async () => {
+    if (!activeGeneratedId || !projectId) return
+    // Remove from Supabase
+    await supabase.from('screens').delete().eq('id', activeGeneratedId)
+    // Remove from state
+    setGeneratedScreens(prev => prev.filter(s => s.id !== activeGeneratedId))
+    setActiveGeneratedId(null)
+    setShowDeleteScreenConfirm(false)
+    setToastMessage('Screen deleted')
+  }, [activeGeneratedId, projectId])
+
+  // Generate variations
+  const handleGenerateVariations = useCallback(async (settings: VariationSettings) => {
+    if (!activeGenerated?.tree) return
+    setIsGeneratingVariations(true)
+
+    const creativeDesc = {
+      refine: 'Make very small, subtle changes — keep the overall structure and design nearly identical but tweak minor details.',
+      explore: 'Make moderate changes — try different arrangements, color variations, or component styles while keeping the same general purpose.',
+      reimagine: 'Create a completely different design — reimagine the screen from scratch with a new layout, style, and visual approach.',
+    }
+
+    const aspectInstructions: string[] = []
+    if (settings.aspects.layout) aspectInstructions.push('Vary the layout and arrangement of elements.')
+    if (settings.aspects.colorScheme) aspectInstructions.push('Use a different color scheme.')
+    if (settings.aspects.images) aspectInstructions.push('Change image placements and styles.')
+    if (settings.aspects.textFont) aspectInstructions.push('Use different font sizes and weights.')
+    if (settings.aspects.textContent) aspectInstructions.push('Change the text content.')
+
+    const originalTree = JSON.stringify(activeGenerated.tree)
+
+    // Create placeholder screens for each variation
+    const placeholders: GeneratedScreen[] = []
+    for (let i = 0; i < settings.count; i++) {
+      const ph: GeneratedScreen = {
+        id: crypto.randomUUID(),
+        name: `${activeGenerated.name} v${i + 1}`,
+        tree: { type: 'View', style: {}, children: [] },
+      }
+      placeholders.push(ph)
+    }
+    setGeneratedScreens(prev => [...prev, ...placeholders])
+    setActiveGeneratedId(placeholders[0].id)
+
+    // Generate each variation in parallel
+    const promises = placeholders.map(async (ph, i) => {
+      const variationPrompt = `You are creating variation ${i + 1} of a mobile screen design.
+
+Here is the original screen's component tree JSON:
+${originalTree}
+
+Creative direction: ${creativeDesc[settings.creativeRange]}
+${aspectInstructions.length > 0 ? 'Aspects to change: ' + aspectInstructions.join(' ') : ''}
+${settings.customInstructions ? 'Additional instructions: ' + settings.customInstructions : ''}
+
+Generate a new version of this screen as a variation. Return ONLY the JSON component tree.`
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: variationPrompt }),
+        })
+        if (!res.ok) throw new Error('Failed')
+        const { tree } = await res.json()
+        setGeneratedScreens(prev => prev.map(s =>
+          s.id === ph.id ? { ...s, tree } : s
+        ))
+      } catch {
+        setGeneratedScreens(prev => prev.map(s =>
+          s.id === ph.id ? { ...s, name: `${ph.name} (failed)` } : s
+        ))
+      }
+    })
+
+    await Promise.all(promises)
+    setIsGeneratingVariations(false)
+    setShowVariationsPanel(false)
+    setToastMessage(`Generated ${settings.count} variations!`)
+  }, [activeGenerated])
 
   // Determine canvas state
   const hasScreens = generatedScreens.length > 0
@@ -1353,26 +1571,49 @@ function App() {
                     }}
                   >
                     {/* Screen label */}
-                    <span style={{
-                      fontSize: 11, fontWeight: 600,
-                      color: isActive ? '#6366f1' : '#888',
-                      textAlign: 'center', maxWidth: 200,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      transition: 'color 0.2s',
-                      padding: '2px 8px', borderRadius: 6,
-                      background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent',
-                    }}>
-                      {idx + 1}. {screen.name}
-                    </span>
+                    {editingScreenLabel === screen.id ? (
+                      <input
+                        autoFocus
+                        value={editingScreenLabelValue}
+                        onChange={e => setEditingScreenLabelValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') commitScreenRename(); if (e.key === 'Escape') setEditingScreenLabel(null) }}
+                        onBlur={commitScreenRename}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          fontSize: 11, fontWeight: 600,
+                          color: '#6366f1',
+                          textAlign: 'center', maxWidth: 200, width: 160,
+                          padding: '2px 8px', borderRadius: 6,
+                          background: 'rgba(99,102,241,0.1)',
+                          border: '1px solid rgba(99,102,241,0.4)',
+                          outline: 'none',
+                        }}
+                      />
+                    ) : (
+                      <span style={{
+                        fontSize: 11, fontWeight: 600,
+                        color: isActive ? '#6366f1' : '#888',
+                        textAlign: 'center', maxWidth: 200,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        transition: 'color 0.2s',
+                        padding: '2px 8px', borderRadius: 6,
+                        background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent',
+                      }}>
+                        {idx + 1}. {screen.name}
+                      </span>
+                    )}
 
                     {/* Phone frame with selection highlight */}
-                    <div style={{
-                      borderRadius: 52,
-                      boxShadow: isActive
-                        ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)'
-                        : '0 8px 32px rgba(0,0,0,0.2)',
-                      transition: 'box-shadow 0.25s',
-                    }}>
+                    <div
+                      ref={el => { if (el) phoneFrameRefs.current.set(screen.id, el); else phoneFrameRefs.current.delete(screen.id) }}
+                      style={{
+                        borderRadius: 52,
+                        boxShadow: isActive
+                          ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)'
+                          : '0 8px 32px rgba(0,0,0,0.2)',
+                        transition: 'box-shadow 0.25s',
+                      }}
+                    >
                       <PhoneFrame
                         generatedTree={!isImage ? screen.tree : undefined}
                         imageUrl={isImage ? screen.imageUrl : undefined}
@@ -1457,6 +1698,30 @@ function App() {
               ))}
             </div>
           )}
+
+          {/* Screen Context Toolbar — appears when a screen is selected */}
+          <ScreenContextToolbar
+            visible={!!activeGeneratedId && !!activeGenerated?.tree}
+            screenName={activeGenerated?.name || ''}
+            screenTree={activeGenerated?.tree}
+            screenId={activeGeneratedId || ''}
+            onRegenerate={handleRegenerate}
+            onOpenVariations={() => setShowVariationsPanel(true)}
+            onEditViaChat={handleEditViaChat}
+            onChangeColorScheme={handleChangeColorScheme}
+            onMakeDarker={handleMakeDarker}
+            onMakeLighter={handleMakeLighter}
+            onPreviewNewTab={handlePreviewNewTab}
+            onShowQrCode={handleShowQrCode}
+            onResizeMobile={handleResizeMobile}
+            onResizeTablet={handleResizeTablet}
+            onExportCode={() => { if (generatedTree) setShowCodeExport(true) }}
+            onDownloadImage={handleDownloadImage}
+            onDuplicate={handleDuplicateScreen}
+            onRename={handleRenameScreen}
+            onDelete={() => setShowDeleteScreenConfirm(true)}
+            onToast={setToastMessage}
+          />
 
           {/* Bottom canvas toolbar */}
           <div style={{
@@ -1551,6 +1816,78 @@ function App() {
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
       />
+
+      {/* Variations Panel */}
+      <VariationsPanel
+        isOpen={showVariationsPanel}
+        onClose={() => setShowVariationsPanel(false)}
+        onGenerate={handleGenerateVariations}
+        isGenerating={isGeneratingVariations}
+      />
+
+      {/* QR Code Modal */}
+      {showQrModal && (
+        <QrCodeModal
+          url={qrUrl}
+          onClose={() => setShowQrModal(false)}
+        />
+      )}
+
+      {/* Delete Screen Confirmation */}
+      {showDeleteScreenConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(4px)',
+        }}
+          onClick={() => setShowDeleteScreenConfirm(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#1A1A1A',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 16, padding: 24,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+              minWidth: 340, maxWidth: 400,
+            }}
+          >
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#f1f5f9' }}>
+              Delete this screen?
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8' }}>
+              This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteScreenConfirm(false)}
+                style={{
+                  padding: '8px 16px', borderRadius: 8,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#e2e8f0', fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteScreen}
+                style={{
+                  padding: '8px 16px', borderRadius: 8,
+                  background: 'rgba(248,113,113,0.15)',
+                  border: '1px solid rgba(248,113,113,0.3)',
+                  color: '#f87171', fontSize: 13, fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

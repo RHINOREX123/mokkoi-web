@@ -102,6 +102,19 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
     }
   }, [focusTrigger])
 
+  // Listen for external input text events (from toolbar actions)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.text) {
+        setInput(detail.text)
+        setTimeout(() => chatInputRef.current?.focus(), 50)
+      }
+    }
+    window.addEventListener('mokkoi-set-chat-input', handler)
+    return () => window.removeEventListener('mokkoi-set-chat-input', handler)
+  }, [])
+
   // Handle initial prompt from URL
   useEffect(() => {
     if (initialPrompt && !initialPromptHandled.current) {
