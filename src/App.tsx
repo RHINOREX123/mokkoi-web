@@ -775,41 +775,18 @@ function App() {
     return () => document.removeEventListener('keydown', handler)
   }, [directEditMode, exitDirectEdit])
 
-  // Preview in new tab — show the rendered screen in a phone-like frame
+  // Preview in new tab — open dedicated preview route
   const handlePreviewNewTab = useCallback(() => {
-    if (!activeGeneratedId) return
-    const el = phoneFrameRefs.current.get(activeGeneratedId)
-      ?? document.querySelector(`[data-screen-id="${activeGeneratedId}"]`) as HTMLElement | null
-    if (!el) { setToastMessage('No screen to preview'); return }
-    // Grab the already-rendered HTML inside the phone frame
-    const renderedContent = el.querySelector('.phone-screen')?.innerHTML || el.innerHTML
-    // Collect all stylesheets from the current page
-    const styles = Array.from(document.styleSheets).map(sheet => {
-      try { return Array.from(sheet.cssRules).map(r => r.cssText).join('\n') } catch { return '' }
-    }).join('\n')
-    const screenName = activeGenerated?.name || 'Screen'
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=390, initial-scale=1">
-<title>${screenName} \u2014 Mokkoi Preview</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#111111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;font-family:-apple-system,system-ui,sans-serif}
-.phone-shell{max-width:390px;width:390px;min-height:844px;margin:40px auto;border-radius:40px;overflow:hidden;background:#0F172A;box-shadow:0 0 0 2px rgba(255,255,255,0.1),0 20px 60px rgba(0,0,0,0.6),0 0 80px rgba(99,102,241,0.08)}
-${styles}
-</style>
-</head><body>
-<div class="phone-shell">
-${renderedContent}
-</div></body></html>`
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank')
-  }, [activeGeneratedId, activeGenerated])
+    if (!activeGeneratedId || !projectId) return
+    window.open(`/preview/${projectId}/${activeGeneratedId}`, '_blank')
+  }, [activeGeneratedId, projectId])
 
-  // Show QR Code
+  // Show QR Code — use preview route if a screen is selected, otherwise project view
   const handleShowQrCode = useCallback(() => {
     if (!projectId) return
-    const previewUrl = `${window.location.origin}/view/${projectId}`
+    const previewUrl = activeGeneratedId
+      ? `${window.location.origin}/preview/${projectId}/${activeGeneratedId}`
+      : `${window.location.origin}/view/${projectId}`
     setQrUrl(previewUrl)
     setShowQrModal(true)
   }, [projectId])
