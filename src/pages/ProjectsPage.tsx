@@ -35,6 +35,7 @@ export default function ProjectsPage() {
   const [renameValue, setRenameValue] = useState('')
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const renameRef = useRef<HTMLInputElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
@@ -530,7 +531,7 @@ export default function ProjectsPage() {
                         <Pencil size={14} /> Rename
                       </button>
                       <button
-                        onClick={() => deleteProject(project.id)}
+                        onClick={() => { setDeleteConfirmId(project.id); setMenuOpen(null) }}
                         style={{ ...menuItemStyle, color: '#f87171' }}
                         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
@@ -545,6 +546,71 @@ export default function ProjectsPage() {
           )}
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId && (() => {
+        const project = projects.find(p => p.id === deleteConfirmId)
+        if (!project) return null
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 300,
+              background: 'rgba(0,0,0,0.7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(4px)',
+            }}
+            onClick={() => setDeleteConfirmId(null)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: '#1A1A1A',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 16, padding: 24,
+                boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+                maxWidth: 400, width: '90%',
+              }}
+            >
+              <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#fff' }}>
+                Delete project?
+              </h3>
+              <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8', lineHeight: 1.5 }}>
+                This will permanently delete '{project.name}' and all its screens. This action cannot be undone.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  style={{
+                    padding: '8px 16px', borderRadius: 8,
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#e2e8f0', fontSize: 13, fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { deleteProject(deleteConfirmId); setDeleteConfirmId(null) }}
+                  style={{
+                    padding: '8px 16px', borderRadius: 8,
+                    background: '#EF4444',
+                    border: 'none',
+                    color: '#fff', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#DC2626' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#EF4444' }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Responsive + animations */}
       <style>{`
