@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut } from 'lucide-react'
 import type { ComponentNode } from './types/mokkoi'
+import { supabase } from './lib/supabase'
+import type { User } from '@supabase/supabase-js'
 
 interface GeneratedScreen {
   id: string
@@ -59,6 +61,8 @@ function isCreateIntent(prompt: string): boolean {
 
 function App() {
   const [searchParams] = useSearchParams()
+  const { projectId } = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
   const initialPrompt = searchParams.get('prompt') || undefined
 
   const [generatedScreens, setGeneratedScreens] = useState<GeneratedScreen[]>([])
@@ -80,6 +84,10 @@ function App() {
   // Share toast
   const [showShareToast, setShowShareToast] = useState(false)
 
+  // Auth user
+  const [user, setUser] = useState<User | null>(null)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+
   // Resizable panel — left is chat (28%), right is canvas (72%)
   const [splitRatio, setSplitRatio] = useState(0.28)
   const isDragging = useRef(false)
@@ -95,6 +103,114 @@ function App() {
   const panOffsetStart = useRef({ x: 0, y: 0 })
   const isSpaceHeld = useRef(false)
   const [isSpacePanning, setIsSpacePanning] = useState(false) // state for cursor re-render
+
+  // Debounce timer ref for auto-save
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const projectLoadedRef = useRef(false)
+
+  // Load user on mount
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user))
+  }, [])
+
+  // Load project data from Supabase
+  useEffect(() => {
+    if (!projectId) return
+    const loadProject = async () => {
+      // Load project info
+      const { data: project } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single()
+      if (project) {
+        setProjectName(project.name || 'Untitled Project')
+      }
+
+      // Load screens
+      const { data: screens } = await supabase
+        .from('screens')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('order_index', { ascending: true })
+      if (screens && screens.length > 0) {
+        const loaded: GeneratedScreen[] = screens.map(s => ({
+          id: s.id,
+          name: s.name,
+          tree: s.component_tree as ComponentNode,
+        }))
+        setGeneratedScreens(loaded)
+        setActiveGeneratedId(loaded[0].id)
+      }
+
+      // Load messages
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: true })
+      if (msgs && msgs.length > 0) {
+        const loaded: ChatMessage[] = msgs.map(m => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          timestamp: new Date(m.created_at).getTime(),
+          imageData: m.image_url ?? undefined,
+        }))
+        setProjectMessages(loaded)
+      }
+
+      projectLoadedRef.current = true
+    }
+    loadProject()
+  }, [projectId])
+
+  // Auto-save screens to Supabase (debounced)
+  useEffect(() => {
+    if (!projectId || !projectLoadedRef.current) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      // Upsert all screens
+      for (let i = 0; i < generatedScreens.length; i++) {
+        const s = generatedScreens[i]
+        await supabase.from('screens').upsert({
+          id: s.id,
+          project_id: projectId,
+          name: s.name,
+          component_tree: s.tree,
+          order_index: i,
+          updated_at: new Date().toISOString(),
+        })
+      }
+      // Update project timestamp
+      await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
+    }, 2000)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  }, [generatedScreens, projectId])
+
+  // Save project name to Supabase
+  const saveProjectName = useCallback(async (name: string) => {
+    if (!projectId) return
+    await supabase.from('projects').update({ name, updated_at: new Date().toISOString() }).eq('id', projectId)
+  }, [projectId])
+
+  // Save a message to Supabase
+  const saveMessage = useCallback(async (msg: ChatMessage) => {
+    if (!projectId) return
+    await supabase.from('messages').insert({
+      id: msg.id,
+      project_id: projectId,
+      role: msg.role,
+      content: msg.content,
+      image_url: msg.imageData ?? null,
+    })
+  }, [projectId])
+
+  // Sign out handler
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    navigate('/auth')
+  }
 
   // Focus project name input when editing
   useEffect(() => {
@@ -193,6 +309,7 @@ function App() {
 
     // Add user message to project-level chat
     setProjectMessages(prev => [...prev, userMsg])
+    saveMessage(userMsg)
 
     // Detect flow requests
     const flowRequest = isFlowPrompt(prompt) && !imageData
@@ -271,6 +388,7 @@ function App() {
           flowScreenNames: screenNames,
         }
         setProjectMessages(prev => [...prev, assistantMsg])
+        saveMessage(assistantMsg)
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
         const errorMsg: ChatMessage = {
@@ -280,6 +398,7 @@ function App() {
           timestamp: Date.now(),
         }
         setProjectMessages(prev => [...prev, errorMsg])
+        saveMessage(errorMsg)
       } finally {
         setIsGenerating(false)
       }
@@ -341,6 +460,7 @@ function App() {
         timestamp: Date.now(),
       }
       setProjectMessages(prev => [...prev, assistantMsg])
+      saveMessage(assistantMsg)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
       const errorMsg: ChatMessage = {
@@ -350,10 +470,11 @@ function App() {
         timestamp: Date.now(),
       }
       setProjectMessages(prev => [...prev, errorMsg])
+      saveMessage(errorMsg)
     } finally {
       setIsGenerating(false)
     }
-  }, [activeGeneratedId, generatedScreens])
+  }, [activeGeneratedId, generatedScreens, saveMessage])
 
   // Handle clicking a screen name in a flow message
   const handleFlowScreenClick = (screenName: string) => {
@@ -473,7 +594,9 @@ function App() {
 
   const handleNameBlur = () => {
     setIsEditingName(false)
-    if (!projectName.trim()) setProjectName('Untitled Project')
+    const name = projectName.trim() || 'Untitled Project'
+    if (!projectName.trim()) setProjectName(name)
+    saveProjectName(name)
   }
 
   // Determine canvas cursor
@@ -695,18 +818,53 @@ function App() {
             Share
           </button>
 
-          {/* User avatar */}
-          <div
-            style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 700, color: '#fff',
-              flexShrink: 0, cursor: 'default',
-            }}
-            title="User"
-          >
-            S
+          {/* User avatar + menu */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, color: '#fff',
+                cursor: 'pointer',
+              }}
+              title={user?.user_metadata?.full_name || user?.email || 'User'}
+            >
+              {(user?.user_metadata?.full_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
+            </div>
+            {showUserMenu && (
+              <div
+                style={{
+                  position: 'absolute', top: 36, right: 0,
+                  background: '#1a1a2e',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 10, padding: 4,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  zIndex: 100, minWidth: 160,
+                }}
+              >
+                <div style={{ padding: '8px 12px', fontSize: 12, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  {user?.email}
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    width: '100%', padding: '8px 12px', borderRadius: 6,
+                    background: 'transparent', border: 'none',
+                    color: '#e2e8f0', fontSize: 13, fontWeight: 500,
+                    cursor: 'pointer', textAlign: 'left',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <LogOut size={14} />
+                  Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </nav>

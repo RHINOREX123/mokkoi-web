@@ -1,16 +1,22 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import LandingPage from './pages/LandingPage'
+import AuthPage from './pages/AuthPage'
+import ProjectsPage from './pages/ProjectsPage'
+import AuthGuard from './components/AuthGuard'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/app" element={<App />} />
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/projects" element={<AuthGuard><ProjectsPage /></AuthGuard>} />
+        <Route path="/app/:projectId" element={<AuthGuard><App /></AuthGuard>} />
+        <Route path="/app" element={<Navigate to="/projects" replace />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

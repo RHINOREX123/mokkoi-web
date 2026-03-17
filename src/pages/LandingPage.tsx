@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 /* ─── tiny helpers ─── */
 function FadeIn({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -250,6 +251,31 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [activeScreen, setActiveScreen] = useState(0);
   const [heroPrompt, setHeroPrompt] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Check auth state
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
+  }, []);
+
+  // Auth-aware navigation: logged in → /projects or create project, not logged in → /auth
+  const goToApp = () => navigate(isLoggedIn ? '/projects' : '/auth');
+  const goWithPrompt = async (prompt: string) => {
+    if (!prompt.trim()) return;
+    if (!isLoggedIn) {
+      navigate('/auth');
+      return;
+    }
+    // Create a project and navigate to it with the prompt
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { navigate('/auth'); return; }
+    const { data } = await supabase
+      .from('projects')
+      .insert({ user_id: user.id, name: prompt.slice(0, 30) })
+      .select()
+      .single();
+    if (data) navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`);
+  };
 
   // Cycle screens
   useEffect(() => {
@@ -313,7 +339,7 @@ export default function LandingPage() {
             {['Features', 'How it works', 'Playground'].map((l) => (
               <a
                 key={l}
-                href={l === 'Playground' ? '/app' : `#${l.toLowerCase().replace(/\s/g, '-')}`}
+                href={l === 'Playground' ? (isLoggedIn ? '/projects' : '/auth') : `#${l.toLowerCase().replace(/\s/g, '-')}`}
                 style={{ color: '#94a3b8', fontSize: 14, textDecoration: 'none', transition: 'color .2s' }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = '#f1f5f9')}
                 onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
@@ -333,7 +359,7 @@ export default function LandingPage() {
               Star
             </a>
             <button
-              onClick={() => navigate('/app')}
+              onClick={() => goToApp()}
               style={{
                 background: 'linear-gradient(135deg, #6366f1, #818cf8)',
                 border: 'none',
@@ -356,7 +382,7 @@ export default function LandingPage() {
           {/* Mobile CTA */}
           <button
             className="landing-mobile-cta"
-            onClick={() => navigate('/app')}
+            onClick={() => goToApp()}
             style={{
               background: 'linear-gradient(135deg, #6366f1, #818cf8)',
               border: 'none',
@@ -473,7 +499,7 @@ export default function LandingPage() {
                     type="text"
                     value={heroPrompt}
                     onChange={(e) => setHeroPrompt(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && heroPrompt.trim()) { navigate(`/app?prompt=${encodeURIComponent(heroPrompt.trim())}`); } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && heroPrompt.trim()) { goWithPrompt(heroPrompt.trim()); } }}
                     placeholder="Describe a mobile screen..."
                     style={{
                       flex: 1,
@@ -486,7 +512,7 @@ export default function LandingPage() {
                     }}
                   />
                   <button
-                    onClick={() => { if (heroPrompt.trim()) navigate(`/app?prompt=${encodeURIComponent(heroPrompt.trim())}`); }}
+                    onClick={() => { if (heroPrompt.trim()) goWithPrompt(heroPrompt.trim()); }}
                     style={{
                       background: heroPrompt.trim() ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,.06)',
                       border: 'none',
@@ -511,7 +537,7 @@ export default function LandingPage() {
                 {['Fitness Dashboard', 'Login Screen', 'Chat Interface', 'E-commerce Product', 'Settings Page'].map((chip) => (
                   <button
                     key={chip}
-                    onClick={() => navigate(`/app?prompt=${encodeURIComponent(chip)}`)}
+                    onClick={() => goWithPrompt(chip)}
                     style={{
                       background: 'transparent',
                       border: '1px solid rgba(255,255,255,.1)',
@@ -866,7 +892,7 @@ export default function LandingPage() {
           <FadeIn delay={0.2}>
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
               <button
-                onClick={() => navigate('/app')}
+                onClick={() => goToApp()}
                 style={{
                   background: 'linear-gradient(135deg, #6366f1, #818cf8)',
                   border: 'none',
@@ -971,7 +997,7 @@ export default function LandingPage() {
           <FadeIn delay={0.15}>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap' as const }}>
               <button
-                onClick={() => navigate('/app')}
+                onClick={() => goToApp()}
                 style={{
                   background: 'linear-gradient(135deg, #6366f1, #818cf8)',
                   border: 'none',
