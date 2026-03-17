@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles } from 'lucide-react'
 import type { ComponentNode } from './types/mokkoi'
 
 interface GeneratedScreen {
@@ -13,6 +13,10 @@ interface GeneratedScreen {
   messages: ChatMessage[]
   /** If this screen is part of a flow, all screens in the flow share the same flowId */
   flowId?: string
+  /** Screen type: 'generated' for AI screens, 'image' for uploaded screenshots */
+  type?: 'generated' | 'image'
+  /** Data URL for uploaded screenshot images */
+  imageUrl?: string
 }
 
 const FLOW_KEYWORDS = [
@@ -106,17 +110,8 @@ function App() {
   // Messages for the active screen (or empty for new screen)
   const activeMessages = activeGenerated?.messages ?? []
 
-  // Flow navigation: get sibling screens if active screen is part of a flow
-  const activeFlowId = activeGenerated?.flowId
-  const flowScreens = activeFlowId
-    ? generatedScreens.filter(s => s.flowId === activeFlowId)
-    : []
-  const flowIndex = activeFlowId
-    ? flowScreens.findIndex(s => s.id === activeGeneratedId)
-    : -1
-  const isInFlow = flowScreens.length > 1
 
-  const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string) => {
+  const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean) => {
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -128,8 +123,8 @@ function App() {
     // Detect flow requests
     const flowRequest = isFlowPrompt(prompt) && !imageData
 
-    // If we have an active generated screen, we're editing it
-    const editingScreenId = activeGeneratedId
+    // If we have an active generated screen, we're editing it (unless forceNew)
+    const editingScreenId = forceNew ? null : activeGeneratedId
     const editingScreen = editingScreenId
       ? generatedScreens.find(s => s.id === editingScreenId)
       : null
@@ -298,19 +293,37 @@ function App() {
     document.body.style.userSelect = 'none'
   }
 
-  // Handle file upload from canvas toolbar
+  // Handle file upload from canvas toolbar — places image ON the canvas
   const handleCanvasUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
     const reader = new FileReader()
     reader.onload = () => {
-      const result = reader.result as string
-      const base64 = result.split(',')[1]
-      const mimeType = file.type || 'image/png'
-      handleSend('Recreate this screen design', base64, mimeType)
+      const dataUrl = reader.result as string
+      const name = file.name.replace(/\.[^.]+$/, '')
+      const screenId = crypto.randomUUID()
+      const newScreen: GeneratedScreen = {
+        id: screenId,
+        name: name.length > 20 ? name.slice(0, 20) + '...' : name,
+        tree: { type: 'View', style: {}, children: [] },
+        messages: [],
+        type: 'image',
+        imageUrl: dataUrl,
+      }
+      setGeneratedScreens(prev => [...prev, newScreen])
+      setActiveGeneratedId(screenId)
     }
     reader.readAsDataURL(file)
+  }
+
+  // Generate a screen from an uploaded screenshot on the canvas
+  const handleGenerateFromImage = (screen: GeneratedScreen) => {
+    if (!screen.imageUrl) return
+    const match = screen.imageUrl.match(/^data:([^;]+);base64,(.+)$/)
+    if (!match) return
+    const [, mimeType, base64] = match
+    handleSend('Recreate this screen design', base64, mimeType, true)
   }
 
   // Determine canvas state
@@ -606,9 +619,9 @@ function App() {
             cursor: (activeTool === 'pan' || isSpaceHeld.current) ? 'grab' : 'default',
           }}
         >
-          {/* Canvas content based on state */}
+          {/* Canvas content — multi-screen infinite canvas */}
           {!hasScreens && !isGenerating ? (
-            /* EMPTY STATE — no phone, just centered text on light canvas */
+            /* EMPTY STATE */
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
               pointerEvents: 'none', userSelect: 'none',
@@ -618,130 +631,79 @@ function App() {
                 Your designs will appear here
               </span>
             </div>
-          ) : isInFlow && !isGenerating ? (
-            /* FLOW MODE — multiple smaller phone frames in a horizontal row */
+          ) : (
+            /* ALL SCREENS — horizontal row, each in its own phone frame */
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 32,
-              padding: '0 40px',
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              maxWidth: '100%',
-              scrollbarWidth: 'none',
+              display: 'flex', alignItems: 'flex-start', gap: 40,
+              padding: '40px 60px',
               transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel / 100})`,
               transformOrigin: 'center center',
               transition: isPanning.current ? 'none' : 'transform 0.15s ease-out',
             }}>
-              {flowScreens.map((screen, idx) => (
-                <div
-                  key={screen.id}
-                  onClick={() => setActiveGeneratedId(screen.id)}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    transform: 'scale(0.65)',
-                    transformOrigin: 'center center',
-                    transition: 'transform 0.2s',
-                  }}
-                >
-                  <div style={{
-                    borderRadius: 52,
-                    boxShadow: screen.id === activeGeneratedId
-                      ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 2px rgba(99,102,241,0.5)'
-                      : '0 8px 32px rgba(0,0,0,0.3)',
-                    transition: 'all 0.25s',
-                  }}>
-                    <PhoneFrame
-                      generatedTree={screen.tree}
-                      isGenerating={false}
-                    />
-                  </div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600,
-                    color: screen.id === activeGeneratedId ? '#6366f1' : '#666',
-                    textAlign: 'center',
-                    maxWidth: 120,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    transition: 'color 0.2s',
-                  }}>
-                    {idx + 1}. {screen.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* SINGLE SCREEN or generating — one phone frame centered with shadow */
-            <div style={{
-              position: 'relative',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${(zoomLevel / 100) * 0.85})`,
-              transformOrigin: 'center center',
-              transition: isPanning.current ? 'none' : 'transform 0.15s ease-out',
-              maxHeight: 'calc(100vh - 80px)',
-            }}>
-              <div style={{
-                borderRadius: 52,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-                transition: 'all 0.3s',
-              }}>
-                <PhoneFrame
-                  generatedTree={generatedTree}
-                  isGenerating={isGenerating}
-                />
-              </div>
+              {generatedScreens.map((screen, idx) => {
+                const isActive = screen.id === activeGeneratedId
+                const isScreenGenerating = isGenerating && isActive
+                const isImage = screen.type === 'image'
+                return (
+                  <div
+                    key={screen.id}
+                    onClick={() => setActiveGeneratedId(screen.id)}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                      cursor: 'pointer', flexShrink: 0,
+                    }}
+                  >
+                    {/* Screen label */}
+                    <span style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: isActive ? '#6366f1' : '#888',
+                      textAlign: 'center', maxWidth: 200,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      transition: 'color 0.2s',
+                      padding: '2px 8px', borderRadius: 6,
+                      background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent',
+                    }}>
+                      {idx + 1}. {screen.name}
+                    </span>
 
-              {/* Flow navigation arrows — only shown when active screen is part of a flow */}
-              {isInFlow && !isGenerating && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 16,
-                  padding: '8px 16px',
-                  borderRadius: 20,
-                  background: 'rgba(0,0,0,0.6)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                }}>
-                  <button
-                    onClick={() => { if (flowIndex > 0) setActiveGeneratedId(flowScreens[flowIndex - 1].id) }}
-                    disabled={flowIndex <= 0}
-                    style={{
-                      padding: '4px 12px',
-                      borderRadius: 12,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      cursor: flowIndex > 0 ? 'pointer' : 'not-allowed',
-                      background: flowIndex > 0 ? 'rgba(99,102,241,0.3)' : 'transparent',
-                      color: flowIndex > 0 ? '#fff' : '#666',
-                      border: '1px solid',
-                      borderColor: flowIndex > 0 ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    ← Previous
-                  </button>
-                  <span style={{ fontSize: 11, color: '#ccc', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                    Screen {flowIndex + 1} of {flowScreens.length}
-                  </span>
-                  <button
-                    onClick={() => { if (flowIndex < flowScreens.length - 1) setActiveGeneratedId(flowScreens[flowIndex + 1].id) }}
-                    disabled={flowIndex >= flowScreens.length - 1}
-                    style={{
-                      padding: '4px 12px',
-                      borderRadius: 12,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      cursor: flowIndex < flowScreens.length - 1 ? 'pointer' : 'not-allowed',
-                      background: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.3)' : 'transparent',
-                      color: flowIndex < flowScreens.length - 1 ? '#fff' : '#666',
-                      border: '1px solid',
-                      borderColor: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    Next →
-                  </button>
-                </div>
-              )}
+                    {/* Phone frame with selection highlight */}
+                    <div style={{
+                      borderRadius: 52,
+                      boxShadow: isActive
+                        ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5)'
+                        : '0 8px 32px rgba(0,0,0,0.2)',
+                      transition: 'box-shadow 0.25s',
+                    }}>
+                      <PhoneFrame
+                        generatedTree={!isImage ? screen.tree : undefined}
+                        imageUrl={isImage ? screen.imageUrl : undefined}
+                        isGenerating={isScreenGenerating}
+                      />
+                    </div>
+
+                    {/* "Generate from this" button for uploaded images */}
+                    {isImage && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleGenerateFromImage(screen) }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '6px 14px', borderRadius: 20,
+                          background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                          color: '#fff', fontSize: 11, fontWeight: 600,
+                          border: 'none', cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(99,102,241,0.4)',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)' }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                      >
+                        <Sparkles size={12} />
+                        Generate from this
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 

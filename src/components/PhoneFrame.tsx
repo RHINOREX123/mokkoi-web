@@ -6,6 +6,8 @@ interface PhoneFrameProps {
   generatedTree?: ComponentNode
   /** Whether a screen is currently being generated */
   isGenerating?: boolean
+  /** Data URL for uploaded screenshot images */
+  imageUrl?: string
 }
 
 const PHONE_W = 261
@@ -46,7 +48,7 @@ function ShimmerSkeleton() {
   )
 }
 
-export function PhoneFrame({ generatedTree, isGenerating }: PhoneFrameProps) {
+export function PhoneFrame({ generatedTree, isGenerating, imageUrl }: PhoneFrameProps) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -90,6 +92,13 @@ export function PhoneFrame({ generatedTree, isGenerating }: PhoneFrameProps) {
           >
             {isGenerating ? (
               <ShimmerSkeleton />
+            ) : imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Uploaded screenshot"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                draggable={false}
+              />
             ) : generatedTree ? (
               <div
                 className="phone-screen"
