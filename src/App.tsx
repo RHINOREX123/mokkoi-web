@@ -155,115 +155,100 @@ function App() {
       {/* Navbar */}
       <nav
         style={{
-          height: 56, flexShrink: 0,
+          height: 48, flexShrink: 0,
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', alignItems: 'center',
-          padding: '0 24px', justifyContent: 'space-between',
+          padding: '0 16px',
           background: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+          gap: 12,
         }}
       >
         {/* Left: logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            <div
-              style={{
-                width: 28, height: 28, borderRadius: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                color: '#fff', fontSize: 12, fontWeight: 800,
-              }}
-            >
-              M
-            </div>
-            <span style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>Mokkoi</span>
-          </a>
-          <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: 14, fontWeight: 300, userSelect: 'none' }}>&middot;</span>
-          <span
+        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
+          <div
             style={{
-              fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em',
-              color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 6,
+              width: 26, height: 26, borderRadius: 7,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+              color: '#fff', fontSize: 11, fontWeight: 800,
             }}
           >
-            Playground
-          </span>
-        </div>
+            M
+          </div>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>Mokkoi</span>
+        </a>
 
-        {/* Right: generating indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Center: Design Studio label */}
+        <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 14, userSelect: 'none', flexShrink: 0 }}>|</span>
+        <span style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0', flexShrink: 0 }}>Design Studio</span>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Right: screen tabs + generating indicator */}
+        <div
+          className="hide-scrollbar"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            overflowX: 'auto', overflowY: 'hidden',
+            scrollbarWidth: 'none', flexShrink: 1, minWidth: 0,
+          }}
+        >
           {isGenerating && (
-            <div className="px-3 py-1 rounded-full text-[11px] font-medium bg-mokkoi-accent/10 text-mokkoi-accent/60 border border-mokkoi-accent/20 flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0" style={{
+              padding: '4px 10px', borderRadius: 14, fontSize: 11, fontWeight: 500,
+              background: 'rgba(129,140,248,0.1)', color: 'rgba(129,140,248,0.7)',
+              border: '1px solid rgba(129,140,248,0.15)',
+            }}>
               <span className="inline-flex gap-0.5">
                 <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
                 <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
                 <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
               </span>
-              Generating...
+              Generating
             </div>
           )}
-        </div>
-      </nav>
 
-      {/* Screen history tab bar */}
-      {generatedScreens.length > 0 && (
-        <div
-          style={{
-            flexShrink: 0,
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(255,255,255,0.02)',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '6px 16px',
-            gap: 6,
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            scrollbarWidth: 'none',
-          }}
-          className="hide-scrollbar"
-        >
           {generatedScreens.map(screen => (
             <button
               key={screen.id}
               onClick={() => setActiveGeneratedId(screen.id)}
               style={{
                 flexShrink: 0,
-                padding: '5px 14px',
-                borderRadius: 20,
-                fontSize: 12,
+                padding: '4px 12px',
+                borderRadius: 14,
+                fontSize: 11,
                 fontWeight: 500,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                border: 'none',
-                maxWidth: 160,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 ...(screen.id === activeGeneratedId
                   ? {
-                      background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                      background: '#6366f1',
                       color: '#fff',
-                      boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                      border: '1px solid rgba(99,102,241,0.5)',
                     }
                   : {
-                      background: 'rgba(255,255,255,0.05)',
-                      color: '#94a3b8',
+                      background: 'transparent',
+                      color: '#64748b',
+                      border: '1px solid rgba(255,255,255,0.1)',
                     }),
               }}
               onMouseEnter={e => {
                 if (screen.id !== activeGeneratedId) {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
-                  e.currentTarget.style.color = '#e2e8f0'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
+                  e.currentTarget.style.color = '#94a3b8'
                 }
               }}
               onMouseLeave={e => {
                 if (screen.id !== activeGeneratedId) {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-                  e.currentTarget.style.color = '#94a3b8'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.color = '#64748b'
                 }
               }}
             >
-              {screen.name}
+              {screen.name.length > 15 ? screen.name.slice(0, 15) + '...' : screen.name}
             </button>
           ))}
 
@@ -272,13 +257,14 @@ function App() {
             onClick={() => setActiveGeneratedId(null)}
             style={{
               flexShrink: 0,
-              width: 28,
-              height: 28,
+              width: 24,
+              height: 24,
               borderRadius: '50%',
               border: '1px dashed rgba(255,255,255,0.15)',
               background: 'transparent',
               color: '#64748b',
-              fontSize: 16,
+              fontSize: 14,
+              lineHeight: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -300,7 +286,7 @@ function App() {
             +
           </button>
         </div>
-      )}
+      </nav>
 
       {/* Main content: side-by-side layout with draggable divider */}
       <div
