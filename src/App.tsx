@@ -775,10 +775,11 @@ function App() {
     return () => document.removeEventListener('keydown', handler)
   }, [directEditMode, exitDirectEdit])
 
-  // Preview in new tab — show the rendered screen, not raw code
+  // Preview in new tab — show the rendered screen in a phone-like frame
   const handlePreviewNewTab = useCallback(() => {
     if (!activeGeneratedId) return
     const el = phoneFrameRefs.current.get(activeGeneratedId)
+      ?? document.querySelector(`[data-screen-id="${activeGeneratedId}"]`) as HTMLElement | null
     if (!el) { setToastMessage('No screen to preview'); return }
     // Grab the already-rendered HTML inside the phone frame
     const renderedContent = el.querySelector('.phone-screen')?.innerHTML || el.innerHTML
@@ -788,15 +789,16 @@ function App() {
     }).join('\n')
     const screenName = activeGenerated?.name || 'Screen'
     const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${screenName} - Mokkoi Preview</title>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=390, initial-scale=1">
+<title>${screenName} \u2014 Mokkoi Preview</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0A0A0A;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:-apple-system,system-ui,sans-serif}
+body{background:#111111;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;font-family:-apple-system,system-ui,sans-serif}
+.phone-shell{max-width:390px;width:390px;min-height:844px;margin:40px auto;border-radius:40px;overflow:hidden;background:#0F172A;box-shadow:0 0 0 2px rgba(255,255,255,0.1),0 20px 60px rgba(0,0,0,0.6),0 0 80px rgba(99,102,241,0.08)}
 ${styles}
 </style>
 </head><body>
-<div style="width:390px;min-height:844px;background:#0F172A;overflow:auto;border-radius:24px;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+<div class="phone-shell">
 ${renderedContent}
 </div></body></html>`
     const blob = new Blob([html], { type: 'text/html' })
@@ -824,9 +826,19 @@ ${renderedContent}
   // Download as image
   const handleDownloadImage = useCallback(async () => {
     if (!activeGeneratedId) return
-    const el = phoneFrameRefs.current.get(activeGeneratedId)
-    if (!el) { setToastMessage('Could not capture screen'); return }
+    // Try ref first, then DOM fallback
+    let el: HTMLElement | null = phoneFrameRefs.current.get(activeGeneratedId) ?? null
+    if (!el) {
+      el = document.querySelector(`[data-screen-id="${activeGeneratedId}"]`)
+    }
+    if (!el) {
+      console.error('Download image: no element found for screen', activeGeneratedId)
+      setToastMessage('Could not find screen to capture')
+      return
+    }
     const screenName = activeGenerated?.name || 'screen'
+    console.log('Capturing element:', el, 'innerHTML length:', el.innerHTML?.length)
+    setToastMessage('Capturing screenshot...')
     try {
       const canvas = await html2canvas(el, {
         backgroundColor: '#0A0A0A',
@@ -835,6 +847,7 @@ ${renderedContent}
         allowTaint: true,
         logging: false,
       })
+      console.log('Canvas captured:', canvas.width, 'x', canvas.height)
       canvas.toBlob(blob => {
         if (!blob) { setToastMessage('Failed to generate image'); return }
         const url = URL.createObjectURL(blob)
@@ -845,9 +858,11 @@ ${renderedContent}
         URL.revokeObjectURL(url)
         setToastMessage('Image downloaded!')
       }, 'image/png')
-    } catch {
+    } catch (err) {
+      console.error('html2canvas failed:', err)
       // Fallback: use SVG foreignObject approach
       try {
+        setToastMessage('Trying alternative capture...')
         const content = el.innerHTML
         const width = el.offsetWidth
         const height = el.offsetHeight
@@ -862,16 +877,16 @@ ${renderedContent}
         const url = URL.createObjectURL(svgBlob)
         const img = new Image()
         img.onload = () => {
-          const canvas = document.createElement('canvas')
-          canvas.width = width * 2
-          canvas.height = height * 2
-          const ctx = canvas.getContext('2d')
+          const cvs = document.createElement('canvas')
+          cvs.width = width * 2
+          cvs.height = height * 2
+          const ctx = cvs.getContext('2d')
           if (ctx) {
             ctx.fillStyle = '#0A0A0A'
-            ctx.fillRect(0, 0, canvas.width, canvas.height)
+            ctx.fillRect(0, 0, cvs.width, cvs.height)
             ctx.drawImage(img, 0, 0)
           }
-          canvas.toBlob(pngBlob => {
+          cvs.toBlob(pngBlob => {
             if (!pngBlob) { setToastMessage('Failed to generate image'); return }
             const dlUrl = URL.createObjectURL(pngBlob)
             const a = document.createElement('a')
@@ -884,12 +899,14 @@ ${renderedContent}
           URL.revokeObjectURL(url)
         }
         img.onerror = () => {
+          console.error('SVG fallback also failed')
           setToastMessage('Failed to capture image — try right-clicking the screen instead')
           URL.revokeObjectURL(url)
         }
         img.src = url
-      } catch {
-        setToastMessage('Failed to capture image — try right-clicking the screen instead')
+      } catch (fallbackErr) {
+        console.error('SVG fallback error:', fallbackErr)
+        setToastMessage(`Failed to capture: ${fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error'}`)
       }
     }
   }, [activeGeneratedId, activeGenerated])
@@ -1813,6 +1830,7 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
 
                     {/* Phone frame with selection highlight */}
                     <div
+                      data-screen-id={screen.id}
                       ref={el => { if (el) phoneFrameRefs.current.set(screen.id, el); else phoneFrameRefs.current.delete(screen.id) }}
                       style={{
                         borderRadius: 52,
