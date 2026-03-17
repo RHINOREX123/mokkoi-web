@@ -50,6 +50,15 @@ function App() {
   const panStart = useRef({ x: 0, y: 0 })
   const scrollStart = useRef({ x: 0, y: 0 })
 
+  // Prevent browser-level Ctrl+scroll zoom on the entire page
+  useEffect(() => {
+    const preventBrowserZoom = (e: WheelEvent) => {
+      if (e.ctrlKey) e.preventDefault()
+    }
+    document.addEventListener('wheel', preventBrowserZoom, { passive: false })
+    return () => document.removeEventListener('wheel', preventBrowserZoom)
+  }, [])
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return
@@ -374,6 +383,8 @@ function App() {
           background: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
           gap: 12,
+          transformOrigin: 'unset',
+          zoom: 1,
         }}
       >
         {/* Left: logo + Design Studio */}
@@ -517,6 +528,8 @@ function App() {
             width: `${splitRatio * 100}%`,
             display: 'flex', flexDirection: 'column', minHeight: 0,
             background: '#0A0A0A',
+            transformOrigin: 'unset',
+            zoom: 1,
           }}
         >
           <ChatPanel
@@ -721,6 +734,8 @@ function App() {
             border: '1px solid rgba(255,255,255,0.08)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
             zIndex: 20,
+            transformOrigin: 'unset',
+            zoom: 1,
           }}>
             {tbBtn('select', <MousePointer2 size={18} />, 'Select')}
             {tbBtn('pan', <Hand size={18} />, 'Pan')}
