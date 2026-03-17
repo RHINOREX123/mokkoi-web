@@ -454,7 +454,7 @@ function App() {
           throw new Error(errData.error || 'Failed to generate flow')
         }
 
-        const { screens } = await res.json()
+        const { screens, modelUsed: flowModelUsed } = await res.json()
         const flowId = crypto.randomUUID()
         const screenNames = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { name: string }) => s.name)
 
@@ -480,6 +480,7 @@ function App() {
           content: `Generated a flow with ${screens.length} screens: ${screenNames.join(' \u2192 ')}`,
           timestamp: Date.now(),
           flowScreenNames: screenNames,
+          modelUsed: flowModelUsed,
         }
         setProjectMessages(prev => [...prev, assistantMsg])
         saveMessage(assistantMsg)
@@ -539,7 +540,7 @@ function App() {
         throw new Error(errData.error || 'Failed to generate screen')
       }
 
-      const { tree } = await res.json()
+      const { tree, modelUsed } = await res.json()
 
       setGeneratedScreens(prev => prev.map(s =>
         s.id === targetId ? { ...s, tree } : s
@@ -552,6 +553,7 @@ function App() {
         role: 'assistant',
         content: `${action} Screen ${screenNumber}: ${screenName}`,
         timestamp: Date.now(),
+        modelUsed,
       }
       setProjectMessages(prev => [...prev, assistantMsg])
       saveMessage(assistantMsg)

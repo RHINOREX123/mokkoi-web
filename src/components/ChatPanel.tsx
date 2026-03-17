@@ -9,6 +9,8 @@ export interface ChatMessage {
   imageData?: string
   /** Screen names for flow messages (clickable links) */
   flowScreenNames?: string[]
+  /** Which model generated this response (e.g. "Sonnet", "Haiku") */
+  modelUsed?: string
 }
 
 interface ChatPanelProps {
@@ -303,6 +305,18 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                   </div>
                 )}
                 {msg.content}
+
+                {/* Model indicator */}
+                {msg.role === 'assistant' && msg.modelUsed && !msg.content.startsWith('Error:') && (
+                  <div style={{
+                    fontSize: 10,
+                    color: 'rgba(255,255,255,0.3)',
+                    fontStyle: 'italic',
+                    marginTop: 4,
+                  }}>
+                    via {msg.modelUsed}
+                  </div>
+                )}
 
                 {/* Flow screen names as clickable links */}
                 {msg.flowScreenNames && msg.flowScreenNames.length > 0 && (

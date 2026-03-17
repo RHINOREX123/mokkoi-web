@@ -49,6 +49,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
 
+  // Smart model routing: detect if this is a new screen or an edit
+  const isNewScreen = !currentScreen ||
+    /\b(create|build|design|make a|generate|new screen|from scratch)\b/i.test(prompt)
+  const isVariation = /variation/i.test(prompt) || prompt.includes('VARIATION_PROMPT')
+  const isRegenerate = /regenerate/i.test(prompt)
+  const model = (isNewScreen || isVariation || isRegenerate)
+    ? 'claude-sonnet-4-20250514'
+    : 'claude-haiku-4-5-20251001'
+  const maxTokens = (isNewScreen || isVariation || isRegenerate) ? 12000 : 8000
+  console.log(`Using model: ${model} for: ${prompt.substring(0, 50)}...`)
+
   // Build user message — include current screen if editing, or image if attached
   let userContent: string | Array<{ type: string; [key: string]: unknown }>
   if (imageData && typeof imageData === 'string') {
@@ -82,9 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        system: SYSTEM_PROMPT,
+        model,
+        max_tokens: maxTokens,
+        system: [
+          {
+            type: 'text',
+            text: SYSTEM_PROMPT,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
         messages: [{ role: 'user', content: userContent }],
       }),
     })
@@ -152,7 +169,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    return res.status(200).json({ tree })
+    const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
+    return res.status(200).json({ tree, modelUsed: modelLabel })
   } catch (err) {
     console.error('Generate error:', err)
     const message = err instanceof Error ? err.message : String(err)

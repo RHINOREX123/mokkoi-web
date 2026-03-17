@@ -64,7 +64,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 16000,
-        system: FLOW_SYSTEM_PROMPT,
+        system: [
+          {
+            type: 'text',
+            text: FLOW_SYSTEM_PROMPT,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
         messages: [{ role: 'user', content: prompt }],
       }),
     })
@@ -144,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tree: s.tree || { type: 'View', style: {}, children: [] },
     }))
 
-    return res.status(200).json({ screens })
+    return res.status(200).json({ screens, modelUsed: 'Sonnet' })
   } catch (err) {
     console.error('Generate flow error:', err)
     const message = err instanceof Error ? err.message : String(err)
