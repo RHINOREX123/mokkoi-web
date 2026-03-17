@@ -35,13 +35,20 @@ function App() {
   const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [showCodeExport, setShowCodeExport] = useState(false)
-  const [activeToolbarBtn, setActiveToolbarBtn] = useState<string>('select')
+  const [activeTool, setActiveTool] = useState<'select' | 'pan'>('select')
+  const [zoomLevel, setZoomLevel] = useState(100)
 
   // Resizable panel — left is chat (28%), right is canvas (72%)
   const [splitRatio, setSplitRatio] = useState(0.28)
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+
+  // Pan state
+  const isPanning = useRef(false)
+  const panStart = useRef({ x: 0, y: 0 })
+  const scrollStart = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -53,6 +60,7 @@ function App() {
     }
     const handleMouseUp = () => {
       isDragging.current = false
+      isPanning.current = false
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
@@ -279,24 +287,71 @@ function App() {
   // Determine canvas state
   const hasScreens = generatedScreens.length > 0
 
+  // Zoom handlers
+  const zoomIn = () => setZoomLevel(z => Math.min(200, z + 10))
+  const zoomOut = () => setZoomLevel(z => Math.max(25, z - 10))
+  const resetZoom = () => setZoomLevel(100)
+
+  const handleCanvasWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -10 : 10
+      setZoomLevel(z => Math.min(200, Math.max(25, z + delta)))
+    }
+  }, [])
+
+  // Pan handlers
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (activeTool !== 'pan') return
+    isPanning.current = true
+    panStart.current = { x: e.clientX, y: e.clientY }
+    const canvas = canvasRef.current
+    if (canvas) {
+      scrollStart.current = { x: canvas.scrollLeft, y: canvas.scrollTop }
+    }
+    document.body.style.cursor = 'grabbing'
+    document.body.style.userSelect = 'none'
+  }
+
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning.current || activeTool !== 'pan') return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const dx = e.clientX - panStart.current.x
+    const dy = e.clientY - panStart.current.y
+    canvas.scrollLeft = scrollStart.current.x - dx
+    canvas.scrollTop = scrollStart.current.y - dy
+  }
+
+  const handleCanvasMouseUp = () => {
+    isPanning.current = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+
   // Toolbar button helper
-  const tbBtn = (id: string, icon: React.ReactNode, onClick?: () => void) => (
-    <button
-      onClick={onClick ?? (() => setActiveToolbarBtn(id))}
-      style={{
-        width: 32, height: 32, borderRadius: 8,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: activeToolbarBtn === id ? 'rgba(255,255,255,0.12)' : 'transparent',
-        color: activeToolbarBtn === id ? '#fff' : '#999',
-        border: 'none', cursor: 'pointer',
-        transition: 'all 0.15s',
-      }}
-      onMouseEnter={e => { if (activeToolbarBtn !== id) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-      onMouseLeave={e => { if (activeToolbarBtn !== id) e.currentTarget.style.background = 'transparent' }}
-    >
-      {icon}
-    </button>
-  )
+  const tbBtn = (id: string, icon: React.ReactNode, tooltip: string, onClick?: () => void) => {
+    const isActiveTool = id === 'select' || id === 'pan'
+    const isActive = isActiveTool && activeTool === id
+    return (
+      <button
+        title={tooltip}
+        onClick={onClick ?? (() => { if (id === 'select' || id === 'pan') setActiveTool(id) })}
+        style={{
+          width: 32, height: 32, borderRadius: 8,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+          color: isActive ? '#fff' : '#999',
+          border: 'none', cursor: 'pointer',
+          transition: 'all 0.15s',
+        }}
+        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+      >
+        {icon}
+      </button>
+    )
+  }
 
   return (
     <div className="app-shell" style={{ height: '100vh', background: '#000000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -493,17 +548,24 @@ function App() {
 
         {/* RIGHT: Canvas — light cream background with dot grid */}
         <div
+          ref={canvasRef}
           className="canvas-side"
+          onWheel={handleCanvasWheel}
+          onMouseDown={handleCanvasMouseDown}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseUp={handleCanvasMouseUp}
+          onMouseLeave={handleCanvasMouseUp}
           style={{
             width: `${(1 - splitRatio) * 100}%`,
             position: 'relative',
-            overflow: 'hidden',
+            overflow: 'auto',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#E8E8E8',
             backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)',
             backgroundSize: '24px 24px',
+            cursor: activeTool === 'pan' ? (isPanning.current ? 'grabbing' : 'grab') : 'default',
           }}
         >
           {/* Canvas content based on state */}
@@ -526,6 +588,9 @@ function App() {
               overflowY: 'hidden',
               maxWidth: '100%',
               scrollbarWidth: 'none',
+              transform: `scale(${zoomLevel / 100})`,
+              transformOrigin: 'center center',
+              transition: 'transform 0.15s ease-out',
             }}>
               {flowScreens.map((screen, idx) => (
                 <div
@@ -572,8 +637,9 @@ function App() {
             <div style={{
               position: 'relative',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-              transform: 'scale(0.85)',
+              transform: `scale(${(zoomLevel / 100) * 0.85})`,
               transformOrigin: 'center center',
+              transition: 'transform 0.15s ease-out',
               maxHeight: 'calc(100vh - 80px)',
             }}>
               <div style={{
@@ -654,24 +720,35 @@ function App() {
             borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.08)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            zIndex: 20,
           }}>
-            {tbBtn('select', <MousePointer2 size={18} />)}
-            {tbBtn('pan', <Hand size={18} />)}
+            {tbBtn('select', <MousePointer2 size={18} />, 'Select')}
+            {tbBtn('pan', <Hand size={18} />, 'Pan')}
 
             {/* Separator */}
             <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
 
-            {tbBtn('zoomOut', <ZoomOut size={18} />, () => {})}
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#999', minWidth: 36, textAlign: 'center', userSelect: 'none' }}>
-              100%
-            </span>
-            {tbBtn('zoomIn', <ZoomIn size={18} />, () => {})}
+            {tbBtn('zoomOut', <ZoomOut size={18} />, 'Zoom out', zoomOut)}
+            <button
+              title="Reset zoom"
+              onClick={resetZoom}
+              style={{
+                fontSize: 12, fontWeight: 600, color: '#999', minWidth: 36, textAlign: 'center',
+                userSelect: 'none', background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '4px 2px', borderRadius: 6, transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#999'; e.currentTarget.style.background = 'transparent' }}
+            >
+              {zoomLevel}%
+            </button>
+            {tbBtn('zoomIn', <ZoomIn size={18} />, 'Zoom in', zoomIn)}
 
             {/* Separator */}
             <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
 
-            {tbBtn('pen', <PenTool size={18} />)}
-            {tbBtn('upload', <Upload size={18} />, () => fileInputRef.current?.click())}
+            {tbBtn('pen', <PenTool size={18} />, 'Direct edit (coming soon)', () => {})}
+            {tbBtn('upload', <Upload size={18} />, 'Upload screenshot', () => fileInputRef.current?.click())}
           </div>
         </div>
       </div>
