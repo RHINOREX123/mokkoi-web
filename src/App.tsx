@@ -3,7 +3,7 @@ import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon } from 'lucide-react'
 import type { ComponentNode } from './types/mokkoi'
 import { supabase } from './lib/supabase'
 import type { User } from '@supabase/supabase-js'
@@ -87,6 +87,11 @@ function App() {
   // Auth user
   const [user, setUser] = useState<User | null>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showHamburgerMenu, setShowHamburgerMenu] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+  const hamburgerMenuRef = useRef<HTMLDivElement>(null)
 
   // Resizable panel — left is chat (28%), right is canvas (72%)
   const [splitRatio, setSplitRatio] = useState(0.28)
@@ -212,6 +217,19 @@ function App() {
     navigate('/auth')
   }
 
+  const handleDeleteProject = async () => {
+    if (!projectId) return
+    await supabase.from('projects').delete().eq('id', projectId)
+    setShowDeleteConfirm(false)
+    navigate('/projects')
+  }
+
+  const handleShareCopy = async () => {
+    await navigator.clipboard.writeText(window.location.href)
+    setToastMessage('Link copied!')
+    setShowHamburgerMenu(false)
+  }
+
   // Focus project name input when editing
   useEffect(() => {
     if (isEditingName) {
@@ -226,6 +244,27 @@ function App() {
     const t = setTimeout(() => setShowShareToast(false), 2000)
     return () => clearTimeout(t)
   }, [showShareToast])
+
+  // Auto-hide toast message
+  useEffect(() => {
+    if (!toastMessage) return
+    const t = setTimeout(() => setToastMessage(''), 2000)
+    return () => clearTimeout(t)
+  }, [toastMessage])
+
+  // Click outside to close menus
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
+      if (hamburgerMenuRef.current && !hamburgerMenuRef.current.contains(e.target as Node)) {
+        setShowHamburgerMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Prevent browser-level Ctrl+scroll zoom + spacebar pan shortcut
   useEffect(() => {
@@ -647,27 +686,103 @@ function App() {
           padding: '0 16px',
           background: 'rgba(0,0,0,0.85)',
           backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-          gap: 12,
+          gap: 10,
           transformOrigin: 'unset',
           zoom: 1,
         }}
       >
-        {/* Left: logo + editable project name */}
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
-          <div
-            style={{
-              width: 26, height: 26, borderRadius: 7,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-              color: '#fff', fontSize: 11, fontWeight: 800,
-            }}
-          >
-            M
-          </div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>Mokkoi</span>
-        </a>
+        {/* Left: M logo (home link) */}
+        <div
+          onClick={() => navigate('/projects')}
+          style={{
+            width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            color: '#fff', fontSize: 11, fontWeight: 800,
+            cursor: 'pointer', transition: 'opacity 0.2s',
+          }}
+          title="Go to projects"
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+        >
+          M
+        </div>
 
-        <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 14, userSelect: 'none', flexShrink: 0 }}>|</span>
+        {/* Hamburger menu */}
+        <div ref={hamburgerMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setShowHamburgerMenu(!showHamburgerMenu)}
+            style={{
+              width: 28, height: 28, borderRadius: 6,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: showHamburgerMenu ? 'rgba(255,255,255,0.1)' : 'transparent',
+              border: 'none', cursor: 'pointer', color: '#94a3b8',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (!showHamburgerMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+            onMouseLeave={e => { if (!showHamburgerMenu) e.currentTarget.style.background = 'transparent' }}
+          >
+            <Menu size={18} />
+          </button>
+          {showHamburgerMenu && (
+            <div style={{
+              position: 'absolute', top: 34, left: 0,
+              background: '#1A1A1A',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 12, padding: 4,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+              zIndex: 100, minWidth: 220,
+            }}>
+              <button
+                onClick={() => { navigate('/projects'); setShowHamburgerMenu(false) }}
+                style={hamburgerItemStyle}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <ArrowLeft size={16} color="#94a3b8" />
+                Go to all projects
+              </button>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
+              <button
+                onClick={handleShareCopy}
+                style={hamburgerItemStyle}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <Share2 size={16} color="#94a3b8" />
+                Share
+              </button>
+              <button
+                onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false) }}
+                style={hamburgerItemStyle}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <Download size={16} color="#94a3b8" />
+                Download project
+              </button>
+              <button
+                onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false) }}
+                style={hamburgerItemStyle}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <Copy size={16} color="#94a3b8" />
+                Duplicate project
+              </button>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
+              <button
+                onClick={() => { setShowDeleteConfirm(true); setShowHamburgerMenu(false) }}
+                style={{ ...hamburgerItemStyle, color: '#f87171' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <Trash2 size={16} color="#f87171" />
+                Delete project
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Editable project name */}
         {isEditingName ? (
@@ -818,8 +933,8 @@ function App() {
             Share
           </button>
 
-          {/* User avatar + menu */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+          {/* User avatar + dropdown */}
+          <div ref={userMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
             <div
               onClick={() => setShowUserMenu(!showUserMenu)}
               style={{
@@ -827,50 +942,83 @@ function App() {
                 background: 'linear-gradient(135deg, #6366f1, #818cf8)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 12, fontWeight: 700, color: '#fff',
-                cursor: 'pointer',
+                cursor: 'pointer', transition: 'box-shadow 0.2s',
+                boxShadow: showUserMenu ? '0 0 0 2px rgba(99,102,241,0.4)' : 'none',
               }}
               title={user?.user_metadata?.full_name || user?.email || 'User'}
             >
               {(user?.user_metadata?.full_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
             </div>
             {showUserMenu && (
-              <div
-                style={{
-                  position: 'absolute', top: 36, right: 0,
-                  background: '#1a1a2e',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 10, padding: 4,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                  zIndex: 100, minWidth: 160,
-                }}
-              >
-                <div style={{ padding: '8px 12px', fontSize: 12, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  {user?.email}
+              <div style={{
+                position: 'absolute', top: 36, right: 0,
+                background: '#1A1A1A',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 16, padding: 0,
+                boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+                zIndex: 100, minWidth: 260,
+                overflow: 'hidden',
+              }}>
+                {/* User info */}
+                <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
+                  }}>
+                    {(user?.user_metadata?.full_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user?.user_metadata?.full_name || user?.email || 'User'}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user?.email || ''}
+                    </div>
+                  </div>
                 </div>
-                <button
-                  onClick={handleSignOut}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    width: '100%', padding: '8px 12px', borderRadius: 6,
-                    background: 'transparent', border: 'none',
-                    color: '#e2e8f0', fontSize: 13, fontWeight: 500,
-                    cursor: 'pointer', textAlign: 'left',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  <LogOut size={14} />
-                  Sign Out
-                </button>
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '0 12px' }} />
+                <div style={{ padding: '4px 8px' }}>
+                  <button
+                    onClick={() => { setToastMessage('Coming soon'); setShowUserMenu(false) }}
+                    style={studioAvatarItemStyle}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <Settings size={18} color="#94a3b8" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={() => { setToastMessage('Coming soon'); setShowUserMenu(false) }}
+                    style={studioAvatarItemStyle}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <UserIcon size={18} color="#94a3b8" />
+                    Manage account
+                  </button>
+                </div>
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '0 12px' }} />
+                <div style={{ padding: '4px 8px 8px' }}>
+                  <button
+                    onClick={handleSignOut}
+                    style={{ ...studioAvatarItemStyle, color: '#f87171' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <LogOut size={18} color="#f87171" />
+                    Sign Out
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
       </nav>
 
-      {/* Share toast */}
-      {showShareToast && (
+      {/* Toast messages */}
+      {(showShareToast || toastMessage) && (
         <div style={{
           position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
           padding: '8px 20px', borderRadius: 10,
@@ -878,10 +1026,66 @@ function App() {
           fontSize: 13, fontWeight: 500,
           border: '1px solid rgba(52,211,153,0.2)',
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          zIndex: 100,
+          zIndex: 200,
           animation: 'fadeInDown 0.25s ease-out',
         }}>
-          Link copied!
+          {toastMessage || 'Link copied!'}
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(4px)',
+        }}
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#1A1A1A',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 16, padding: 24,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+              minWidth: 340, maxWidth: 400,
+            }}
+          >
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#f1f5f9' }}>
+              Delete this project?
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8' }}>
+              This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  padding: '8px 16px', borderRadius: 8,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#e2e8f0', fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                style={{
+                  padding: '8px 16px', borderRadius: 8,
+                  background: 'rgba(248,113,113,0.15)',
+                  border: '1px solid rgba(248,113,113,0.3)',
+                  color: '#f87171', fontSize: 13, fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1178,6 +1382,24 @@ function App() {
       )}
     </div>
   )
+}
+
+const hamburgerItemStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  width: '100%', padding: '9px 12px', borderRadius: 8,
+  background: 'transparent', border: 'none',
+  color: '#e2e8f0', fontSize: 13, fontWeight: 500,
+  cursor: 'pointer', transition: 'background 0.15s',
+  textAlign: 'left',
+}
+
+const studioAvatarItemStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  width: '100%', padding: '10px 12px', borderRadius: 8,
+  background: 'transparent', border: 'none',
+  color: '#e2e8f0', fontSize: 14, fontWeight: 500,
+  cursor: 'pointer', transition: 'background 0.15s',
+  textAlign: 'left',
 }
 
 export default App
