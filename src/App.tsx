@@ -205,6 +205,103 @@ function App() {
         </div>
       </nav>
 
+      {/* Screen history tab bar */}
+      {generatedScreens.length > 0 && (
+        <div
+          style={{
+            flexShrink: 0,
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            background: 'rgba(255,255,255,0.02)',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '6px 16px',
+            gap: 6,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            scrollbarWidth: 'none',
+          }}
+          className="hide-scrollbar"
+        >
+          {generatedScreens.map(screen => (
+            <button
+              key={screen.id}
+              onClick={() => setActiveGeneratedId(screen.id)}
+              style={{
+                flexShrink: 0,
+                padding: '5px 14px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                border: 'none',
+                maxWidth: 160,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                ...(screen.id === activeGeneratedId
+                  ? {
+                      background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                      color: '#fff',
+                      boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                    }
+                  : {
+                      background: 'rgba(255,255,255,0.05)',
+                      color: '#94a3b8',
+                    }),
+              }}
+              onMouseEnter={e => {
+                if (screen.id !== activeGeneratedId) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                  e.currentTarget.style.color = '#e2e8f0'
+                }
+              }}
+              onMouseLeave={e => {
+                if (screen.id !== activeGeneratedId) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.color = '#94a3b8'
+                }
+              }}
+            >
+              {screen.name}
+            </button>
+          ))}
+
+          {/* New screen button */}
+          <button
+            onClick={() => setActiveGeneratedId(null)}
+            style={{
+              flexShrink: 0,
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              border: '1px dashed rgba(255,255,255,0.15)',
+              background: 'transparent',
+              color: '#64748b',
+              fontSize: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = 'rgba(99,102,241,0.5)'
+              e.currentTarget.style.color = '#818cf8'
+              e.currentTarget.style.background = 'rgba(99,102,241,0.1)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'
+              e.currentTarget.style.color = '#64748b'
+              e.currentTarget.style.background = 'transparent'
+            }}
+            title="New screen"
+          >
+            +
+          </button>
+        </div>
+      )}
+
       {/* Main content: side-by-side layout with draggable divider */}
       <div
         ref={containerRef}

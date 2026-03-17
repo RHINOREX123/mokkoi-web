@@ -108,12 +108,13 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Header */}
       <div style={{
-        padding: '10px 20px',
+        padding: '12px 20px',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
         fontSize: 16,
         fontWeight: 600,
         color: '#F1F5F9',
         background: '#0f0f12',
+        lineHeight: 1,
       }}>
         Design Studio
       </div>
