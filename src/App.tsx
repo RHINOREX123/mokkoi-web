@@ -689,6 +689,8 @@ function App() {
           gap: 10,
           transformOrigin: 'unset',
           zoom: 1,
+          position: 'relative',
+          zIndex: 50,
         }}
       >
         {/* Left: M logo (home link) */}
