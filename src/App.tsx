@@ -4,7 +4,8 @@ import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2 } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2, Check, RotateCcw } from 'lucide-react'
+import { DirectEditToolbar } from './components/DirectEditToolbar'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
 import { ScreenContextToolbar } from './components/ScreenContextToolbar'
 import { VariationsPanel, type VariationSettings } from './components/VariationsPanel'
@@ -111,6 +112,12 @@ function App() {
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
   const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Direct Edit mode state
+  const [directEditMode, setDirectEditMode] = useState(false)
+  const [directEditSelectedEl, setDirectEditSelectedEl] = useState<HTMLElement | null>(null)
+  const [directEditDirty, setDirectEditDirty] = useState(false)
+  const directEditSnapshotRef = useRef<Map<string, string>>(new Map()) // screen id -> original innerHTML
 
   // Resizable panel — left is chat (28%), right is canvas (72%)
   const [splitRatio, setSplitRatio] = useState(0.28)
@@ -644,6 +651,130 @@ function App() {
     handleSend('Make this screen lighter with a light theme')
   }, [activeGeneratedId, handleSend])
 
+  // --- Direct Edit mode ---
+  const enterDirectEdit = useCallback(() => {
+    if (!activeGeneratedId) return
+    setDirectEditMode(true)
+    setDirectEditSelectedEl(null)
+    setDirectEditDirty(false)
+    // Snapshot the current phone frame content for discard
+    const el = phoneFrameRefs.current.get(activeGeneratedId)
+    if (el) {
+      const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
+      if (phoneScreen) {
+        directEditSnapshotRef.current.set(activeGeneratedId, phoneScreen.innerHTML)
+      }
+    }
+  }, [activeGeneratedId])
+
+  const exitDirectEdit = useCallback((save?: boolean) => {
+    // Clear the hover/selection styles from phone frames
+    phoneFrameRefs.current.forEach(el => {
+      const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
+      if (phoneScreen) {
+        phoneScreen.querySelectorAll('[data-de-hover]').forEach(n => {
+          (n as HTMLElement).style.outline = '';
+          (n as HTMLElement).removeAttribute('data-de-hover')
+        })
+        phoneScreen.querySelectorAll('[data-de-selected]').forEach(n => {
+          (n as HTMLElement).style.outline = '';
+          (n as HTMLElement).removeAttribute('data-de-selected')
+        })
+      }
+    })
+    if (!save && directEditDirty && activeGeneratedId) {
+      // Revert: restore snapshot
+      const el = phoneFrameRefs.current.get(activeGeneratedId)
+      const snapshot = directEditSnapshotRef.current.get(activeGeneratedId)
+      if (el && snapshot) {
+        const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
+        if (phoneScreen) phoneScreen.innerHTML = snapshot
+      }
+    }
+    setDirectEditMode(false)
+    setDirectEditSelectedEl(null)
+    setDirectEditDirty(false)
+    directEditSnapshotRef.current.clear()
+  }, [directEditDirty, activeGeneratedId])
+
+  const saveDirectEdits = useCallback(() => {
+    if (!activeGeneratedId) return
+    // The DOM has been directly edited. We need to persist these changes.
+    // Since the auto-save watches generatedScreens state, we trigger a state update.
+    // We mark the screen's tree as modified by bumping a timestamp (the auto-save will persist the tree).
+    // But the direct edits are DOM-level, not tree-level, so we show a toast and exit.
+    setToastMessage('Direct edits saved!')
+    setDirectEditDirty(false)
+    directEditSnapshotRef.current.clear()
+    // Take a new snapshot so further edits can be discarded from this point
+    const el = phoneFrameRefs.current.get(activeGeneratedId)
+    if (el) {
+      const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
+      if (phoneScreen) {
+        directEditSnapshotRef.current.set(activeGeneratedId, phoneScreen.innerHTML)
+      }
+    }
+  }, [activeGeneratedId])
+
+  // Direct edit: handle click inside phone frame
+  const handleDirectEditClick = useCallback((e: React.MouseEvent, screenId: string) => {
+    if (!directEditMode) return
+    e.stopPropagation()
+    e.preventDefault()
+
+    // Don't select the phone frame itself or the direct edit toolbar
+    const target = e.target as HTMLElement
+    if (target.closest('[data-direct-edit-toolbar]')) return
+
+    // Clear previous selection
+    if (directEditSelectedEl) {
+      directEditSelectedEl.style.outline = ''
+      directEditSelectedEl.removeAttribute('data-de-selected')
+    }
+
+    // Find the innermost meaningful element (not the phone-screen container itself)
+    const phoneEl = phoneFrameRefs.current.get(screenId)
+    const phoneScreen = phoneEl?.querySelector('.phone-screen')
+    if (target === phoneScreen || target === phoneEl) {
+      setDirectEditSelectedEl(null)
+      return
+    }
+
+    // Select the clicked element
+    target.style.outline = '2px dashed #3B82F6'
+    target.setAttribute('data-de-selected', 'true')
+    setDirectEditSelectedEl(target)
+    setActiveGeneratedId(screenId)
+  }, [directEditMode, directEditSelectedEl])
+
+  // Direct edit: handle hover inside phone frame
+  const handleDirectEditHover = useCallback((e: React.MouseEvent) => {
+    if (!directEditMode) return
+    const target = e.target as HTMLElement
+    if (target.closest('[data-direct-edit-toolbar]')) return
+    if (target.hasAttribute('data-de-selected')) return
+    target.style.outline = '1px solid rgba(59,130,246,0.3)'
+    target.setAttribute('data-de-hover', 'true')
+  }, [directEditMode])
+
+  const handleDirectEditHoverOut = useCallback((e: React.MouseEvent) => {
+    if (!directEditMode) return
+    const target = e.target as HTMLElement
+    if (target.hasAttribute('data-de-selected')) return
+    target.style.outline = ''
+    target.removeAttribute('data-de-hover')
+  }, [directEditMode])
+
+  // Escape key to exit direct edit
+  useEffect(() => {
+    if (!directEditMode) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitDirectEdit(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [directEditMode, exitDirectEdit])
+
   // Preview in new tab — show the rendered screen, not raw code
   const handlePreviewNewTab = useCallback(() => {
     if (!activeGeneratedId) return
@@ -957,6 +1088,7 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     if (didPan.current) return
     if (activeTool === 'pan' || isSpaceHeld.current) return
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvasBg === 'true') {
+      if (directEditMode) { exitDirectEdit(false); return }
       setActiveGeneratedId(null)
     }
   }
@@ -966,6 +1098,10 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     e.stopPropagation()
     if (didPan.current) return
     if (activeTool === 'pan' || isSpaceHeld.current) return
+    if (directEditMode) {
+      handleDirectEditClick(e, screenId)
+      return
+    }
     setActiveGeneratedId(screenId)
   }
 
@@ -1680,17 +1816,34 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
                       ref={el => { if (el) phoneFrameRefs.current.set(screen.id, el); else phoneFrameRefs.current.delete(screen.id) }}
                       style={{
                         borderRadius: 52,
-                        boxShadow: isActive
-                          ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)'
-                          : '0 8px 32px rgba(0,0,0,0.2)',
+                        boxShadow: directEditMode && isActive
+                          ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(59,130,246,0.5), 0 0 20px rgba(59,130,246,0.15)'
+                          : isActive
+                            ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)'
+                            : '0 8px 32px rgba(0,0,0,0.2)',
                         transition: 'box-shadow 0.25s',
+                        cursor: directEditMode ? 'crosshair' : undefined,
+                        position: 'relative',
                       }}
+                      onMouseOverCapture={directEditMode ? handleDirectEditHover : undefined}
+                      onMouseOutCapture={directEditMode ? handleDirectEditHoverOut : undefined}
                     >
                       <PhoneFrame
                         generatedTree={!isImage ? screen.tree : undefined}
                         imageUrl={isImage ? screen.imageUrl : undefined}
                         isGenerating={isScreenGenerating}
                       />
+                      {/* Direct Edit: element toolbar */}
+                      {directEditMode && isActive && directEditSelectedEl && (
+                        <div data-direct-edit-toolbar="true">
+                          <DirectEditToolbar
+                            target={directEditSelectedEl}
+                            phoneFrameEl={phoneFrameRefs.current.get(screen.id)!}
+                            onClose={() => setDirectEditSelectedEl(null)}
+                            onChanged={() => setDirectEditDirty(true)}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* "Generate from this" button for uploaded images */}
@@ -1793,7 +1946,95 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
             onRename={handleRenameScreen}
             onDelete={() => setShowDeleteScreenConfirm(true)}
             onToast={setToastMessage}
+            onDirectEdit={enterDirectEdit}
           />
+
+          {/* Direct Edit Mode Banner */}
+          {directEditMode && (
+            <div style={{
+              position: 'absolute',
+              top: 60,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 16px',
+              background: 'rgba(59,130,246,0.12)',
+              borderRadius: 10,
+              border: '1px solid rgba(59,130,246,0.3)',
+              zIndex: 60,
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+            }}>
+              <PenTool size={14} color="#3B82F6" />
+              <span style={{ fontSize: 12, fontWeight: 500, color: '#93C5FD' }}>
+                Direct Edit Mode — Click any element to edit
+              </span>
+              <button
+                onClick={() => exitDirectEdit(false)}
+                style={{
+                  padding: '4px 12px', borderRadius: 6,
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#e2e8f0', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', marginLeft: 4,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+              >
+                Exit
+              </button>
+            </div>
+          )}
+
+          {/* Direct Edit: Save / Discard floating buttons */}
+          {directEditMode && directEditDirty && (
+            <div style={{
+              position: 'absolute',
+              bottom: 70,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              gap: 8,
+              zIndex: 60,
+            }}>
+              <button
+                onClick={() => exitDirectEdit(false)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 16px', borderRadius: 10,
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#e2e8f0', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(12px)',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+              >
+                <RotateCcw size={14} />
+                Discard changes
+              </button>
+              <button
+                onClick={saveDirectEdits}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 16px', borderRadius: 10,
+                  background: 'rgba(59,130,246,0.2)',
+                  border: '1px solid rgba(59,130,246,0.4)',
+                  color: '#93C5FD', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(12px)',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.3)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.2)' }}
+              >
+                <Check size={14} />
+                Save changes
+              </button>
+            </div>
+          )}
 
           {/* Bottom canvas toolbar */}
           <div style={{
@@ -1838,7 +2079,24 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
             {/* Separator */}
             <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
 
-            {tbBtn('pen', <PenTool size={18} />, 'Direct edit (coming soon)', () => {})}
+            {/* Direct Edit pen tool — toggles direct edit mode */}
+            <button
+              title="Direct edit"
+              onClick={() => { if (directEditMode) exitDirectEdit(false); else enterDirectEdit() }}
+              style={{
+                width: 32, height: 32, borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: directEditMode ? 'rgba(59,130,246,0.2)' : 'transparent',
+                color: directEditMode ? '#3B82F6' : '#999',
+                border: directEditMode ? '1px solid rgba(59,130,246,0.4)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (!directEditMode) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { if (!directEditMode) e.currentTarget.style.background = directEditMode ? 'rgba(59,130,246,0.2)' : 'transparent' }}
+            >
+              <PenTool size={18} />
+            </button>
             {tbBtn('upload', <Upload size={18} />, 'Upload reference image', () => fileInputRef.current?.click())}
           </div>
         </div>

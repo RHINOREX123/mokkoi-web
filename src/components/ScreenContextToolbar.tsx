@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import {
   Sparkles, RefreshCw, LayoutGrid, Pencil, MessageSquare, Palette, Moon, Sun,
   Play, ExternalLink, QrCode, Smartphone, Tablet, MoreHorizontal, Code,
-  Download, Copy, Type, Trash2, Star, ThumbsUp, ThumbsDown, ChevronDown,
+  Download, Copy, Type, Trash2, Star, ThumbsUp, ThumbsDown, ChevronDown, PenTool,
 } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
 
@@ -27,6 +27,7 @@ interface ScreenContextToolbarProps {
   onRename: () => void
   onDelete: () => void
   onToast: (msg: string) => void
+  onDirectEdit?: () => void
 }
 
 const DROPDOWN_STYLE: React.CSSProperties = {
@@ -66,7 +67,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
     onChangeColorScheme, onMakeDarker, onMakeLighter,
     onPreviewNewTab, onShowQrCode, onResizeMobile, onResizeTablet,
     onExportCode, onDownloadImage, onDuplicate, onRename, onDelete,
-    onToast,
+    onToast, onDirectEdit,
   } = props
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
@@ -209,6 +210,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
         </button>
         {openDropdown === 'modify' && (
           <div style={DROPDOWN_STYLE}>
+            {menuItem(<PenTool size={16} color="#94a3b8" />, 'Direct Edit', onDirectEdit ?? (() => onToast('Coming soon')))}
             {menuItem(<MessageSquare size={16} color="#94a3b8" />, 'Edit via chat', onEditViaChat)}
             {menuItem(<Palette size={16} color="#94a3b8" />, 'Change color scheme', onChangeColorScheme)}
             {divider}
