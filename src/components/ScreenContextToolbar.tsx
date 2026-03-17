@@ -159,10 +159,10 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
       ref={toolbarRef}
       style={{
         position: 'absolute',
-        top: 16,
+        top: 12,
         left: '50%',
         transform: 'translateX(-50%)',
-        display: 'flex',
+        display: visible ? 'flex' : 'none',
         alignItems: 'center',
         gap: 2,
         padding: '6px 12px',
@@ -170,10 +170,8 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
         borderRadius: 999,
         border: '1px solid rgba(255,255,255,0.1)',
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-        zIndex: 30,
-        opacity: visible ? 1 : 0,
-        pointerEvents: visible ? 'auto' : 'none',
-        transition: 'opacity 0.2s ease-out',
+        zIndex: 50,
+        animation: visible ? 'fadeInToolbar 0.2s ease-out' : undefined,
       }}
     >
       {/* Generate */}
@@ -298,6 +296,14 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
       >
         <ThumbsDown size={14} />
       </button>
+
+      {/* Fade-in animation */}
+      <style>{`
+        @keyframes fadeInToolbar {
+          from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+      `}</style>
     </div>
   )
 }
