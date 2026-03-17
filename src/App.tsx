@@ -613,8 +613,6 @@ function App() {
   // Regenerate: re-send original prompt for the selected screen
   const handleRegenerate = useCallback(() => {
     if (!activeGenerated) return
-    // Find the original user message that generated this screen
-    const screenIdx = generatedScreens.findIndex(s => s.id === activeGeneratedId)
     const screenName = activeGenerated.name
     // Use the screen name as the regeneration prompt
     handleSend(`Regenerate: ${screenName}`, undefined, undefined, false)
