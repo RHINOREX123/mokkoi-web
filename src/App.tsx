@@ -824,6 +824,41 @@ function App() {
     clone.style.boxShadow = 'none'
     document.body.appendChild(clone)
 
+    // Sanitize modern CSS color functions (oklab, oklch, color-mix) that html2canvas can't parse
+    const sanitizeColorsForCapture = (root: HTMLElement) => {
+      const allEls = [root, ...Array.from(root.querySelectorAll('*'))] as HTMLElement[]
+      const colorProps = ['color', 'backgroundColor', 'borderColor', 'outlineColor'] as const
+      for (const htmlEl of allEls) {
+        const computed = window.getComputedStyle(htmlEl)
+        for (const prop of colorProps) {
+          const val = computed[prop]
+          if (val && (val.includes('oklab') || val.includes('oklch') || val.includes('color-mix'))) {
+            // Use canvas 2d context to resolve to a hex/rgb value the browser understands
+            const c = document.createElement('canvas')
+            c.width = 1; c.height = 1
+            const ctx = c.getContext('2d')
+            if (ctx) {
+              ctx.fillStyle = val
+              htmlEl.style[prop] = ctx.fillStyle
+            }
+          }
+        }
+        // Handle CSS custom properties and inline styles with unsupported functions
+        const style = htmlEl.style
+        if (style.cssText && /oklab|oklch|color-mix/.test(style.cssText)) {
+          style.cssText = style.cssText
+            .replace(/oklab\([^)]*\)/g, '#000000')
+            .replace(/oklch\([^)]*\)/g, '#000000')
+            .replace(/color-mix\([^)]*\)/g, '#000000')
+        }
+        // Also force-set computed colors to override any CSS variable resolution issues
+        htmlEl.style.color = computed.color
+        htmlEl.style.backgroundColor = computed.backgroundColor
+        htmlEl.style.borderColor = computed.borderColor
+      }
+    }
+    sanitizeColorsForCapture(clone)
+
     try {
       const canvas = await html2canvas(clone, {
         backgroundColor: '#0A0A0A',
