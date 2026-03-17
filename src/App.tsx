@@ -611,17 +611,12 @@ function App() {
       // If the scroll target is inside a phone frame, let it scroll naturally
       // (unless Ctrl is held — then zoom takes priority)
       const target = e.target as HTMLElement
-      if (!e.ctrlKey && !e.metaKey && target.closest('.phone-screen')) {
-        // Check if the phone content is actually scrollable and not at boundary
-        const phoneEl = target.closest('.phone-screen') as HTMLElement
-        if (phoneEl) {
-          const { scrollTop, scrollHeight, clientHeight } = phoneEl
-          const atTop = scrollTop <= 0 && e.deltaY < 0
-          const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && e.deltaY > 0
-          // If phone has scroll room in the scroll direction, let it scroll
-          if (scrollHeight > clientHeight && !atTop && !atBottom) {
-            return // Let the phone frame scroll naturally
-          }
+      if (!e.ctrlKey && !e.metaKey) {
+        // Check if the target is inside any phone frame element
+        const phoneFrame = target.closest('.phone-screen, [class*="phone"], [class*="phoneFrame"]')
+        if (phoneFrame) {
+          // Don't intercept — let the phone content scroll naturally
+          return
         }
       }
 

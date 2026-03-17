@@ -100,18 +100,7 @@ export function PhoneFrame({ generatedTree, isGenerating, imageUrl }: PhoneFrame
                 draggable={false}
               />
             ) : generatedTree ? (
-              <div
-                className="phone-screen"
-                style={{
-                  width: '100%',
-                  minHeight: '100%',
-                  overflowY: 'auto',
-                  WebkitOverflowScrolling: 'touch',
-                  scrollbarWidth: 'none',
-                }}
-              >
-                <ScreenRenderer tree={generatedTree} />
-              </div>
+              <ScreenRenderer tree={generatedTree} />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6">
                 <div className="w-10 h-10 rounded-xl bg-mokkoi-accent/10 flex items-center justify-center">
