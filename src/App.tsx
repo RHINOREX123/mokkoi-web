@@ -3,14 +3,13 @@ import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil } from 'lucide-react'
 import type { ComponentNode } from './types/mokkoi'
 
 interface GeneratedScreen {
   id: string
   name: string
   tree: ComponentNode
-  messages: ChatMessage[]
   /** If this screen is part of a flow, all screens in the flow share the same flowId */
   flowId?: string
   /** Screen type: 'generated' for AI screens, 'image' for uploaded screenshots */
@@ -70,6 +69,17 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(100)
   const [referenceImages, setReferenceImages] = useState<CanvasRefImage[]>([])
 
+  // Project-level chat messages — one continuous thread
+  const [projectMessages, setProjectMessages] = useState<ChatMessage[]>([])
+
+  // Editable project name
+  const [projectName, setProjectName] = useState('Untitled Project')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const projectNameInputRef = useRef<HTMLInputElement>(null)
+
+  // Share toast
+  const [showShareToast, setShowShareToast] = useState(false)
+
   // Resizable panel — left is chat (28%), right is canvas (72%)
   const [splitRatio, setSplitRatio] = useState(0.28)
   const isDragging = useRef(false)
@@ -80,9 +90,26 @@ function App() {
   // Pan state — Figma-style translate-based panning
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const isPanning = useRef(false)
+  const didPan = useRef(false)
   const panStart = useRef({ x: 0, y: 0 })
   const panOffsetStart = useRef({ x: 0, y: 0 })
   const isSpaceHeld = useRef(false)
+  const [isSpacePanning, setIsSpacePanning] = useState(false) // state for cursor re-render
+
+  // Focus project name input when editing
+  useEffect(() => {
+    if (isEditingName) {
+      projectNameInputRef.current?.focus()
+      projectNameInputRef.current?.select()
+    }
+  }, [isEditingName])
+
+  // Auto-hide share toast
+  useEffect(() => {
+    if (!showShareToast) return
+    const t = setTimeout(() => setShowShareToast(false), 2000)
+    return () => clearTimeout(t)
+  }, [showShareToast])
 
   // Prevent browser-level Ctrl+scroll zoom + spacebar pan shortcut
   useEffect(() => {
@@ -93,11 +120,13 @@ function App() {
       if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
         e.preventDefault()
         isSpaceHeld.current = true
+        setIsSpacePanning(true)
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         isSpaceHeld.current = false
+        setIsSpacePanning(false)
       }
     }
     document.addEventListener('wheel', preventBrowserZoom, { passive: false })
@@ -112,15 +141,32 @@ function App() {
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
-      let ratio = (e.clientX - rect.left) / rect.width
-      ratio = Math.max(0.2, Math.min(0.45, ratio))
-      setSplitRatio(ratio)
+      if (isDragging.current && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        let ratio = (e.clientX - rect.left) / rect.width
+        ratio = Math.max(0.2, Math.min(0.45, ratio))
+        setSplitRatio(ratio)
+      }
+      // Handle canvas panning via global mousemove for smoothness
+      if (isPanning.current) {
+        const dx = e.clientX - panStart.current.x
+        const dy = e.clientY - panStart.current.y
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          didPan.current = true
+        }
+        setPanOffset({
+          x: panOffsetStart.current.x + dx,
+          y: panOffsetStart.current.y + dy,
+        })
+      }
     }
     const handleMouseUp = () => {
       isDragging.current = false
-      isPanning.current = false
+      if (isPanning.current) {
+        isPanning.current = false
+        // Reset didPan after a tick so click handlers can still read it
+        requestAnimationFrame(() => { didPan.current = false })
+      }
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
@@ -135,9 +181,6 @@ function App() {
   // Current active generated screen
   const activeGenerated = generatedScreens.find(s => s.id === activeGeneratedId)
   const generatedTree = activeGenerated?.tree
-  // Messages for the active screen (or empty for new screen)
-  const activeMessages = activeGenerated?.messages ?? []
-
 
   const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean) => {
     const userMsg: ChatMessage = {
@@ -148,6 +191,9 @@ function App() {
       imageData,
     }
 
+    // Add user message to project-level chat
+    setProjectMessages(prev => [...prev, userMsg])
+
     // Detect flow requests
     const flowRequest = isFlowPrompt(prompt) && !imageData
 
@@ -156,16 +202,13 @@ function App() {
     if (!forceNew && activeGeneratedId) {
       const hasEditIntent = isEditIntent(prompt)
       const hasCreateIntent = isCreateIntent(prompt)
-      // Edit if: screen selected AND (edit words OR no create words)
       if (hasEditIntent && !hasCreateIntent) {
         editingScreenId = activeGeneratedId
       } else if (!hasEditIntent && hasCreateIntent) {
-        editingScreenId = null // create new
+        editingScreenId = null
       } else if (hasEditIntent && hasCreateIntent) {
-        // Ambiguous — default to edit since a screen is selected
         editingScreenId = activeGeneratedId
       } else {
-        // No keywords — default to edit selected screen
         editingScreenId = activeGeneratedId
       }
     }
@@ -183,7 +226,6 @@ function App() {
         id: placeholderId,
         name: placeholderName,
         tree: { type: 'View', style: {}, children: [] },
-        messages: [userMsg],
       }
       setGeneratedScreens(prev => [...prev, placeholderScreen])
       setActiveGeneratedId(placeholderId)
@@ -206,23 +248,11 @@ function App() {
         const screenNames = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { name: string }) => s.name)
 
         // Create flow screens
-        const newFlowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }, i: number) => ({
+        const newFlowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }) => ({
           id: crypto.randomUUID(),
           name: s.name,
           tree: s.tree,
           flowId,
-          messages: i === 0
-            ? [
-                userMsg,
-                {
-                  id: crypto.randomUUID(),
-                  role: 'assistant' as const,
-                  content: `Generated a flow with ${screens.length} screens: ${screenNames.join(' \u2192 ')}`,
-                  timestamp: Date.now(),
-                  flowScreenNames: screenNames,
-                },
-              ]
-            : [],
         }))
 
         // Replace placeholder with flow screens
@@ -231,6 +261,16 @@ function App() {
           return [...withoutPlaceholder, ...newFlowScreens]
         })
         setActiveGeneratedId(newFlowScreens[0].id)
+
+        // Add assistant message to project chat
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Generated a flow with ${screens.length} screens: ${screenNames.join(' \u2192 ')}`,
+          timestamp: Date.now(),
+          flowScreenNames: screenNames,
+        }
+        setProjectMessages(prev => [...prev, assistantMsg])
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
         const errorMsg: ChatMessage = {
@@ -239,37 +279,30 @@ function App() {
           content: `Error: ${errorMessage}`,
           timestamp: Date.now(),
         }
-        setGeneratedScreens(prev => prev.map(s =>
-          s.id === placeholderId
-            ? { ...s, messages: [...s.messages, errorMsg] }
-            : s
-        ))
+        setProjectMessages(prev => [...prev, errorMsg])
       } finally {
         setIsGenerating(false)
       }
       return
     }
 
-    // === SINGLE SCREEN GENERATION (original logic) ===
+    // === SINGLE SCREEN GENERATION ===
     let targetId: string
+    let screenName: string
+    const screenNumber = editingScreen
+      ? generatedScreens.findIndex(s => s.id === editingScreenId) + 1
+      : generatedScreens.length + 1
 
     if (editingScreen) {
-      // Editing existing screen — append message
       targetId = editingScreenId!
-      setGeneratedScreens(prev => prev.map(s =>
-        s.id === targetId
-          ? { ...s, messages: [...s.messages, userMsg] }
-          : s
-      ))
+      screenName = editingScreen.name
     } else {
-      // Creating a new screen
       targetId = crypto.randomUUID()
-      const name = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
+      screenName = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
       const newScreen: GeneratedScreen = {
         id: targetId,
-        name,
+        name: screenName,
         tree: { type: 'View', style: {}, children: [] },
-        messages: [userMsg],
       }
       setGeneratedScreens(prev => [...prev, newScreen])
       setActiveGeneratedId(targetId)
@@ -295,17 +328,19 @@ function App() {
 
       const { tree } = await res.json()
 
+      setGeneratedScreens(prev => prev.map(s =>
+        s.id === targetId ? { ...s, tree } : s
+      ))
+
+      // Project-level assistant message with screen context
+      const action = editingScreen ? 'Updated' : 'Generated'
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: editingScreen ? 'Updated your screen design' : 'Generated your screen design',
+        content: `${action} Screen ${screenNumber}: ${screenName}`,
         timestamp: Date.now(),
       }
-      setGeneratedScreens(prev => prev.map(s =>
-        s.id === targetId
-          ? { ...s, tree, messages: [...s.messages, assistantMsg] }
-          : s
-      ))
+      setProjectMessages(prev => [...prev, assistantMsg])
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
       const errorMsg: ChatMessage = {
@@ -314,11 +349,7 @@ function App() {
         content: `Error: ${errorMessage}`,
         timestamp: Date.now(),
       }
-      setGeneratedScreens(prev => prev.map(s =>
-        s.id === targetId
-          ? { ...s, messages: [...s.messages, errorMsg] }
-          : s
-      ))
+      setProjectMessages(prev => [...prev, errorMsg])
     } finally {
       setIsGenerating(false)
     }
@@ -386,54 +417,68 @@ function App() {
   }, [])
 
   // Pan handlers — Figma-style: hand tool, middle mouse, or spacebar+drag
-  const canPan = (e: React.MouseEvent) =>
+  // Works ANYWHERE on canvas (empty space, phones, reference images)
+  const shouldPan = (e: React.MouseEvent) =>
     activeTool === 'pan' || e.button === 1 || isSpaceHeld.current
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (!canPan(e)) return
-    // Prevent middle-click auto-scroll
+    if (!shouldPan(e)) return
     if (e.button === 1) e.preventDefault()
     isPanning.current = true
+    didPan.current = false
     panStart.current = { x: e.clientX, y: e.clientY }
     panOffsetStart.current = { ...panOffset }
     document.body.style.cursor = 'grabbing'
     document.body.style.userSelect = 'none'
   }
 
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning.current) return
-    const dx = e.clientX - panStart.current.x
-    const dy = e.clientY - panStart.current.y
-    setPanOffset({
-      x: panOffsetStart.current.x + dx,
-      y: panOffsetStart.current.y + dy,
-    })
-  }
-
-  const handleCanvasMouseUp = () => {
-    isPanning.current = false
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }
-
   const resetPan = () => setPanOffset({ x: 0, y: 0 })
 
-  // Click empty canvas to deselect
+  // Click empty canvas to deselect (only in select mode)
   const handleCanvasClick = (e: React.MouseEvent) => {
-    // Only deselect if clicking directly on the canvas background (not a child phone)
+    if (didPan.current) return
+    if (activeTool === 'pan' || isSpaceHeld.current) return
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvasBg === 'true') {
       setActiveGeneratedId(null)
     }
   }
 
-  // Share: copy current URL
+  // Phone click handler — select only in select mode and if not panning
+  const handlePhoneClick = (e: React.MouseEvent, screenId: string) => {
+    e.stopPropagation()
+    if (didPan.current) return
+    if (activeTool === 'pan' || isSpaceHeld.current) return
+    setActiveGeneratedId(screenId)
+  }
+
+  // Share: copy current URL + show toast
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href)
+      setShowShareToast(true)
     } catch {
-      // fallback — silently ignore
+      // fallback
     }
   }
+
+  // Project name editing
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      setIsEditingName(false)
+    }
+    if (e.key === 'Escape') {
+      setIsEditingName(false)
+    }
+  }
+
+  const handleNameBlur = () => {
+    setIsEditingName(false)
+    if (!projectName.trim()) setProjectName('Untitled Project')
+  }
+
+  // Determine canvas cursor
+  const panActive = activeTool === 'pan' || isSpacePanning
+  const canvasCursor = isPanning.current ? 'grabbing' : panActive ? 'grab' : 'default'
 
   // Toolbar button helper
   const tbBtn = (id: string, icon: React.ReactNode, tooltip: string, onClick?: () => void) => {
@@ -458,37 +503,6 @@ function App() {
       </button>
     )
   }
-
-  // Navbar button helper
-  const navBtn = (icon: React.ReactNode, label: string, onClick: () => void) => (
-    <button
-      onClick={onClick}
-      style={{
-        flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '5px 12px', borderRadius: 8,
-        fontSize: 12, fontWeight: 500,
-        color: '#94a3b8',
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
-        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'
-        e.currentTarget.style.color = '#e2e8f0'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-        e.currentTarget.style.color = '#94a3b8'
-      }}
-    >
-      {icon}
-      {label}
-    </button>
-  )
 
   return (
     <div className="app-shell" style={{ height: '100vh', background: '#000000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -515,7 +529,7 @@ function App() {
           zoom: 1,
         }}
       >
-        {/* Left: logo + Design Studio */}
+        {/* Left: logo + editable project name */}
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
           <div
             style={{
@@ -531,7 +545,60 @@ function App() {
         </a>
 
         <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 14, userSelect: 'none', flexShrink: 0 }}>|</span>
-        <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b', flexShrink: 0 }}>Design Studio</span>
+
+        {/* Editable project name */}
+        {isEditingName ? (
+          <input
+            ref={projectNameInputRef}
+            value={projectName}
+            onChange={e => setProjectName(e.target.value)}
+            onKeyDown={handleNameKeyDown}
+            onBlur={handleNameBlur}
+            style={{
+              fontSize: 14, fontWeight: 500, color: '#f1f5f9',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(99,102,241,0.4)',
+              borderRadius: 6,
+              padding: '2px 8px',
+              outline: 'none',
+              minWidth: 120, maxWidth: 240,
+            }}
+          />
+        ) : (
+          <button
+            onClick={() => setIsEditingName(true)}
+            className="project-name-btn"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 14, fontWeight: 500, color: '#f1f5f9',
+              background: 'transparent',
+              border: '1px solid transparent',
+              borderRadius: 6,
+              padding: '2px 8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+              const pencil = e.currentTarget.querySelector('.pencil-icon') as HTMLElement
+              if (pencil) pencil.style.opacity = '1'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.borderColor = 'transparent'
+              const pencil = e.currentTarget.querySelector('.pencil-icon') as HTMLElement
+              if (pencil) pencil.style.opacity = '0'
+            }}
+            title="Click to rename project"
+          >
+            {projectName}
+            <span className="pencil-icon" style={{ opacity: 0, transition: 'opacity 0.2s', display: 'flex' }}>
+              <Pencil size={12} color="#64748b" />
+            </span>
+          </button>
+        )}
 
         {/* Generating indicator */}
         {isGenerating && (
@@ -586,12 +653,47 @@ function App() {
           </button>
 
           {/* Export button */}
-          {navBtn(<Download size={14} />, 'Export', () => {
-            if (generatedTree) setShowCodeExport(true)
-          })}
+          <button
+            onClick={() => { if (generatedTree) setShowCodeExport(true) }}
+            style={{
+              flexShrink: 0,
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '5px 12px', borderRadius: 8,
+              fontSize: 12, fontWeight: 500,
+              color: '#94a3b8',
+              background: 'transparent',
+              border: 'none',
+              cursor: generatedTree ? 'pointer' : 'default',
+              opacity: generatedTree ? 1 : 0.4,
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { if (generatedTree) e.currentTarget.style.color = '#e2e8f0' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8' }}
+          >
+            <Download size={14} />
+            Export
+          </button>
 
           {/* Share button */}
-          {navBtn(<Share2 size={14} />, 'Share', handleShare)}
+          <button
+            onClick={handleShare}
+            style={{
+              flexShrink: 0, position: 'relative',
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '5px 12px', borderRadius: 8,
+              fontSize: 12, fontWeight: 500,
+              color: '#94a3b8',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#e2e8f0' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8' }}
+          >
+            <Share2 size={14} />
+            Share
+          </button>
 
           {/* User avatar */}
           <div
@@ -604,10 +706,26 @@ function App() {
             }}
             title="User"
           >
-            U
+            S
           </div>
         </div>
       </nav>
+
+      {/* Share toast */}
+      {showShareToast && (
+        <div style={{
+          position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+          padding: '8px 20px', borderRadius: 10,
+          background: '#1a1a2e', color: '#34d399',
+          fontSize: 13, fontWeight: 500,
+          border: '1px solid rgba(52,211,153,0.2)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          zIndex: 100,
+          animation: 'fadeInDown 0.25s ease-out',
+        }}>
+          Link copied!
+        </div>
+      )}
 
       {/* Main content: LEFT = Chat, RIGHT = Canvas */}
       <div
@@ -629,7 +747,7 @@ function App() {
           }}
         >
           <ChatPanel
-            messages={activeMessages}
+            messages={projectMessages}
             onSend={handleSend}
             onExportCode={() => generatedTree && setShowCodeExport(true)}
             isGenerating={isGenerating}
@@ -656,15 +774,12 @@ function App() {
           onMouseLeave={e => { if (!isDragging.current) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.width = '1px' } }}
         />
 
-        {/* RIGHT: Canvas — light cream background with dot grid */}
+        {/* RIGHT: Canvas */}
         <div
           ref={canvasRef}
           className="canvas-side"
           onWheel={handleCanvasWheel}
           onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseUp}
           onClick={handleCanvasClick}
           style={{
             width: `${(1 - splitRatio) * 100}%`,
@@ -677,7 +792,7 @@ function App() {
             backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)',
             backgroundSize: '24px 24px',
             backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
-            cursor: (activeTool === 'pan' || isSpaceHeld.current) ? 'grab' : 'default',
+            cursor: canvasCursor,
           }}
         >
           {/* Canvas content — multi-screen infinite canvas */}
@@ -693,7 +808,7 @@ function App() {
               </span>
             </div>
           ) : (
-            /* ALL SCREENS + REFERENCE IMAGES — horizontal row */
+            /* ALL SCREENS + REFERENCE IMAGES */
             <div
               data-canvas-bg="true"
               style={{
@@ -702,6 +817,7 @@ function App() {
                 transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel / 100})`,
                 transformOrigin: 'center center',
                 transition: isPanning.current ? 'none' : 'transform 0.15s ease-out',
+                cursor: panActive ? 'inherit' : 'default',
               }}
             >
               {generatedScreens.map((screen, idx) => {
@@ -711,10 +827,11 @@ function App() {
                 return (
                   <div
                     key={screen.id}
-                    onClick={(e) => { e.stopPropagation(); setActiveGeneratedId(screen.id) }}
+                    onClick={(e) => handlePhoneClick(e, screen.id)}
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                      cursor: 'pointer', flexShrink: 0,
+                      cursor: panActive ? 'inherit' : 'pointer',
+                      flexShrink: 0,
                     }}
                   >
                     {/* Screen label */}
@@ -872,8 +989,12 @@ function App() {
         </div>
       </div>
 
-      {/* Responsive styles */}
+      {/* Responsive styles + toast animation */}
       <style>{`
+        @keyframes fadeInDown {
+          from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
         @media (max-width: 768px) {
           .main-panels {
             flex-direction: column !important;
