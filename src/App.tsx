@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload } from 'lucide-react'
 import type { ComponentNode } from './types/mokkoi'
 
 interface GeneratedScreen {
@@ -34,18 +35,20 @@ function App() {
   const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [showCodeExport, setShowCodeExport] = useState(false)
+  const [activeToolbarBtn, setActiveToolbarBtn] = useState<string>('select')
 
-  // Resizable panel — left is chat (38%), right is canvas (62%)
-  const [splitRatio, setSplitRatio] = useState(0.38)
+  // Resizable panel — left is chat (28%), right is canvas (72%)
+  const [splitRatio, setSplitRatio] = useState(0.28)
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
       let ratio = (e.clientX - rect.left) / rect.width
-      ratio = Math.max(0.25, Math.min(0.55, ratio))
+      ratio = Math.max(0.2, Math.min(0.45, ratio))
       setSplitRatio(ratio)
     }
     const handleMouseUp = () => {
@@ -64,8 +67,6 @@ function App() {
   // Current active generated screen
   const activeGenerated = generatedScreens.find(s => s.id === activeGeneratedId)
   const generatedTree = activeGenerated?.tree
-  const showingGenerated = !!activeGenerated
-
   // Messages for the active screen (or empty for new screen)
   const activeMessages = activeGenerated?.messages ?? []
 
@@ -261,11 +262,53 @@ function App() {
     document.body.style.userSelect = 'none'
   }
 
+  // Handle file upload from canvas toolbar
+  const handleCanvasUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      const base64 = result.split(',')[1]
+      handleSend('Recreate this screen design', base64)
+    }
+    reader.readAsDataURL(file)
+  }
+
   // Determine canvas state
   const hasScreens = generatedScreens.length > 0
 
+  // Toolbar button helper
+  const tbBtn = (id: string, icon: React.ReactNode, onClick?: () => void) => (
+    <button
+      onClick={onClick ?? (() => setActiveToolbarBtn(id))}
+      style={{
+        width: 32, height: 32, borderRadius: 8,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: activeToolbarBtn === id ? 'rgba(255,255,255,0.12)' : 'transparent',
+        color: activeToolbarBtn === id ? '#fff' : '#999',
+        border: 'none', cursor: 'pointer',
+        transition: 'all 0.15s',
+      }}
+      onMouseEnter={e => { if (activeToolbarBtn !== id) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+      onMouseLeave={e => { if (activeToolbarBtn !== id) e.currentTarget.style.background = 'transparent' }}
+    >
+      {icon}
+    </button>
+  )
+
   return (
     <div className="app-shell" style={{ height: '100vh', background: '#000000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Hidden file input for canvas upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".png,.jpg,.jpeg,.webp"
+        style={{ display: 'none' }}
+        onChange={handleCanvasUpload}
+      />
+
       {/* Navbar */}
       <nav
         style={{
@@ -428,6 +471,7 @@ function App() {
             isGenerating={isGenerating}
             initialPrompt={initialPrompt}
             onFlowScreenClick={handleFlowScreenClick}
+            hasScreens={hasScreens}
           />
         </div>
 
@@ -447,7 +491,7 @@ function App() {
           onMouseLeave={e => { if (!isDragging.current) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.width = '1px' } }}
         />
 
-        {/* RIGHT: Canvas */}
+        {/* RIGHT: Canvas — light cream background with dot grid */}
         <div
           className="canvas-side"
           style={{
@@ -457,25 +501,19 @@ function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#050505',
-            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)',
+            backgroundColor: '#E8E8E8',
+            backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)',
             backgroundSize: '24px 24px',
           }}
         >
           {/* Canvas content based on state */}
           {!hasScreens && !isGenerating ? (
-            /* EMPTY STATE — no screens generated yet */
+            /* EMPTY STATE — no phone, just centered text on light canvas */
             <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
               pointerEvents: 'none', userSelect: 'none',
             }}>
-              {/* Phone outline icon */}
-              <svg width="48" height="72" viewBox="0 0 48 72" fill="none" style={{ opacity: 0.2 }}>
-                <rect x="2" y="2" width="44" height="68" rx="10" stroke="white" strokeWidth="2" strokeDasharray="4 3" />
-                <rect x="18" y="60" width="12" height="3" rx="1.5" fill="white" opacity="0.3" />
-                <rect x="16" y="6" width="16" height="4" rx="2" fill="white" opacity="0.2" />
-              </svg>
-              <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>
+              <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>
                 Your designs will appear here
               </span>
             </div>
@@ -505,11 +543,8 @@ function App() {
                   <div style={{
                     borderRadius: 52,
                     boxShadow: screen.id === activeGeneratedId
-                      ? '0 0 30px rgba(99,102,241,0.3), 0 0 60px rgba(99,102,241,0.1)'
-                      : '0 0 30px rgba(0,0,0,0.3)',
-                    border: screen.id === activeGeneratedId
-                      ? '2px solid rgba(99,102,241,0.5)'
-                      : '2px solid transparent',
+                      ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 2px rgba(99,102,241,0.5)'
+                      : '0 8px 32px rgba(0,0,0,0.3)',
                     transition: 'all 0.25s',
                   }}>
                     <PhoneFrame
@@ -518,8 +553,8 @@ function App() {
                     />
                   </div>
                   <span style={{
-                    fontSize: 11, fontWeight: 500,
-                    color: screen.id === activeGeneratedId ? '#a5b4fc' : '#64748b',
+                    fontSize: 11, fontWeight: 600,
+                    color: screen.id === activeGeneratedId ? '#6366f1' : '#666',
                     textAlign: 'center',
                     maxWidth: 120,
                     overflow: 'hidden',
@@ -533,7 +568,7 @@ function App() {
               ))}
             </div>
           ) : (
-            /* SINGLE SCREEN or generating — one phone frame centered */
+            /* SINGLE SCREEN or generating — one phone frame centered with shadow */
             <div style={{
               position: 'relative',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
@@ -541,25 +576,9 @@ function App() {
               transformOrigin: 'center center',
               maxHeight: 'calc(100vh - 80px)',
             }}>
-              {/* Subtle glow behind phone */}
-              {showingGenerated && !isGenerating && (
-                <div style={{
-                  position: 'absolute', top: '50%', left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: 300, height: 400, borderRadius: '50%',
-                  background: 'rgba(99,102,241,0.06)',
-                  filter: 'blur(80px)',
-                  pointerEvents: 'none',
-                }} />
-              )}
               <div style={{
                 borderRadius: 52,
-                boxShadow: showingGenerated && !isGenerating
-                  ? '0 0 40px rgba(99,102,241,0.15), 0 0 80px rgba(99,102,241,0.05)'
-                  : 'none',
-                border: showingGenerated && !isGenerating
-                  ? '2px solid rgba(99,102,241,0.2)'
-                  : '2px solid transparent',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
                 transition: 'all 0.3s',
               }}>
                 <PhoneFrame
@@ -574,8 +593,8 @@ function App() {
                   display: 'flex', alignItems: 'center', gap: 16,
                   padding: '8px 16px',
                   borderRadius: 20,
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'rgba(0,0,0,0.6)',
+                  border: '1px solid rgba(255,255,255,0.1)',
                 }}>
                   <button
                     onClick={() => { if (flowIndex > 0) setActiveGeneratedId(flowScreens[flowIndex - 1].id) }}
@@ -586,16 +605,16 @@ function App() {
                       fontSize: 12,
                       fontWeight: 500,
                       cursor: flowIndex > 0 ? 'pointer' : 'not-allowed',
-                      background: flowIndex > 0 ? 'rgba(99,102,241,0.15)' : 'transparent',
-                      color: flowIndex > 0 ? '#a5b4fc' : '#334155',
+                      background: flowIndex > 0 ? 'rgba(99,102,241,0.3)' : 'transparent',
+                      color: flowIndex > 0 ? '#fff' : '#666',
                       border: '1px solid',
-                      borderColor: flowIndex > 0 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
+                      borderColor: flowIndex > 0 ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)',
                       transition: 'all 0.2s',
                     }}
                   >
-                    \u2190 Previous
+                    ← Previous
                   </button>
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#ccc', fontWeight: 500, whiteSpace: 'nowrap' }}>
                     Screen {flowIndex + 1} of {flowScreens.length}
                   </span>
                   <button
@@ -607,19 +626,53 @@ function App() {
                       fontSize: 12,
                       fontWeight: 500,
                       cursor: flowIndex < flowScreens.length - 1 ? 'pointer' : 'not-allowed',
-                      background: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.15)' : 'transparent',
-                      color: flowIndex < flowScreens.length - 1 ? '#a5b4fc' : '#334155',
+                      background: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.3)' : 'transparent',
+                      color: flowIndex < flowScreens.length - 1 ? '#fff' : '#666',
                       border: '1px solid',
-                      borderColor: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.06)',
+                      borderColor: flowIndex < flowScreens.length - 1 ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)',
                       transition: 'all 0.2s',
                     }}
                   >
-                    Next \u2192
+                    Next →
                   </button>
                 </div>
               )}
             </div>
           )}
+
+          {/* Bottom canvas toolbar */}
+          <div style={{
+            position: 'absolute',
+            bottom: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '8px 16px',
+            background: '#1A1A1A',
+            borderRadius: 14,
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          }}>
+            {tbBtn('select', <MousePointer2 size={18} />)}
+            {tbBtn('pan', <Hand size={18} />)}
+
+            {/* Separator */}
+            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
+
+            {tbBtn('zoomOut', <ZoomOut size={18} />, () => {})}
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#999', minWidth: 36, textAlign: 'center', userSelect: 'none' }}>
+              100%
+            </span>
+            {tbBtn('zoomIn', <ZoomIn size={18} />, () => {})}
+
+            {/* Separator */}
+            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
+
+            {tbBtn('pen', <PenTool size={18} />)}
+            {tbBtn('upload', <Upload size={18} />, () => fileInputRef.current?.click())}
+          </div>
         </div>
       </div>
 

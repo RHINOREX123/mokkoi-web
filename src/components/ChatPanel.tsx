@@ -19,6 +19,8 @@ interface ChatPanelProps {
   initialPrompt?: string
   /** Callback when user clicks a screen name in a flow message */
   onFlowScreenClick?: (screenName: string) => void
+  /** Whether any screens have been generated (hides example cards) */
+  hasScreens?: boolean
 }
 
 const PLACEHOLDERS = [
@@ -50,7 +52,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -115,13 +117,11 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    // Reset input so same file can be re-selected
     e.target.value = ''
 
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string
-      // result is "data:image/png;base64,AAAA..."
       const base64 = result.split(',')[1]
       const mediaType = file.type || 'image/png'
       setAttachedImage({ data: base64, name: file.name, mediaType })
@@ -143,6 +143,9 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
   const lastMsg = messages[messages.length - 1]
   const showSuggestions = lastMsg?.role === 'assistant' && !lastMsg.content.startsWith('Error:') && !lastMsg.flowScreenNames && !isGenerating
 
+  // Show example cards only when zero screens AND zero messages
+  const showExampleCards = messages.length === 0 && !isGenerating && !hasScreens
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Hidden file input */}
@@ -162,10 +165,10 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
         padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 16,
       }}>
-        {/* Empty state */}
-        {messages.length === 0 && !isGenerating && (
+        {/* Empty state with example cards */}
+        {showExampleCards && (
           <div style={{
             flex: 1,
             display: 'flex',
@@ -195,7 +198,6 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                     textAlign: 'left',
                     cursor: 'pointer',
                     transition: 'all 0.25s ease',
-                    // 5th card spans full width
                     ...(idx === 4 ? { gridColumn: '1 / -1' } : {}),
                   }}
                   onMouseEnter={e => {
@@ -226,49 +228,39 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
         {messages.map((msg, idx) => (
           <div key={msg.id}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                gap: 8,
-                alignItems: 'flex-end',
-              }}
-            >
-              {/* AI avatar */}
-              {msg.role === 'assistant' && (
-                <div style={{
-                  width: 24, height: 24, borderRadius: 6, flexShrink: 0,
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 800, color: '#fff',
-                }}>
-                  M
-                </div>
-              )}
-              <div
-                style={{
-                  maxWidth: '80%',
-                  padding: '10px 14px',
-                  borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                  ...(msg.role === 'user'
-                    ? {
-                        background: 'rgba(129,140,248,0.15)',
-                        color: '#a5b4fc',
-                      }
-                    : msg.content.startsWith('Error:')
-                      ? {
-                          background: 'rgba(248,113,113,0.1)',
-                          color: '#f87171',
-                        }
-                      : {
-                          background: 'rgba(255,255,255,0.04)',
-                          color: '#94a3b8',
-                        }
-                  ),
-                }}
-              >
+            {/* Clean message style: label above, no background bubbles */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+            }}>
+              {/* Label row */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                marginBottom: 4,
+              }}>
+                {msg.role === 'assistant' && (
+                  <div style={{
+                    width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                    background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 8, fontWeight: 800, color: '#fff',
+                  }}>
+                    M
+                  </div>
+                )}
+                <span style={{ fontSize: 11, color: '#555', fontWeight: 500 }}>
+                  {msg.role === 'user' ? 'You' : 'Mokkoi'}
+                </span>
+              </div>
+
+              {/* Message content — no background */}
+              <div style={{
+                maxWidth: '90%',
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: msg.content.startsWith('Error:') ? '#f87171' : '#e2e8f0',
+              }}>
                 {/* Show attached image thumbnail in user messages */}
                 {msg.imageData && (
                   <div style={{ marginBottom: 8 }}>
@@ -325,7 +317,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
             {/* Quick suggestion pills after last assistant message */}
             {idx === messages.length - 1 && showSuggestions && (
-              <div style={{ display: 'flex', gap: 6, marginTop: 8, marginLeft: 32, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                 {QUICK_SUGGESTIONS.map(s => (
                   <button
                     key={s}
@@ -335,19 +327,19 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
                       borderRadius: 20,
                       fontSize: 12,
                       fontWeight: 500,
-                      color: '#a5b4fc',
-                      background: 'rgba(99,102,241,0.1)',
-                      border: '1px solid rgba(99,102,241,0.2)',
+                      color: '#94a3b8',
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.1)',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.background = 'rgba(99,102,241,0.2)'
-                      e.currentTarget.style.borderColor = 'rgba(99,102,241,0.4)'
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'
+                      e.currentTarget.style.color = '#e2e8f0'
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = 'rgba(99,102,241,0.1)'
-                      e.currentTarget.style.borderColor = 'rgba(99,102,241,0.2)'
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+                      e.currentTarget.style.color = '#94a3b8'
                     }}
                   >
                     {s}
@@ -360,19 +352,20 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
         {/* Multi-step generating indicator */}
         {isGenerating && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: 6, flexShrink: 0,
-              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, fontWeight: 800, color: '#fff',
-            }}>
-              M
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            {/* Label */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <div style={{
+                width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 8, fontWeight: 800, color: '#fff',
+              }}>
+                M
+              </div>
+              <span style={{ fontSize: 11, color: '#555', fontWeight: 500 }}>Mokkoi</span>
             </div>
             <div style={{
-              padding: '12px 16px',
-              borderRadius: '14px 14px 14px 4px',
-              background: 'rgba(255,255,255,0.04)',
               display: 'flex', flexDirection: 'column', gap: 8,
               minWidth: 200,
             }}>
