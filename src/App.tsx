@@ -3,7 +3,8 @@ import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Search, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2 } from 'lucide-react'
+import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
 import type { ComponentNode } from './types/mokkoi'
 import { supabase } from './lib/supabase'
 import type { User } from '@supabase/supabase-js'
@@ -90,6 +91,9 @@ function App() {
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [focusTrigger, setFocusTrigger] = useState(0)
+  const [showEditSubmenu, setShowEditSubmenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
 
@@ -99,6 +103,7 @@ function App() {
   const containerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const hasTreeRef = useRef(false)
 
   // Pan state — Figma-style translate-based panning
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
@@ -272,7 +277,33 @@ function App() {
       if (e.ctrlKey) e.preventDefault()
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+      const tag = (e.target as HTMLElement)?.tagName
+      const inInput = ['INPUT', 'TEXTAREA'].includes(tag)
+
+      // Ctrl+K → Command palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(prev => !prev)
+        return
+      }
+
+      // Global shortcuts (only when not in an input)
+      if (!inInput) {
+        if (e.key === 'v' || e.key === 'V') { setActiveTool('select'); return }
+        if (e.key === 'h' || e.key === 'H') { setActiveTool('pan'); return }
+        if (e.key === 'n' || e.key === 'N') {
+          setActiveGeneratedId(null)
+          setShowCodeExport(false)
+          setFocusTrigger(t => t + 1)
+          return
+        }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); setZoomLevel(z => Math.min(200, z + 10)); return }
+        if (e.key === '-') { e.preventDefault(); setZoomLevel(z => Math.max(25, z - 10)); return }
+        if ((e.ctrlKey || e.metaKey) && e.key === '0') { e.preventDefault(); setZoomLevel(100); setPanOffset({ x: 0, y: 0 }); return }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); if (hasTreeRef.current) setShowCodeExport(true); return }
+      }
+
+      if (e.code === 'Space' && !inInput) {
         e.preventDefault()
         isSpaceHeld.current = true
         setIsSpacePanning(true)
@@ -336,6 +367,7 @@ function App() {
   // Current active generated screen
   const activeGenerated = generatedScreens.find(s => s.id === activeGeneratedId)
   const generatedTree = activeGenerated?.tree
+  hasTreeRef.current = !!generatedTree
 
   const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean) => {
     const userMsg: ChatMessage = {
@@ -666,6 +698,22 @@ function App() {
     )
   }
 
+  // Command palette commands
+  const commands: CmdType[] = useMemo(() => [
+    { id: 'select-tool', label: 'Select Tool', shortcut: 'V', icon: <MousePointer2 size={16} />, group: 'Tools', action: () => setActiveTool('select') },
+    { id: 'pan-tool', label: 'Hand Tool', shortcut: 'H', icon: <Hand size={16} />, group: 'Tools', action: () => setActiveTool('pan') },
+    { id: 'new-screen', label: 'New Screen', shortcut: 'N', icon: <Plus size={16} />, group: 'Canvas', action: () => { setActiveGeneratedId(null); setShowCodeExport(false); setFocusTrigger(t => t + 1) } },
+    { id: 'zoom-in', label: 'Zoom In', shortcut: '+', icon: <ZoomIn size={16} />, group: 'Canvas', action: zoomIn },
+    { id: 'zoom-out', label: 'Zoom Out', shortcut: '-', icon: <ZoomOut size={16} />, group: 'Canvas', action: zoomOut },
+    { id: 'reset-zoom', label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: <Maximize2 size={16} />, group: 'Canvas', action: resetZoom },
+    { id: 'export-code', label: 'Export Code', shortcut: 'Ctrl+E', icon: <Download size={16} />, group: 'Project', action: () => { if (generatedTree) setShowCodeExport(true) } },
+    { id: 'share', label: 'Copy Share Link', icon: <Share2 size={16} />, group: 'Project', action: handleShare },
+    { id: 'rename-project', label: 'Rename Project', icon: <Pencil size={16} />, group: 'Project', action: () => setIsEditingName(true) },
+    { id: 'upload-ref', label: 'Upload Reference Image', icon: <Upload size={16} />, group: 'Canvas', action: () => fileInputRef.current?.click() },
+    { id: 'go-projects', label: 'Go to All Projects', icon: <ArrowLeft size={16} />, group: 'Navigation', action: () => navigate('/projects') },
+    { id: 'sign-out', label: 'Sign Out', icon: <LogOut size={16} />, group: 'Account', action: handleSignOut },
+  ], [generatedTree, handleShare, handleSignOut, navigate, zoomIn, zoomOut, resetZoom])
+
   return (
     <div className="app-shell" style={{ height: '100vh', background: '#000000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Hidden file input for canvas upload */}
@@ -744,6 +792,62 @@ function App() {
                 <ArrowLeft size={16} color="#94a3b8" />
                 Go to all projects
               </button>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
+
+              {/* Edit submenu */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowEditSubmenu(s => !s)}
+                  style={{ ...hamburgerItemStyle, justifyContent: 'space-between' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Pencil size={16} color="#94a3b8" />
+                    Edit
+                  </span>
+                  <ChevronRight size={14} color="#555" style={{ transform: showEditSubmenu ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                </button>
+                {showEditSubmenu && (
+                  <div style={{ padding: '2px 0 2px 20px' }}>
+                    {[
+                      { label: 'Undo', icon: <Undo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Z' },
+                      { label: 'Redo', icon: <Redo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Y' },
+                      { label: 'Copy', icon: <ClipboardCopy size={14} color="#94a3b8" />, shortcut: 'Ctrl+C' },
+                      { label: 'Paste', icon: <Clipboard size={14} color="#94a3b8" />, shortcut: 'Ctrl+V' },
+                    ].map(item => (
+                      <button
+                        key={item.label}
+                        onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false); setShowEditSubmenu(false) }}
+                        style={{ ...hamburgerItemStyle, fontSize: 12, padding: '7px 10px', justifyContent: 'space-between' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {item.icon}
+                          {item.label}
+                        </span>
+                        <span style={{ fontSize: 10, color: '#555' }}>{item.shortcut}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Command menu */}
+              <button
+                onClick={() => { setShowCommandPalette(true); setShowHamburgerMenu(false) }}
+                style={{ ...hamburgerItemStyle, justifyContent: 'space-between' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Command size={16} color="#94a3b8" />
+                  Command menu
+                </span>
+                <span style={{ fontSize: 10, color: '#555' }}>Ctrl+K</span>
+              </button>
+
               <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
               <button
                 onClick={handleShareCopy}
@@ -1119,6 +1223,7 @@ function App() {
             onFlowScreenClick={handleFlowScreenClick}
             hasScreens={hasScreens}
             selectedScreenName={activeGenerated?.name}
+            focusTrigger={focusTrigger}
           />
         </div>
 
@@ -1382,6 +1487,13 @@ function App() {
           onClose={() => setShowCodeExport(false)}
         />
       )}
+
+      {/* Command Palette */}
+      <CommandPalette
+        commands={commands}
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+      />
     </div>
   )
 }

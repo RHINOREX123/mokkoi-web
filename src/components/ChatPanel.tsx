@@ -23,6 +23,8 @@ interface ChatPanelProps {
   hasScreens?: boolean
   /** Name of the currently selected screen on canvas */
   selectedScreenName?: string
+  /** Incrementing trigger to programmatically focus the chat input */
+  focusTrigger?: number
 }
 
 const PLACEHOLDERS = [
@@ -54,7 +56,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, focusTrigger }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -62,6 +64,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
   const [attachedImage, setAttachedImage] = useState<{ data: string; name: string; mediaType: string } | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const chatInputRef = useRef<HTMLInputElement>(null)
   const initialPromptHandled = useRef(false)
 
   // Cycle placeholder text
@@ -91,6 +94,13 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isGenerating])
+
+  // Focus input when focusTrigger changes
+  useEffect(() => {
+    if (focusTrigger && focusTrigger > 0) {
+      chatInputRef.current?.focus()
+    }
+  }, [focusTrigger])
 
   // Handle initial prompt from URL
   useEffect(() => {
@@ -479,6 +489,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
             <div className="flex-1 relative">
               <input
+                ref={chatInputRef}
                 type="text"
                 value={input}
                 onChange={e => setInput(e.target.value)}
