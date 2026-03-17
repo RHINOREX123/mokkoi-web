@@ -10,6 +10,7 @@ export interface ChatMessage {
 interface ChatPanelProps {
   messages: ChatMessage[]
   onSend: (prompt: string) => void
+  onExportCode?: () => void
   isGenerating: boolean
   initialPrompt?: string
 }
@@ -42,7 +43,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -229,7 +230,7 @@ export function ChatPanel({ messages, onSend, isGenerating, initialPrompt }: Cha
                 {QUICK_SUGGESTIONS.map(s => (
                   <button
                     key={s}
-                    onClick={() => onSend(s)}
+                    onClick={() => s === 'Export code' && onExportCode ? onExportCode() : onSend(s)}
                     style={{
                       padding: '5px 12px',
                       borderRadius: 20,

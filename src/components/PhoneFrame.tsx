@@ -89,6 +89,7 @@ export function PhoneFrame({ screen, generatedTree, isGenerating }: PhoneFramePr
             className="flex-1 rounded-b-[36px] overflow-hidden phone-screen"
             style={{
               backgroundColor: '#0F172A',
+              overflowX: 'hidden',
               overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
               scrollbarWidth: 'none',

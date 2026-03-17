@@ -186,5 +186,9 @@ export function ScreenRenderer({ tree }: ScreenRendererProps) {
       </div>
     )
   }
-  return <>{renderNode(tree, 0)}</>
+  return (
+    <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+      {renderNode(tree, 0)}
+    </div>
+  )
 }

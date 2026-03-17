@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
+import { CodeExportModal } from './components/CodeExportModal'
 import { useMokkoiSocket } from './hooks/useMokkoiSocket'
 import type { ComponentNode } from './types/mokkoi'
 
@@ -23,6 +24,7 @@ function App() {
   const [generatedScreens, setGeneratedScreens] = useState<GeneratedScreen[]>([])
   const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [showCodeExport, setShowCodeExport] = useState(false)
 
   // Resizable panel
   const [splitRatio, setSplitRatio] = useState(0.55)
@@ -254,7 +256,10 @@ function App() {
 
           {/* New screen button */}
           <button
-            onClick={() => setActiveGeneratedId(null)}
+            onClick={() => {
+              setActiveGeneratedId(null)
+              setShowCodeExport(false)
+            }}
             style={{
               flexShrink: 0,
               width: 24,
@@ -368,11 +373,20 @@ function App() {
           <ChatPanel
             messages={activeMessages}
             onSend={handleSend}
+            onExportCode={() => generatedTree && setShowCodeExport(true)}
             isGenerating={isGenerating}
             initialPrompt={initialPrompt}
           />
         </div>
       </div>
+
+      {/* Code Export Modal */}
+      {showCodeExport && generatedTree && (
+        <CodeExportModal
+          tree={generatedTree}
+          onClose={() => setShowCodeExport(false)}
+        />
+      )}
     </div>
   )
 }
