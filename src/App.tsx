@@ -411,7 +411,7 @@ function App() {
   const generatedTree = activeGenerated?.tree
   hasTreeRef.current = !!generatedTree
 
-  const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean) => {
+  const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => {
     // Clear any previous error messages before starting a new generation
     setProjectMessages(prev => {
       const lastMsg = prev[prev.length - 1]
@@ -564,6 +564,7 @@ function App() {
           prompt,
           projectId,
           ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
+          ...(regenerateTree ? { currentScreen: regenerateTree, screenName: screenName } : {}),
           ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
         }),
       })
@@ -692,13 +693,16 @@ function App() {
 
   // === Screen Context Toolbar Handlers ===
 
-  // Regenerate: re-send the ORIGINAL clean prompt (no version labels)
+  // Regenerate: re-send the ORIGINAL clean prompt with current tree as context
   const handleRegenerate = useCallback(() => {
     if (!activeGenerated) return
     // Prefer the stored original prompt; fall back to screen name with version labels stripped
-    const cleanPrompt = activeGenerated.originalPrompt
+    const originalPrompt = activeGenerated.originalPrompt
       || activeGenerated.name.replace(/\s*v\d+/gi, '').replace(/\s*\(failed\)/gi, '').trim()
-    handleSend(cleanPrompt || activeGenerated.name, undefined, undefined, true)
+      || 'this mobile app screen'
+    const regeneratePrompt = `Regenerate this screen with a fresh design approach. Original request: "${originalPrompt}"`
+    // Pass current tree so the API knows what screen type to preserve
+    handleSend(regeneratePrompt, undefined, undefined, true, activeGenerated.tree)
   }, [activeGenerated, activeGeneratedId, generatedScreens, handleSend])
 
   // Edit via chat: focus chat input with editing context

@@ -251,7 +251,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId } = req.body ?? {}
+  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId, screenName } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
@@ -291,6 +291,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       { type: 'text', text: textPrompt },
     ]
+  } else if (isRegenerate && currentScreen) {
+    // Regenerate mode: send existing tree as reference so Claude preserves screen type
+    userContent = `REGENERATE MODE: You are regenerating an existing screen. The user wants a fresh design approach for the SAME type of screen. Keep the same purpose, features, and information architecture but create a new visual design. Do NOT change the screen type (e.g., if it's a fitness screen, keep it as fitness; if it's a dashboard, keep it as a dashboard).
+
+Here is the current screen's component tree JSON for reference:
+${JSON.stringify(currentScreen, null, 2)}
+${screenName ? `\nScreen name: ${screenName}` : ''}
+
+${prompt}
+
+Generate a completely fresh design for this same type of screen. Use different layout patterns, card styles, and visual hierarchy — but preserve the same screen purpose and content type. Return ONLY valid JSON.`
   } else if (currentScreen) {
     userContent = `Here is the current screen JSON that the user wants to modify:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user's edit request: ${prompt}\n\nModify the existing screen based on their request. Keep unchanged parts the same. Return the complete modified JSON.`
   } else {
