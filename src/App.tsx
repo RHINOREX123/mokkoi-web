@@ -1,87 +1,32 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
-import { ChatPanel, type ChatMessage } from './components/ChatPanel'
+import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
+import { MousePointer2, Hand, ZoomIn, ZoomOut, PenTool, Sparkles, Download, Share2, Plus, X, Upload, Pencil, LogOut, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
 import { DirectEditToolbar } from './components/DirectEditToolbar'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
 import { ScreenContextToolbar } from './components/ScreenContextToolbar'
-import { VariationsPanel, type VariationSettings } from './components/VariationsPanel'
+import { VariationsPanel } from './components/VariationsPanel'
 import { QrCodeModal } from './components/QrCodeModal'
 import { ScreenshotModal } from './components/ScreenshotModal'
-import { convertTreeToJSX } from './components/CodeExportModal'
+import { CanvasToolbar } from './components/CanvasToolbar'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { TopNavbar } from './components/TopNavbar'
 import html2canvas from 'html2canvas'
-import type { ComponentNode } from './types/mokkoi'
-import { supabase } from './lib/supabase'
-import type { User } from '@supabase/supabase-js'
 
-interface GeneratedScreen {
-  id: string
-  name: string
-  tree: ComponentNode
-  /** The original user prompt used to generate this screen (clean, no version labels) */
-  originalPrompt?: string
-  /** If this screen is part of a flow, all screens in the flow share the same flowId */
-  flowId?: string
-  /** Screen type: 'generated' for AI screens, 'image' for uploaded screenshots */
-  type?: 'generated' | 'image'
-  /** Data URL for uploaded screenshot images */
-  imageUrl?: string
-}
+import { supabase } from './lib/supabase'
+import { useCanvasState } from './hooks/useCanvasState'
+import { useScreenManagement } from './hooks/useScreenManagement'
+import { useAIGeneration } from './hooks/useAIGeneration'
+import { useDirectEdit } from './hooks/useDirectEdit'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 
 interface CanvasRefImage {
   id: string
   url: string
   name: string
-}
-
-const FLOW_KEYWORDS = [
-  'flow', 'onboarding', 'walkthrough', 'multi-screen', 'complete app',
-  'full app', 'series of screens', 'connected screens', 'user journey',
-  'navigation flow', 'multi screen', 'multiple screens', 'screen flow',
-  'app flow', 'checkout flow', 'signup flow', 'sign up flow',
-]
-
-const EDIT_KEYWORDS = [
-  'change', 'update', 'modify', 'remove', 'add to', 'make it', 'make the',
-  'replace', 'fix', 'adjust', 'tweak', 'edit', 'move', 'resize', 'recolor',
-  'darker', 'lighter', 'bigger', 'smaller', 'add a', 'delete',
-]
-
-const CREATE_KEYWORDS = [
-  'create', 'build', 'make a', 'design a', 'new', 'generate a',
-  'create a', 'build a', 'design', 'make me',
-]
-
-function isFlowPrompt(prompt: string): boolean {
-  const lower = prompt.toLowerCase()
-  return FLOW_KEYWORDS.some(kw => lower.includes(kw))
-}
-
-function isEditIntent(prompt: string): boolean {
-  const lower = prompt.toLowerCase()
-  return EDIT_KEYWORDS.some(kw => lower.includes(kw))
-}
-
-function isCreateIntent(prompt: string): boolean {
-  const lower = prompt.toLowerCase()
-  return CREATE_KEYWORDS.some(kw => lower.includes(kw))
-}
-
-/** Get auth headers for API calls. Returns headers with Bearer token. */
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token
-  console.log('Auth token being sent:', token ? `present (${token.substring(0, 20)}...)` : 'MISSING')
-  if (!token) {
-    throw new Error('Not authenticated. Please sign in.')
-  }
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }
 }
 
 function App() {
@@ -90,285 +35,68 @@ function App() {
   const navigate = useNavigate()
   const initialPrompt = searchParams.get('prompt') || undefined
 
-  const [generatedScreens, setGeneratedScreens] = useState<GeneratedScreen[]>([])
-  const [activeGeneratedId, setActiveGeneratedId] = useState<string | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
+  // --- Core hooks ---
+  const canvas = useCanvasState()
+  const screens = useScreenManagement(projectId)
+  const phoneFrameRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // UI state
   const [showCodeExport, setShowCodeExport] = useState(false)
-  const [activeTool, setActiveTool] = useState<'select' | 'pan'>('select')
-  const [zoomLevel, setZoomLevel] = useState(100)
   const [referenceImages, setReferenceImages] = useState<CanvasRefImage[]>([])
-
-  // Project-level chat messages — one continuous thread
-  const [projectMessages, setProjectMessages] = useState<ChatMessage[]>([])
-
-  // Editable project name
-  const [projectName, setProjectName] = useState('Untitled Project')
-  const [isEditingName, setIsEditingName] = useState(false)
-  const projectNameInputRef = useRef<HTMLInputElement>(null)
-
-  // Share toast
-  const [showShareToast, setShowShareToast] = useState(false)
-
-  // Auth user
-  const [user, setUser] = useState<User | null>(null)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const [showHamburgerMenu, setShowHamburgerMenu] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [focusTrigger, setFocusTrigger] = useState(0)
-  const [showEditSubmenu, setShowEditSubmenu] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [showVariationsPanel, setShowVariationsPanel] = useState(false)
   const [showQrModal, setShowQrModal] = useState(false)
   const [qrUrl, setQrUrl] = useState('')
   const [showDeleteScreenConfirm, setShowDeleteScreenConfirm] = useState(false)
-  const [editingScreenLabel, setEditingScreenLabel] = useState<string | null>(null)
-  const [editingScreenLabelValue, setEditingScreenLabelValue] = useState('')
-  const [isGeneratingVariations, setIsGeneratingVariations] = useState(false)
   const [showScreenshotModal, setShowScreenshotModal] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
-  const userMenuRef = useRef<HTMLDivElement>(null)
-  const hamburgerMenuRef = useRef<HTMLDivElement>(null)
-  const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Direct Edit mode state
-  const [directEditMode, setDirectEditMode] = useState(false)
-  const [directEditSelectedEl, setDirectEditSelectedEl] = useState<HTMLElement | null>(null)
-  const [directEditDirty, setDirectEditDirty] = useState(false)
-  const directEditSnapshotRef = useRef<Map<string, string>>(new Map()) // screen id -> original innerHTML
-
-  // Resizable panel — left is chat (28%), right is canvas (72%)
+  // Resizable panel
   const [splitRatio, setSplitRatio] = useState(0.28)
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const canvasRef = useRef<HTMLDivElement>(null)
-  const hasTreeRef = useRef(false)
-  const phoneFrameRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  // Pan state — Figma-style translate-based panning
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
-  const isPanning = useRef(false)
-  const didPan = useRef(false)
-  const panStart = useRef({ x: 0, y: 0 })
-  const panOffsetStart = useRef({ x: 0, y: 0 })
-  const isSpaceHeld = useRef(false)
-  const [isSpacePanning, setIsSpacePanning] = useState(false) // state for cursor re-render
+  // AI Generation
+  const ai = useAIGeneration({
+    projectId,
+    activeGeneratedId: screens.activeGeneratedId,
+    activeGenerated: screens.activeGenerated,
+    generatedScreens: screens.generatedScreens,
+    setGeneratedScreens: screens.setGeneratedScreens,
+    setActiveGeneratedId: screens.setActiveGeneratedId,
+    projectMessages: screens.projectMessages,
+    setProjectMessages: screens.setProjectMessages,
+    saveMessage: screens.saveMessage,
+    setToastMessage,
+    setShowVariationsPanel,
+  })
 
-  // Debounce timer ref for auto-save
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const projectLoadedRef = useRef(false)
+  // Direct Edit
+  const directEdit = useDirectEdit({
+    activeGeneratedId: screens.activeGeneratedId,
+    phoneFrameRefs,
+    setActiveGeneratedId: screens.setActiveGeneratedId,
+    setToastMessage,
+  })
 
-  // Load user on mount
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUser(user))
-  }, [])
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    setShowCommandPalette,
+    setActiveTool: canvas.setActiveTool,
+    setActiveGeneratedId: screens.setActiveGeneratedId,
+    setShowCodeExport,
+    setFocusTrigger,
+    setZoomLevel: canvas.setZoomLevel,
+    setPanOffset: canvas.setPanOffset,
+    hasTreeRef: screens.hasTreeRef,
+  })
 
-  // Load project data from Supabase
-  useEffect(() => {
-    if (!projectId) return
-    const loadProject = async () => {
-      // Load project info
-      const { data: project } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', projectId)
-        .single()
-      if (project) {
-        setProjectName(project.name || 'Untitled Project')
-      }
-
-      // Load screens
-      const { data: screens } = await supabase
-        .from('screens')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('order_index', { ascending: true })
-      if (screens && screens.length > 0) {
-        const loaded: GeneratedScreen[] = screens.map(s => ({
-          id: s.id,
-          name: s.name,
-          tree: s.component_tree as ComponentNode,
-          originalPrompt: s.original_prompt ?? undefined,
-        }))
-        setGeneratedScreens(loaded)
-        setActiveGeneratedId(loaded[0].id)
-      }
-
-      // Load messages
-      const { data: msgs } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: true })
-      if (msgs && msgs.length > 0) {
-        const loaded: ChatMessage[] = msgs.map(m => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          timestamp: new Date(m.created_at).getTime(),
-          imageData: m.image_url ?? undefined,
-        }))
-        setProjectMessages(loaded)
-      }
-
-      projectLoadedRef.current = true
-    }
-    loadProject()
-  }, [projectId])
-
-  // Auto-save screens to Supabase (debounced)
-  useEffect(() => {
-    if (!projectId || !projectLoadedRef.current) return
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(async () => {
-      // Upsert all screens
-      for (let i = 0; i < generatedScreens.length; i++) {
-        const s = generatedScreens[i]
-        await supabase.from('screens').upsert({
-          id: s.id,
-          project_id: projectId,
-          name: s.name,
-          component_tree: s.tree,
-          original_prompt: s.originalPrompt ?? null,
-          order_index: i,
-          updated_at: new Date().toISOString(),
-        })
-      }
-      // Update project timestamp
-      await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
-    }, 2000)
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [generatedScreens, projectId])
-
-  // Save project name to Supabase
-  const saveProjectName = useCallback(async (name: string) => {
-    if (!projectId) return
-    await supabase.from('projects').update({ name, updated_at: new Date().toISOString() }).eq('id', projectId)
-  }, [projectId])
-
-  // Save a message to Supabase
-  const saveMessage = useCallback(async (msg: ChatMessage) => {
-    if (!projectId) return
-    await supabase.from('messages').insert({
-      id: msg.id,
-      project_id: projectId,
-      role: msg.role,
-      content: msg.content,
-      image_url: msg.imageData ?? null,
-    })
-  }, [projectId])
-
-  // Sign out handler
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    navigate('/auth')
-  }
-
-  const handleDeleteProject = async () => {
-    if (!projectId) return
-    await supabase.from('projects').delete().eq('id', projectId)
-    setShowDeleteConfirm(false)
-    navigate('/projects')
-  }
-
-  const handleShareCopy = () => {
-    setShowShareModal(true)
-    setShowHamburgerMenu(false)
-  }
-
-  // Focus project name input when editing
-  useEffect(() => {
-    if (isEditingName) {
-      projectNameInputRef.current?.focus()
-      projectNameInputRef.current?.select()
-    }
-  }, [isEditingName])
-
-  // Auto-hide share toast
-  useEffect(() => {
-    if (!showShareToast) return
-    const t = setTimeout(() => setShowShareToast(false), 2000)
-    return () => clearTimeout(t)
-  }, [showShareToast])
-
-  // Auto-hide toast message
-  useEffect(() => {
-    if (!toastMessage) return
-    const t = setTimeout(() => setToastMessage(''), 2000)
-    return () => clearTimeout(t)
-  }, [toastMessage])
-
-  // Click outside to close menus
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setShowUserMenu(false)
-      }
-      if (hamburgerMenuRef.current && !hamburgerMenuRef.current.contains(e.target as Node)) {
-        setShowHamburgerMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  // Prevent browser-level Ctrl+scroll zoom + spacebar pan shortcut
-  useEffect(() => {
-    const preventBrowserZoom = (e: WheelEvent) => {
-      // Prevent browser zoom on Ctrl+scroll globally
-      if (e.ctrlKey) e.preventDefault()
-    }
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName
-      const inInput = ['INPUT', 'TEXTAREA'].includes(tag)
-
-      // Ctrl+K → Command palette
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        setShowCommandPalette(prev => !prev)
-        return
-      }
-
-      // Global shortcuts (only when not in an input)
-      if (!inInput) {
-        if (e.key === 'v' || e.key === 'V') { setActiveTool('select'); return }
-        if (e.key === 'h' || e.key === 'H') { setActiveTool('pan'); return }
-        if (e.key === 'n' || e.key === 'N') {
-          setActiveGeneratedId(null)
-          setShowCodeExport(false)
-          setFocusTrigger(t => t + 1)
-          return
-        }
-        if (e.key === '=' || e.key === '+') { e.preventDefault(); setZoomLevel(z => Math.min(300, z + 5)); return }
-        if (e.key === '-') { e.preventDefault(); setZoomLevel(z => Math.max(25, z - 5)); return }
-        if ((e.ctrlKey || e.metaKey) && e.key === '0') { e.preventDefault(); setZoomLevel(100); setPanOffset({ x: 0, y: 0 }); return }
-        if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); if (hasTreeRef.current) setShowCodeExport(true); return }
-      }
-
-      if (e.code === 'Space' && !inInput) {
-        e.preventDefault()
-        isSpaceHeld.current = true
-        setIsSpacePanning(true)
-      }
-    }
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        isSpaceHeld.current = false
-        setIsSpacePanning(false)
-      }
-    }
-    document.addEventListener('wheel', preventBrowserZoom, { passive: false })
-    document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('keyup', handleKeyUp)
-    return () => {
-      document.removeEventListener('wheel', preventBrowserZoom)
-      document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('keyup', handleKeyUp)
-    }
-  }, [])
-
+  // Split panel dragging
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging.current && containerRef.current) {
@@ -377,252 +105,30 @@ function App() {
         ratio = Math.max(0.2, Math.min(0.45, ratio))
         setSplitRatio(ratio)
       }
-      // Handle canvas panning via global mousemove for smoothness
-      if (isPanning.current) {
-        const dx = e.clientX - panStart.current.x
-        const dy = e.clientY - panStart.current.y
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-          didPan.current = true
-        }
-        setPanOffset({
-          x: panOffsetStart.current.x + dx,
-          y: panOffsetStart.current.y + dy,
-        })
-      }
     }
-    const handleMouseUp = () => {
-      isDragging.current = false
-      if (isPanning.current) {
-        isPanning.current = false
-        // Reset didPan after a tick so click handlers can still read it
-        requestAnimationFrame(() => { didPan.current = false })
-      }
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
+    const handleMouseUp = () => { isDragging.current = false; document.body.style.cursor = ''; document.body.style.userSelect = '' }
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
+    return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp) }
   }, [])
 
-  // Current active generated screen
-  const activeGenerated = generatedScreens.find(s => s.id === activeGeneratedId)
-  const generatedTree = activeGenerated?.tree
-  hasTreeRef.current = !!generatedTree
+  // Auto-hide toast
+  useEffect(() => {
+    if (!toastMessage) return
+    const t = setTimeout(() => setToastMessage(''), 2000)
+    return () => clearTimeout(t)
+  }, [toastMessage])
 
-  const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => {
-    // Clear any previous error messages before starting a new generation
-    setProjectMessages(prev => {
-      const lastMsg = prev[prev.length - 1]
-      if (lastMsg?.role === 'assistant' && lastMsg.content.startsWith('Error:')) {
-        return prev.slice(0, -1)
-      }
-      return prev
-    })
-
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: prompt,
-      timestamp: Date.now(),
-      imageData,
-    }
-
-    // Add user message to project-level chat
-    setProjectMessages(prev => [...prev, userMsg])
-    saveMessage(userMsg)
-
-    // Detect flow requests
-    const flowRequest = isFlowPrompt(prompt) && !imageData
-
-    // Intent detection: decide whether to edit or create
-    let editingScreenId: string | null = null
-    if (!forceNew && activeGeneratedId) {
-      const hasEditIntent = isEditIntent(prompt)
-      const hasCreateIntent = isCreateIntent(prompt)
-      if (hasEditIntent && !hasCreateIntent) {
-        editingScreenId = activeGeneratedId
-      } else if (!hasEditIntent && hasCreateIntent) {
-        editingScreenId = null
-      } else if (hasEditIntent && hasCreateIntent) {
-        editingScreenId = activeGeneratedId
-      } else {
-        editingScreenId = activeGeneratedId
-      }
-    }
-
-    const editingScreen = editingScreenId
-      ? generatedScreens.find(s => s.id === editingScreenId)
-      : null
-
-    // Don't use flow mode when editing an existing screen
-    if (flowRequest && !editingScreen) {
-      // === FLOW GENERATION ===
-      const placeholderId = crypto.randomUUID()
-      const placeholderName = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
-      const placeholderScreen: GeneratedScreen = {
-        id: placeholderId,
-        name: placeholderName,
-        originalPrompt: prompt,
-        tree: { type: 'View', style: {}, children: [] },
-      }
-      setGeneratedScreens(prev => [...prev, placeholderScreen])
-      setActiveGeneratedId(placeholderId)
-      setIsGenerating(true)
-
-      try {
-        const authHeaders = await getAuthHeaders()
-        const res = await fetch('/api/generate-flow', {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({ prompt, projectId }),
-        })
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}))
-          throw new Error(errData.error || 'Failed to generate flow')
-        }
-
-        const { screens, modelUsed: flowModelUsed } = await res.json()
-        const flowId = crypto.randomUUID()
-        const screenNames = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { name: string }) => s.name)
-
-        // Create flow screens
-        const newFlowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }) => ({
-          id: crypto.randomUUID(),
-          name: s.name,
-          tree: s.tree,
-          flowId,
-        }))
-
-        // Replace placeholder with flow screens
-        setGeneratedScreens(prev => {
-          const withoutPlaceholder = prev.filter(s => s.id !== placeholderId)
-          return [...withoutPlaceholder, ...newFlowScreens]
-        })
-        setActiveGeneratedId(newFlowScreens[0].id)
-
-        // Add assistant message to project chat
-        const assistantMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Generated a flow with ${screens.length} screens: ${screenNames.join(' \u2192 ')}`,
-          timestamp: Date.now(),
-          flowScreenNames: screenNames,
-          modelUsed: flowModelUsed,
-        }
-        setProjectMessages(prev => [...prev, assistantMsg])
-        saveMessage(assistantMsg)
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
-        const errorMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Error: ${errorMessage}`,
-          timestamp: Date.now(),
-        }
-        setProjectMessages(prev => [...prev, errorMsg])
-        saveMessage(errorMsg)
-      } finally {
-        setIsGenerating(false)
-      }
-      return
-    }
-
-    // === SINGLE SCREEN GENERATION ===
-    let targetId: string
-    let screenName: string
-    const screenNumber = editingScreen
-      ? generatedScreens.findIndex(s => s.id === editingScreenId) + 1
-      : generatedScreens.length + 1
-
-    if (editingScreen) {
-      targetId = editingScreenId!
-      screenName = editingScreen.name
-    } else {
-      targetId = crypto.randomUUID()
-      screenName = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
-      const newScreen: GeneratedScreen = {
-        id: targetId,
-        name: screenName,
-        originalPrompt: prompt,
-        tree: { type: 'View', style: {}, children: [] },
-      }
-      setGeneratedScreens(prev => [...prev, newScreen])
-      setActiveGeneratedId(targetId)
-    }
-
-    setIsGenerating(true)
-
-    try {
-      const authHeaders = await getAuthHeaders()
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({
-          prompt,
-          projectId,
-          ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
-          ...(regenerateTree ? { currentScreen: regenerateTree, screenName: screenName } : {}),
-          ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
-        }),
-      })
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData.error || 'Failed to generate screen')
-      }
-
-      const { tree, modelUsed } = await res.json()
-
-      setGeneratedScreens(prev => prev.map(s =>
-        s.id === targetId ? { ...s, tree } : s
-      ))
-
-      // Project-level assistant message with screen context
-      const action = editingScreen ? 'Updated' : 'Generated'
-      const assistantMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: `${action} Screen ${screenNumber}: ${screenName}`,
-        timestamp: Date.now(),
-        modelUsed,
-      }
-      setProjectMessages(prev => [...prev, assistantMsg])
-      saveMessage(assistantMsg)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
-      const errorMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: `Error: ${errorMessage}`,
-        timestamp: Date.now(),
-      }
-      setProjectMessages(prev => [...prev, errorMsg])
-      saveMessage(errorMsg)
-    } finally {
-      setIsGenerating(false)
-    }
-  }, [activeGeneratedId, generatedScreens, saveMessage])
-
-  // Handle clicking a screen name in a flow message
-  const handleFlowScreenClick = (screenName: string) => {
-    const screen = generatedScreens.find(s => s.name === screenName && s.flowId)
-    if (screen) {
-      setActiveGeneratedId(screen.id)
-    }
+  // --- Handlers ---
+  const handleDeleteProject = async () => {
+    if (!projectId) return
+    await supabase.from('projects').delete().eq('id', projectId)
+    setShowDeleteConfirm(false)
+    navigate('/projects')
   }
 
-  const startDragging = () => {
-    isDragging.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-  }
+  const startDragging = () => { isDragging.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none' }
 
-  // Handle file upload from canvas toolbar — places image as REFERENCE on canvas
   const handleCanvasUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -631,1745 +137,353 @@ function App() {
     reader.onload = () => {
       const dataUrl = reader.result as string
       const name = file.name.replace(/\.[^.]+$/, '')
-      setReferenceImages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        url: dataUrl,
-        name: name.length > 20 ? name.slice(0, 20) + '...' : name,
-      }])
+      setReferenceImages(prev => [...prev, { id: crypto.randomUUID(), url: dataUrl, name: name.length > 20 ? name.slice(0, 20) + '...' : name }])
     }
     reader.readAsDataURL(file)
   }
 
-  const removeReferenceImage = (id: string) => {
-    setReferenceImages(prev => prev.filter(img => img.id !== id))
+  const handleFlowScreenClick = (screenName: string) => {
+    const screen = screens.generatedScreens.find(s => s.name === screenName && s.flowId)
+    if (screen) screens.setActiveGeneratedId(screen.id)
   }
 
-  // Generate a screen from an uploaded screenshot on the canvas
-  const handleGenerateFromImage = (screen: GeneratedScreen) => {
-    if (!screen.imageUrl) return
-    const match = screen.imageUrl.match(/^data:([^;]+);base64,(.+)$/)
-    if (!match) return
-    const [, mimeType, base64] = match
-    handleSend('Recreate this screen design', base64, mimeType, true)
-  }
-
-  // === Canvas drag-and-drop for screenshot-to-screen ===
-  const handleCanvasDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.dataTransfer.types.includes('Files')) {
-      setCanvasDragOver(true)
-    }
-  }, [])
+  const handleCanvasDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.types.includes('Files')) setCanvasDragOver(true) }, [])
 
   const handleCanvasDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (rect) {
-      const { clientX, clientY } = e
-      if (clientX <= rect.left || clientX >= rect.right || clientY <= rect.top || clientY >= rect.bottom) {
-        setCanvasDragOver(false)
-      }
-    }
-  }, [])
+    e.preventDefault(); e.stopPropagation()
+    const rect = canvas.canvasRef.current?.getBoundingClientRect()
+    if (rect && (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom)) setCanvasDragOver(false)
+  }, [canvas.canvasRef])
 
   const handleCanvasDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setCanvasDragOver(false)
+    e.preventDefault(); e.stopPropagation(); setCanvasDragOver(false)
     const file = e.dataTransfer.files[0]
-    if (!file) return
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return
-    if (file.size > 5 * 1024 * 1024) return
+    if (!file || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) return
     const reader = new FileReader()
     reader.onload = () => {
-      const dataUrl = reader.result as string
-      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-      if (!match) return
-      const [, mimeType, base64] = match
-      handleSend('Recreate this screen design', base64, mimeType, true)
+      const match = (reader.result as string).match(/^data:([^;]+);base64,(.+)$/)
+      if (match) ai.handleSend('Recreate this screen design', match[2], match[1], true)
     }
     reader.readAsDataURL(file)
-  }, [handleSend])
+  }, [ai.handleSend])
 
-  // === Screen Context Toolbar Handlers ===
-
-  // Regenerate: re-send the ORIGINAL clean prompt with current tree as context
-  const handleRegenerate = useCallback(() => {
-    if (!activeGenerated) return
-    // Prefer the stored original prompt; fall back to screen name with version labels stripped
-    const originalPrompt = activeGenerated.originalPrompt
-      || activeGenerated.name.replace(/\s*v\d+/gi, '').replace(/\s*\(failed\)/gi, '').trim()
-      || 'this mobile app screen'
-    const regeneratePrompt = `Regenerate this screen with a fresh design approach. Original request: "${originalPrompt}"`
-    // Pass current tree so the API knows what screen type to preserve
-    handleSend(regeneratePrompt, undefined, undefined, true, activeGenerated.tree)
-  }, [activeGenerated, activeGeneratedId, generatedScreens, handleSend])
-
-  // Edit via chat: focus chat input with editing context
-  const handleEditViaChat = useCallback(() => {
-    setFocusTrigger(t => t + 1)
-  }, [])
-
-  // Change color scheme: pre-fill chat
+  const handleEditViaChat = useCallback(() => { setFocusTrigger(t => t + 1) }, [])
   const handleChangeColorScheme = useCallback(() => {
-    // We'll use a custom event to set the chat input text
-    const event = new CustomEvent('mokkoi-set-chat-input', {
-      detail: { text: 'Change the color scheme of this screen to ' }
-    })
-    window.dispatchEvent(event)
+    window.dispatchEvent(new CustomEvent('mokkoi-set-chat-input', { detail: { text: 'Change the color scheme of this screen to ' } }))
     setFocusTrigger(t => t + 1)
   }, [])
-
-  // Make darker / lighter
-  const handleMakeDarker = useCallback(() => {
-    if (!activeGeneratedId) return
-    handleSend('Make this screen darker with a dark theme')
-  }, [activeGeneratedId, handleSend])
-
-  const handleMakeLighter = useCallback(() => {
-    if (!activeGeneratedId) return
-    handleSend('Make this screen lighter with a light theme')
-  }, [activeGeneratedId, handleSend])
-
-  // --- Direct Edit mode ---
-  const enterDirectEdit = useCallback(() => {
-    if (!activeGeneratedId) return
-    setDirectEditMode(true)
-    setDirectEditSelectedEl(null)
-    setDirectEditDirty(false)
-    // Snapshot the current phone frame content for discard
-    const el = phoneFrameRefs.current.get(activeGeneratedId)
-    if (el) {
-      const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
-      if (phoneScreen) {
-        directEditSnapshotRef.current.set(activeGeneratedId, phoneScreen.innerHTML)
-      }
-    }
-  }, [activeGeneratedId])
-
-  const exitDirectEdit = useCallback((save?: boolean) => {
-    // Clear the hover/selection styles from phone frames
-    phoneFrameRefs.current.forEach(el => {
-      const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
-      if (phoneScreen) {
-        phoneScreen.querySelectorAll('[data-de-hover]').forEach(n => {
-          (n as HTMLElement).style.outline = '';
-          (n as HTMLElement).removeAttribute('data-de-hover')
-        })
-        phoneScreen.querySelectorAll('[data-de-selected]').forEach(n => {
-          (n as HTMLElement).style.outline = '';
-          (n as HTMLElement).removeAttribute('data-de-selected')
-        })
-      }
-    })
-    if (!save && directEditDirty && activeGeneratedId) {
-      // Revert: restore snapshot
-      const el = phoneFrameRefs.current.get(activeGeneratedId)
-      const snapshot = directEditSnapshotRef.current.get(activeGeneratedId)
-      if (el && snapshot) {
-        const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
-        if (phoneScreen) phoneScreen.innerHTML = snapshot
-      }
-    }
-    setDirectEditMode(false)
-    setDirectEditSelectedEl(null)
-    setDirectEditDirty(false)
-    directEditSnapshotRef.current.clear()
-  }, [directEditDirty, activeGeneratedId])
-
-  // NOTE: Direct edits are DOM-level only. The component tree in generatedScreens
-  // is NOT updated during direct editing. Edit diff capture (before/after trees)
-  // is not possible until DOM-to-tree reverse parsing is implemented.
-  // See api/log-edit-diff.ts for the endpoint that will handle this in the future.
-  const saveDirectEdits = useCallback(() => {
-    if (!activeGeneratedId) return
-    // The DOM has been directly edited. We need to persist these changes.
-    // Since the auto-save watches generatedScreens state, we trigger a state update.
-    // We mark the screen's tree as modified by bumping a timestamp (the auto-save will persist the tree).
-    // But the direct edits are DOM-level, not tree-level, so we show a toast and exit.
-    setToastMessage('Direct edits saved!')
-    setDirectEditDirty(false)
-    directEditSnapshotRef.current.clear()
-    // Take a new snapshot so further edits can be discarded from this point
-    const el = phoneFrameRefs.current.get(activeGeneratedId)
-    if (el) {
-      const phoneScreen = el.querySelector('.phone-screen') as HTMLElement | null
-      if (phoneScreen) {
-        directEditSnapshotRef.current.set(activeGeneratedId, phoneScreen.innerHTML)
-      }
-    }
-  }, [activeGeneratedId])
-
-  // Direct edit: handle click inside phone frame
-  const handleDirectEditClick = useCallback((e: React.MouseEvent, screenId: string) => {
-    if (!directEditMode) return
-    e.stopPropagation()
-    e.preventDefault()
-
-    // Don't select the phone frame itself or the direct edit toolbar
-    const target = e.target as HTMLElement
-    if (target.closest('[data-direct-edit-toolbar]')) return
-
-    // Clear previous selection
-    if (directEditSelectedEl) {
-      directEditSelectedEl.style.outline = ''
-      directEditSelectedEl.removeAttribute('data-de-selected')
-    }
-
-    // Find the innermost meaningful element (not the phone-screen container itself)
-    const phoneEl = phoneFrameRefs.current.get(screenId)
-    const phoneScreen = phoneEl?.querySelector('.phone-screen')
-    if (target === phoneScreen || target === phoneEl) {
-      setDirectEditSelectedEl(null)
-      return
-    }
-
-    // Select the clicked element
-    target.style.outline = '2px dashed #3B82F6'
-    target.setAttribute('data-de-selected', 'true')
-    setDirectEditSelectedEl(target)
-    setActiveGeneratedId(screenId)
-  }, [directEditMode, directEditSelectedEl])
-
-  // Direct edit: handle hover inside phone frame
-  const handleDirectEditHover = useCallback((e: React.MouseEvent) => {
-    if (!directEditMode) return
-    const target = e.target as HTMLElement
-    if (target.closest('[data-direct-edit-toolbar]')) return
-    if (target.hasAttribute('data-de-selected')) return
-    target.style.outline = '1px solid rgba(59,130,246,0.3)'
-    target.setAttribute('data-de-hover', 'true')
-  }, [directEditMode])
-
-  const handleDirectEditHoverOut = useCallback((e: React.MouseEvent) => {
-    if (!directEditMode) return
-    const target = e.target as HTMLElement
-    if (target.hasAttribute('data-de-selected')) return
-    target.style.outline = ''
-    target.removeAttribute('data-de-hover')
-  }, [directEditMode])
-
-  // Escape key to exit direct edit
-  useEffect(() => {
-    if (!directEditMode) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') exitDirectEdit(false)
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [directEditMode, exitDirectEdit])
-
-  // Preview in new tab — open dedicated preview route
-  const handlePreviewNewTab = useCallback(() => {
-    if (!activeGeneratedId || !projectId) return
-    window.open(`/preview/${projectId}/${activeGeneratedId}`, '_blank')
-  }, [activeGeneratedId, projectId])
-
-  // Show QR Code — use preview route if a screen is selected, otherwise project view
+  const handleMakeDarker = useCallback(() => { if (screens.activeGeneratedId) ai.handleSend('Make this screen darker with a dark theme') }, [screens.activeGeneratedId, ai.handleSend])
+  const handleMakeLighter = useCallback(() => { if (screens.activeGeneratedId) ai.handleSend('Make this screen lighter with a light theme') }, [screens.activeGeneratedId, ai.handleSend])
+  const handlePreviewNewTab = useCallback(() => { if (screens.activeGeneratedId && projectId) window.open(`/preview/${projectId}/${screens.activeGeneratedId}`, '_blank') }, [screens.activeGeneratedId, projectId])
   const handleShowQrCode = useCallback(() => {
     if (!projectId) return
-    const previewUrl = activeGeneratedId
-      ? `${window.location.origin}/preview/${projectId}/${activeGeneratedId}`
-      : `${window.location.origin}/view/${projectId}`
-    setQrUrl(previewUrl)
+    setQrUrl(screens.activeGeneratedId ? `${window.location.origin}/preview/${projectId}/${screens.activeGeneratedId}` : `${window.location.origin}/view/${projectId}`)
     setShowQrModal(true)
-  }, [projectId])
+  }, [projectId, screens.activeGeneratedId])
 
-  // Resize phone frame (these are visual-only hints for now)
-  const handleResizeMobile = useCallback(() => {
-    setToastMessage('Resized to iPhone 14 (390×844)')
-  }, [])
-
-  const handleResizeTablet = useCallback(() => {
-    setToastMessage('Resized to iPad (768×1024)')
-  }, [])
-
-  // Download as image — clone element to avoid transform/zoom issues, then html2canvas
   const handleDownloadImage = useCallback(async () => {
-    if (!activeGeneratedId) return
-    const el = document.querySelector(`[data-screen-id="${activeGeneratedId}"]`) as HTMLElement | null
-      ?? phoneFrameRefs.current.get(activeGeneratedId) ?? null
-    if (!el) {
-      setToastMessage('Could not find screen to capture')
-      return
-    }
-    const screenName = activeGenerated?.name || 'screen'
+    if (!screens.activeGeneratedId) return
+    const el = document.querySelector(`[data-screen-id="${screens.activeGeneratedId}"]`) as HTMLElement | null ?? phoneFrameRefs.current.get(screens.activeGeneratedId) ?? null
+    if (!el) { setToastMessage('Could not find screen to capture'); return }
     setToastMessage('Capturing screenshot...')
-
-    // Clone element and strip transforms so html2canvas gets a clean render
     const clone = el.cloneNode(true) as HTMLElement
-    clone.style.transform = 'none'
-    clone.style.position = 'fixed'
-    clone.style.top = '0'
-    clone.style.left = '0'
-    clone.style.zIndex = '-9999'
-    clone.style.opacity = '1'
-    clone.style.pointerEvents = 'none'
-    clone.style.boxShadow = 'none'
+    clone.style.transform = 'none'; clone.style.position = 'fixed'; clone.style.top = '0'; clone.style.left = '0'
+    clone.style.zIndex = '-9999'; clone.style.opacity = '1'; clone.style.pointerEvents = 'none'; clone.style.boxShadow = 'none'
     document.body.appendChild(clone)
-
-    // Sanitize modern CSS color functions (oklab, oklch, color-mix) that html2canvas can't parse
-    const sanitizeColorsForCapture = (root: HTMLElement) => {
-      const allEls = [root, ...Array.from(root.querySelectorAll('*'))] as HTMLElement[]
-      const colorProps = ['color', 'backgroundColor', 'borderColor', 'outlineColor'] as const
-      for (const htmlEl of allEls) {
-        const computed = window.getComputedStyle(htmlEl)
-        for (const prop of colorProps) {
-          const val = computed[prop]
-          if (val && (val.includes('oklab') || val.includes('oklch') || val.includes('color-mix'))) {
-            // Use canvas 2d context to resolve to a hex/rgb value the browser understands
-            const c = document.createElement('canvas')
-            c.width = 1; c.height = 1
-            const ctx = c.getContext('2d')
-            if (ctx) {
-              ctx.fillStyle = val
-              htmlEl.style[prop] = ctx.fillStyle
-            }
-          }
+    // Sanitize modern CSS colors
+    const allEls = [clone, ...Array.from(clone.querySelectorAll('*'))] as HTMLElement[]
+    for (const htmlEl of allEls) {
+      const computed = window.getComputedStyle(htmlEl)
+      for (const prop of ['color', 'backgroundColor', 'borderColor', 'outlineColor'] as const) {
+        const val = computed[prop]
+        if (val && (val.includes('oklab') || val.includes('oklch') || val.includes('color-mix'))) {
+          const c = document.createElement('canvas'); c.width = 1; c.height = 1
+          const ctx = c.getContext('2d')
+          if (ctx) { ctx.fillStyle = val; htmlEl.style[prop] = ctx.fillStyle }
         }
-        // Handle CSS custom properties and inline styles with unsupported functions
-        const style = htmlEl.style
-        if (style.cssText && /oklab|oklch|color-mix/.test(style.cssText)) {
-          style.cssText = style.cssText
-            .replace(/oklab\([^)]*\)/g, '#000000')
-            .replace(/oklch\([^)]*\)/g, '#000000')
-            .replace(/color-mix\([^)]*\)/g, '#000000')
-        }
-        // Also force-set computed colors to override any CSS variable resolution issues
-        htmlEl.style.color = computed.color
-        htmlEl.style.backgroundColor = computed.backgroundColor
-        htmlEl.style.borderColor = computed.borderColor
       }
+      if (htmlEl.style.cssText && /oklab|oklch|color-mix/.test(htmlEl.style.cssText)) {
+        htmlEl.style.cssText = htmlEl.style.cssText.replace(/oklab\([^)]*\)/g, '#000').replace(/oklch\([^)]*\)/g, '#000').replace(/color-mix\([^)]*\)/g, '#000')
+      }
+      htmlEl.style.color = computed.color; htmlEl.style.backgroundColor = computed.backgroundColor; htmlEl.style.borderColor = computed.borderColor
     }
-    sanitizeColorsForCapture(clone)
-
     try {
-      const canvas = await html2canvas(clone, {
-        backgroundColor: '#0A0A0A',
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        width: clone.offsetWidth,
-        height: clone.offsetHeight,
-        windowWidth: clone.offsetWidth,
-        windowHeight: clone.offsetHeight,
-      })
-      canvas.toBlob(blob => {
+      const canvasEl = await html2canvas(clone, { backgroundColor: '#0A0A0A', scale: 2, useCORS: true, allowTaint: true, logging: false, width: clone.offsetWidth, height: clone.offsetHeight, windowWidth: clone.offsetWidth, windowHeight: clone.offsetHeight })
+      canvasEl.toBlob(blob => {
         if (!blob) { setToastMessage('Failed to generate image'); return }
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${screenName}.png`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        setToastMessage('Screenshot saved!')
+        const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${screens.activeGenerated?.name || 'screen'}.png`
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); setToastMessage('Screenshot saved!')
       }, 'image/png')
     } catch (err) {
       console.error('html2canvas failed:', err)
       setToastMessage(`Screenshot failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    } finally {
-      document.body.removeChild(clone)
-    }
-  }, [activeGeneratedId, activeGenerated])
+    } finally { document.body.removeChild(clone) }
+  }, [screens.activeGeneratedId, screens.activeGenerated])
 
-  // Duplicate screen
-  const handleDuplicateScreen = useCallback(() => {
-    if (!activeGenerated) return
-    const newScreen: GeneratedScreen = {
-      id: crypto.randomUUID(),
-      name: `${activeGenerated.name} (copy)`,
-      tree: JSON.parse(JSON.stringify(activeGenerated.tree)),
-      flowId: activeGenerated.flowId,
-    }
-    setGeneratedScreens(prev => [...prev, newScreen])
-    setActiveGeneratedId(newScreen.id)
-    setToastMessage('Screen duplicated!')
-  }, [activeGenerated])
-
-  // Rename screen
-  const handleRenameScreen = useCallback(() => {
-    if (!activeGenerated) return
-    setEditingScreenLabel(activeGenerated.id)
-    setEditingScreenLabelValue(activeGenerated.name)
-  }, [activeGenerated])
-
-  const commitScreenRename = useCallback(() => {
-    if (!editingScreenLabel) return
-    const newName = editingScreenLabelValue.trim() || 'Untitled'
-    setGeneratedScreens(prev => prev.map(s =>
-      s.id === editingScreenLabel ? { ...s, name: newName } : s
-    ))
-    setEditingScreenLabel(null)
-  }, [editingScreenLabel, editingScreenLabelValue])
-
-  // Delete screen
-  const handleDeleteScreen = useCallback(async () => {
-    if (!activeGeneratedId || !projectId) return
-    // Remove from Supabase
-    await supabase.from('screens').delete().eq('id', activeGeneratedId)
-    // Remove from state
-    setGeneratedScreens(prev => prev.filter(s => s.id !== activeGeneratedId))
-    setActiveGeneratedId(null)
-    setShowDeleteScreenConfirm(false)
-    setToastMessage('Screen deleted')
-  }, [activeGeneratedId, projectId])
-
-  // Generate variations
-  const handleGenerateVariations = useCallback(async (settings: VariationSettings) => {
-    if (!activeGenerated?.tree) return
-    setIsGeneratingVariations(true)
-
-    const creativeDesc = {
-      refine: 'Make very small, subtle changes — keep the overall structure and design nearly identical but tweak minor details.',
-      explore: 'Make moderate changes — try different arrangements, color variations, or component styles while keeping the same general purpose.',
-      reimagine: 'Create a completely different design — reimagine the screen from scratch with a new layout, style, and visual approach.',
-    }
-
-    const aspectInstructions: string[] = []
-    if (settings.aspects.layout) aspectInstructions.push('Vary the layout and arrangement of elements.')
-    if (settings.aspects.colorScheme) aspectInstructions.push('Use a different color scheme.')
-    if (settings.aspects.images) aspectInstructions.push('Change image placements and styles.')
-    if (settings.aspects.textFont) aspectInstructions.push('Use different font sizes and weights.')
-    if (settings.aspects.textContent) aspectInstructions.push('Change the text content.')
-
-    const originalTree = JSON.stringify(activeGenerated.tree)
-
-    // Create placeholder screens for each variation
-    const placeholders: GeneratedScreen[] = []
-    for (let i = 0; i < settings.count; i++) {
-      const ph: GeneratedScreen = {
-        id: crypto.randomUUID(),
-        name: `${activeGenerated.name} v${i + 1}`,
-        originalPrompt: activeGenerated.originalPrompt,
-        tree: { type: 'View', style: {}, children: [] },
-      }
-      placeholders.push(ph)
-    }
-    setGeneratedScreens(prev => [...prev, ...placeholders])
-    setActiveGeneratedId(placeholders[0].id)
-
-    // Generate each variation in parallel
-    const promises = placeholders.map(async (ph, i) => {
-      const variationPrompt = `You are creating variation ${i + 1} of a mobile screen design.
-
-Here is the original screen's component tree JSON:
-${originalTree}
-
-Creative direction: ${creativeDesc[settings.creativeRange]}
-${aspectInstructions.length > 0 ? 'Aspects to change: ' + aspectInstructions.join(' ') : ''}
-${settings.customInstructions ? 'Additional instructions: ' + settings.customInstructions : ''}
-
-Generate a new version of this screen as a variation. Return ONLY the JSON component tree.`
-
-      try {
-        const authHeaders = await getAuthHeaders()
-        const res = await fetch('/api/generate', {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({ prompt: variationPrompt, projectId }),
-        })
-        if (!res.ok) throw new Error('Failed')
-        const { tree } = await res.json()
-        setGeneratedScreens(prev => prev.map(s =>
-          s.id === ph.id ? { ...s, tree } : s
-        ))
-      } catch {
-        setGeneratedScreens(prev => prev.map(s =>
-          s.id === ph.id ? { ...s, name: `${ph.name} (failed)` } : s
-        ))
-      }
-    })
-
-    await Promise.all(promises)
-    setIsGeneratingVariations(false)
-    setShowVariationsPanel(false)
-    setToastMessage(`Generated ${settings.count} variations!`)
-  }, [activeGenerated])
-
-  // Determine canvas state
-  const hasScreens = generatedScreens.length > 0
-
-  // Zoom handlers
-  const zoomIn = () => setZoomLevel(z => Math.min(300, z + 5))
-  const zoomOut = () => setZoomLevel(z => Math.max(25, z - 5))
-  const resetZoom = () => { setZoomLevel(100); resetPan() }
-
-  // Canvas wheel handler — attached natively with { passive: false } so preventDefault works
-  useEffect(() => {
-    const el = canvasRef.current
-    if (!el) return
-    const handleWheel = (e: WheelEvent) => {
-      // If the scroll target is inside a phone frame, let it scroll naturally
-      // (unless Ctrl is held — then zoom takes priority)
-      const target = e.target as HTMLElement
-      if (!e.ctrlKey && !e.metaKey) {
-        // Check if the target is inside any phone frame element
-        const phoneFrame = target.closest('.phone-screen, [class*="phone"], [class*="phoneFrame"]')
-        if (phoneFrame) {
-          // Don't intercept — let the phone content scroll naturally
-          return
-        }
-      }
-
-      // Prevent ALL default wheel behavior on canvas (no browser scroll)
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (e.ctrlKey || e.metaKey) {
-        // Zoom toward mouse cursor position
-        const rect = el.getBoundingClientRect()
-        const mx = e.clientX - rect.left - rect.width / 2
-        const my = e.clientY - rect.top - rect.height / 2
-
-        setZoomLevel(prevZoom => {
-          const delta = e.deltaY > 0 ? -5 : 5
-          const newZoom = Math.min(300, Math.max(25, prevZoom + delta))
-          const scaleFactor = newZoom / prevZoom
-          setPanOffset(prev => ({
-            x: mx - scaleFactor * (mx - prev.x),
-            y: my - scaleFactor * (my - prev.y),
-          }))
-          return newZoom
-        })
-      } else if (e.shiftKey) {
-        // Shift + scroll = horizontal pan
-        setPanOffset(prev => ({ ...prev, x: prev.x - e.deltaY }))
-      } else {
-        // Regular scroll = vertical pan (+ honor deltaX for trackpad horizontal)
-        setPanOffset(prev => ({
-          x: prev.x - e.deltaX,
-          y: prev.y - e.deltaY,
-        }))
-      }
-    }
-    el.addEventListener('wheel', handleWheel, { passive: false })
-    return () => el.removeEventListener('wheel', handleWheel)
-  }, [])
-
-  // Pan handlers — Figma-style: hand tool, middle mouse, or spacebar+drag
-  // Middle-click and spacebar ALWAYS pan regardless of active tool
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    // Middle-click and spacebar always start pan, regardless of tool
-    if (e.button === 1 || isSpaceHeld.current || activeTool === 'pan') {
-      if (e.button === 1) e.preventDefault()
-      isPanning.current = true
-      didPan.current = false
-      panStart.current = { x: e.clientX, y: e.clientY }
-      panOffsetStart.current = { ...panOffset }
-      document.body.style.cursor = 'grabbing'
-      document.body.style.userSelect = 'none'
-    }
-  }
-
-  const resetPan = () => setPanOffset({ x: 0, y: 0 })
-
-  // Click empty canvas to deselect (only in select mode)
   const handleCanvasClick = (e: React.MouseEvent) => {
-    if (didPan.current) return
-    if (activeTool === 'pan' || isSpaceHeld.current) return
+    if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvasBg === 'true') {
-      if (directEditMode) { exitDirectEdit(false); return }
-      setActiveGeneratedId(null)
+      if (directEdit.directEditMode) { directEdit.exitDirectEdit(false); return }
+      screens.setActiveGeneratedId(null)
     }
   }
 
-  // Phone click handler — select only in select mode and if not panning
   const handlePhoneClick = (e: React.MouseEvent, screenId: string) => {
     e.stopPropagation()
-    if (didPan.current) return
-    if (activeTool === 'pan' || isSpaceHeld.current) return
-    if (directEditMode) {
-      handleDirectEditClick(e, screenId)
-      return
-    }
-    setActiveGeneratedId(screenId)
+    if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
+    if (directEdit.directEditMode) { directEdit.handleDirectEditClick(e, screenId); return }
+    screens.setActiveGeneratedId(screenId)
   }
 
-  // Open share modal
-  const handleShare = () => {
-    setShowShareModal(true)
-  }
-
-  // Project name editing
-  const handleNameKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      setIsEditingName(false)
-    }
-    if (e.key === 'Escape') {
-      setIsEditingName(false)
-    }
-  }
-
-  const handleNameBlur = () => {
-    setIsEditingName(false)
-    const name = projectName.trim() || 'Untitled Project'
-    if (!projectName.trim()) setProjectName(name)
-    saveProjectName(name)
-  }
-
-  // Determine canvas cursor
-  const panActive = activeTool === 'pan' || isSpacePanning
-  const canvasCursor = isPanning.current ? 'grabbing' : panActive ? 'grab' : 'default'
-
-  // Toolbar button helper
-  const tbBtn = (id: string, icon: React.ReactNode, tooltip: string, onClick?: () => void) => {
-    const isActiveTool = id === 'select' || id === 'pan'
-    const isActive = isActiveTool && activeTool === id
-    return (
-      <button
-        title={tooltip}
-        onClick={onClick ?? (() => { if (id === 'select' || id === 'pan') setActiveTool(id) })}
-        style={{
-          width: 32, height: 32, borderRadius: 8,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
-          color: isActive ? '#fff' : '#999',
-          border: 'none', cursor: 'pointer',
-          transition: 'all 0.15s',
-        }}
-        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-        onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
-      >
-        {icon}
-      </button>
-    )
-  }
-
-  // Command palette commands
+  // Command palette
   const commands: CmdType[] = useMemo(() => [
-    { id: 'select-tool', label: 'Select Tool', shortcut: 'V', icon: <MousePointer2 size={16} />, group: 'Tools', action: () => setActiveTool('select') },
-    { id: 'pan-tool', label: 'Hand Tool', shortcut: 'H', icon: <Hand size={16} />, group: 'Tools', action: () => setActiveTool('pan') },
-    { id: 'new-screen', label: 'New Screen', shortcut: 'N', icon: <Plus size={16} />, group: 'Canvas', action: () => { setActiveGeneratedId(null); setShowCodeExport(false); setFocusTrigger(t => t + 1) } },
-    { id: 'zoom-in', label: 'Zoom In', shortcut: '+', icon: <ZoomIn size={16} />, group: 'Canvas', action: zoomIn },
-    { id: 'zoom-out', label: 'Zoom Out', shortcut: '-', icon: <ZoomOut size={16} />, group: 'Canvas', action: zoomOut },
-    { id: 'reset-zoom', label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: <Maximize2 size={16} />, group: 'Canvas', action: resetZoom },
-    { id: 'export-code', label: 'Export Code', shortcut: 'Ctrl+E', icon: <Download size={16} />, group: 'Project', action: () => { if (generatedTree) setShowCodeExport(true) } },
-    { id: 'share', label: 'Share Project', icon: <Share2 size={16} />, group: 'Project', action: handleShare },
-    { id: 'rename-project', label: 'Rename Project', icon: <Pencil size={16} />, group: 'Project', action: () => setIsEditingName(true) },
+    { id: 'select-tool', label: 'Select Tool', shortcut: 'V', icon: <MousePointer2 size={16} />, group: 'Tools', action: () => canvas.setActiveTool('select') },
+    { id: 'pan-tool', label: 'Hand Tool', shortcut: 'H', icon: <Hand size={16} />, group: 'Tools', action: () => canvas.setActiveTool('pan') },
+    { id: 'new-screen', label: 'New Screen', shortcut: 'N', icon: <Plus size={16} />, group: 'Canvas', action: () => { screens.setActiveGeneratedId(null); setShowCodeExport(false); setFocusTrigger(t => t + 1) } },
+    { id: 'zoom-in', label: 'Zoom In', shortcut: '+', icon: <ZoomIn size={16} />, group: 'Canvas', action: canvas.zoomIn },
+    { id: 'zoom-out', label: 'Zoom Out', shortcut: '-', icon: <ZoomOut size={16} />, group: 'Canvas', action: canvas.zoomOut },
+    { id: 'reset-zoom', label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: <Maximize2 size={16} />, group: 'Canvas', action: canvas.resetZoom },
+    { id: 'export-code', label: 'Export Code', shortcut: 'Ctrl+E', icon: <Download size={16} />, group: 'Project', action: () => { if (screens.generatedTree) setShowCodeExport(true) } },
+    { id: 'share', label: 'Share Project', icon: <Share2 size={16} />, group: 'Project', action: () => setShowShareModal(true) },
+    { id: 'rename-project', label: 'Rename Project', icon: <Pencil size={16} />, group: 'Project', action: () => setToastMessage('Use navbar to rename') },
     { id: 'upload-ref', label: 'Upload Reference Image', icon: <Upload size={16} />, group: 'Canvas', action: () => fileInputRef.current?.click() },
-    { id: 'go-projects', label: 'Go to All Projects', icon: <ArrowLeft size={16} />, group: 'Navigation', action: () => navigate('/projects') },
-    { id: 'sign-out', label: 'Sign Out', icon: <LogOut size={16} />, group: 'Account', action: handleSignOut },
-  ], [generatedTree, handleShare, handleSignOut, navigate, zoomIn, zoomOut, resetZoom])
+    { id: 'go-projects', label: 'Go to All Projects', icon: <span style={{ display: 'flex' }}>&larr;</span>, group: 'Navigation', action: () => navigate('/projects') },
+    { id: 'sign-out', label: 'Sign Out', icon: <LogOut size={16} />, group: 'Account', action: async () => { await supabase.auth.signOut(); navigate('/auth') } },
+  ], [screens.generatedTree, canvas.zoomIn, canvas.zoomOut, canvas.resetZoom, navigate])
 
   return (
     <div className="app-shell" style={{ height: '100vh', background: '#000000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Hidden file input for canvas upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".png,.jpg,.jpeg,.webp"
-        style={{ display: 'none' }}
-        onChange={handleCanvasUpload}
+      <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp" style={{ display: 'none' }} onChange={handleCanvasUpload} />
+
+      <TopNavbar
+        projectName={screens.projectName}
+        setProjectName={screens.setProjectName}
+        saveProjectName={screens.saveProjectName}
+        isGenerating={ai.isGenerating}
+        generatedTree={screens.generatedTree}
+        activeGeneratedTree={screens.activeGenerated?.tree}
+        setActiveGeneratedId={screens.setActiveGeneratedId}
+        setShowCodeExport={setShowCodeExport}
+        setShowShareModal={setShowShareModal}
+        setShowCommandPalette={setShowCommandPalette}
+        setShowDeleteConfirm={setShowDeleteConfirm}
+        setToastMessage={setToastMessage}
       />
 
-      {/* Navbar */}
-      <nav
-        style={{
-          height: 48, flexShrink: 0,
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex', alignItems: 'center',
-          padding: '0 16px',
-          background: 'rgba(0,0,0,0.85)',
-          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-          gap: 10,
-          transformOrigin: 'unset',
-          zoom: 1,
-          position: 'relative',
-          zIndex: 50,
-        }}
-      >
-        {/* Left: M logo (home link) */}
-        <div
-          onClick={() => navigate('/projects')}
-          style={{
-            width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-            color: '#fff', fontSize: 11, fontWeight: 800,
-            cursor: 'pointer', transition: 'opacity 0.2s',
-          }}
-          title="Go to projects"
-          onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
-        >
-          M
-        </div>
-
-        {/* Hamburger menu */}
-        <div ref={hamburgerMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
-          <button
-            onClick={() => setShowHamburgerMenu(!showHamburgerMenu)}
-            style={{
-              width: 28, height: 28, borderRadius: 6,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: showHamburgerMenu ? 'rgba(255,255,255,0.1)' : 'transparent',
-              border: 'none', cursor: 'pointer', color: '#94a3b8',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { if (!showHamburgerMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-            onMouseLeave={e => { if (!showHamburgerMenu) e.currentTarget.style.background = 'transparent' }}
-          >
-            <Menu size={18} />
-          </button>
-          {showHamburgerMenu && (
-            <div style={{
-              position: 'absolute', top: 34, left: 0,
-              background: '#1A1A1A',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 12, padding: 4,
-              boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-              zIndex: 100, minWidth: 220,
-            }}>
-              <button
-                onClick={() => { navigate('/projects'); setShowHamburgerMenu(false) }}
-                style={hamburgerItemStyle}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <ArrowLeft size={16} color="#94a3b8" />
-                Go to all projects
-              </button>
-              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
-
-              {/* Edit submenu — opens on hover to the right */}
-              <div
-                style={{ position: 'relative' }}
-                onMouseEnter={() => { if (editSubmenuTimer.current) { clearTimeout(editSubmenuTimer.current); editSubmenuTimer.current = null } setShowEditSubmenu(true) }}
-                onMouseLeave={() => { editSubmenuTimer.current = setTimeout(() => setShowEditSubmenu(false), 200) }}
-              >
-                <button
-                  style={{ ...hamburgerItemStyle, justifyContent: 'space-between', background: showEditSubmenu ? 'rgba(255,255,255,0.06)' : 'transparent' }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Pencil size={16} color="#94a3b8" />
-                    Edit
-                  </span>
-                  <ChevronRight size={14} color="#555" />
-                </button>
-                {showEditSubmenu && (
-                  <div style={{
-                    position: 'absolute', left: '100%', top: 0,
-                    background: '#1A1A1A',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 12, padding: 4,
-                    boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-                    zIndex: 101, minWidth: 200,
-                    marginLeft: 4,
-                  }}>
-                    {[
-                      { label: 'Undo', icon: <Undo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Z', action: () => { setToastMessage('Undo — coming soon'); } },
-                      { label: 'Redo', icon: <Redo2 size={14} color="#94a3b8" />, shortcut: 'Ctrl+Y', action: () => { setToastMessage('Redo — coming soon'); } },
-                      { label: 'Copy', icon: <ClipboardCopy size={14} color="#94a3b8" />, shortcut: 'Ctrl+C', action: () => {
-                        if (activeGenerated?.tree) {
-                          const code = convertTreeToJSX(activeGenerated.tree)
-                          navigator.clipboard.writeText(code).then(
-                            () => setToastMessage('Code copied!'),
-                            () => setToastMessage('Failed to copy code')
-                          )
-                        } else {
-                          setToastMessage('No screen selected to copy')
-                        }
-                      }},
-                      { label: 'Paste', icon: <Clipboard size={14} color="#94a3b8" />, shortcut: 'Ctrl+V', action: () => { setToastMessage('Paste — coming soon'); } },
-                    ].map(item => (
-                      <button
-                        key={item.label}
-                        onClick={() => { item.action(); setShowHamburgerMenu(false); setShowEditSubmenu(false) }}
-                        style={{ ...hamburgerItemStyle, fontSize: 12, padding: '7px 10px', justifyContent: 'space-between' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                      >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {item.icon}
-                          {item.label}
-                        </span>
-                        <span style={{ fontSize: 10, color: '#555' }}>{item.shortcut}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Command menu */}
-              <button
-                onClick={() => { setShowCommandPalette(true); setShowHamburgerMenu(false) }}
-                style={{ ...hamburgerItemStyle, justifyContent: 'space-between' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Command size={16} color="#94a3b8" />
-                  Command menu
-                </span>
-                <span style={{ fontSize: 10, color: '#555' }}>Ctrl+K</span>
-              </button>
-
-              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
-              <button
-                onClick={handleShareCopy}
-                style={hamburgerItemStyle}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <Share2 size={16} color="#94a3b8" />
-                Share
-              </button>
-              <button
-                onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false) }}
-                style={hamburgerItemStyle}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <Download size={16} color="#94a3b8" />
-                Download project
-              </button>
-              <button
-                onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false) }}
-                style={hamburgerItemStyle}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <Copy size={16} color="#94a3b8" />
-                Duplicate project
-              </button>
-              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
-              <button
-                onClick={() => { setShowDeleteConfirm(true); setShowHamburgerMenu(false) }}
-                style={{ ...hamburgerItemStyle, color: '#f87171' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                <Trash2 size={16} color="#f87171" />
-                Delete project
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Editable project name */}
-        {isEditingName ? (
-          <input
-            ref={projectNameInputRef}
-            value={projectName}
-            onChange={e => setProjectName(e.target.value)}
-            onKeyDown={handleNameKeyDown}
-            onBlur={handleNameBlur}
-            style={{
-              fontSize: 14, fontWeight: 500, color: '#f1f5f9',
-              background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(99,102,241,0.4)',
-              borderRadius: 6,
-              padding: '2px 8px',
-              outline: 'none',
-              minWidth: 120, maxWidth: 240,
-            }}
-          />
-        ) : (
-          <button
-            onClick={() => setIsEditingName(true)}
-            className="project-name-btn"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 14, fontWeight: 500, color: '#f1f5f9',
-              background: 'transparent',
-              border: '1px solid transparent',
-              borderRadius: 6,
-              padding: '2px 8px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              flexShrink: 0,
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
-              const pencil = e.currentTarget.querySelector('.pencil-icon') as HTMLElement
-              if (pencil) pencil.style.opacity = '1'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.borderColor = 'transparent'
-              const pencil = e.currentTarget.querySelector('.pencil-icon') as HTMLElement
-              if (pencil) pencil.style.opacity = '0'
-            }}
-            title="Click to rename project"
-          >
-            {projectName}
-            <span className="pencil-icon" style={{ opacity: 0, transition: 'opacity 0.2s', display: 'flex' }}>
-              <Pencil size={12} color="#64748b" />
-            </span>
-          </button>
-        )}
-
-        {/* Generating indicator */}
-        {isGenerating && (
-          <div className="flex items-center gap-1.5 shrink-0" style={{
-            padding: '4px 10px', borderRadius: 14, fontSize: 11, fontWeight: 500,
-            background: 'rgba(129,140,248,0.1)', color: 'rgba(129,140,248,0.7)',
-            border: '1px solid rgba(129,140,248,0.15)',
-          }}>
-            <span className="inline-flex gap-0.5">
-              <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
-              <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-              <span className="w-1 h-1 rounded-full bg-mokkoi-accent/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
-            </span>
-            Generating
-          </div>
-        )}
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Right: action buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* New screen button */}
-          <button
-            onClick={() => {
-              setActiveGeneratedId(null)
-              setShowCodeExport(false)
-            }}
-            style={{
-              flexShrink: 0,
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 12px', borderRadius: 8,
-              fontSize: 12, fontWeight: 500,
-              color: '#818cf8',
-              background: 'rgba(99,102,241,0.08)',
-              border: '1px dashed rgba(99,102,241,0.3)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(99,102,241,0.15)'
-              e.currentTarget.style.borderColor = 'rgba(99,102,241,0.5)'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'rgba(99,102,241,0.08)'
-              e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'
-            }}
-            title="New screen"
-          >
-            <Plus size={14} />
-            New Screen
-          </button>
-
-          {/* Export button */}
-          <button
-            onClick={() => { if (generatedTree) setShowCodeExport(true) }}
-            style={{
-              flexShrink: 0,
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 12px', borderRadius: 8,
-              fontSize: 12, fontWeight: 500,
-              color: '#94a3b8',
-              background: 'transparent',
-              border: 'none',
-              cursor: generatedTree ? 'pointer' : 'default',
-              opacity: generatedTree ? 1 : 0.4,
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { if (generatedTree) e.currentTarget.style.color = '#e2e8f0' }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8' }}
-          >
-            <Download size={14} />
-            Export
-          </button>
-
-          {/* Share button */}
-          <button
-            onClick={handleShare}
-            style={{
-              flexShrink: 0, position: 'relative',
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 12px', borderRadius: 8,
-              fontSize: 12, fontWeight: 500,
-              color: '#94a3b8',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#e2e8f0' }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8' }}
-          >
-            <Share2 size={14} />
-            Share
-          </button>
-
-          {/* User avatar + dropdown */}
-          <div ref={userMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
-            <div
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 700, color: '#fff',
-                cursor: 'pointer', transition: 'box-shadow 0.2s',
-                boxShadow: showUserMenu ? '0 0 0 2px rgba(99,102,241,0.4)' : 'none',
-              }}
-              title={user?.user_metadata?.full_name || user?.email || 'User'}
-            >
-              {(user?.user_metadata?.full_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
-            </div>
-            {showUserMenu && (
-              <div style={{
-                position: 'absolute', top: 36, right: 0,
-                background: '#1A1A1A',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 16, padding: 0,
-                boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
-                zIndex: 100, minWidth: 260,
-                overflow: 'hidden',
-              }}>
-                {/* User info */}
-                <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 48, height: 48, borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
-                  }}>
-                    {(user?.user_metadata?.full_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {user?.user_metadata?.full_name || user?.email || 'User'}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {user?.email || ''}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '0 12px' }} />
-                <div style={{ padding: '4px 8px' }}>
-                  <button
-                    onClick={() => { setToastMessage('Coming soon'); setShowUserMenu(false) }}
-                    style={studioAvatarItemStyle}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <Settings size={18} color="#94a3b8" />
-                    Settings
-                  </button>
-                  <button
-                    onClick={() => { setToastMessage('Coming soon'); setShowUserMenu(false) }}
-                    style={studioAvatarItemStyle}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <UserIcon size={18} color="#94a3b8" />
-                    Manage account
-                  </button>
-                </div>
-                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '0 12px' }} />
-                <div style={{ padding: '4px 8px 8px' }}>
-                  <button
-                    onClick={handleSignOut}
-                    style={{ ...studioAvatarItemStyle, color: '#f87171' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <LogOut size={18} color="#f87171" />
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      {/* Toast messages */}
-      {(showShareToast || toastMessage) && (
+      {/* Toast */}
+      {toastMessage && (
         <div style={{
           position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
-          padding: '8px 20px', borderRadius: 10,
-          background: '#1a1a2e', color: '#34d399',
-          fontSize: 13, fontWeight: 500,
-          border: '1px solid rgba(52,211,153,0.2)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          zIndex: 200,
-          animation: 'fadeInDown 0.25s ease-out',
-        }}>
-          {toastMessage || 'Link copied!'}
-        </div>
+          padding: '8px 20px', borderRadius: 10, background: '#1a1a2e', color: '#34d399',
+          fontSize: 13, fontWeight: 500, border: '1px solid rgba(52,211,153,0.2)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 200, animation: 'fadeInDown 0.25s ease-out',
+        }}>{toastMessage}</div>
       )}
 
-      {/* Delete confirmation dialog */}
+      {/* Delete project confirmation */}
       {showDeleteConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 300,
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backdropFilter: 'blur(4px)',
-        }}
-          onClick={() => setShowDeleteConfirm(false)}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: '#1A1A1A',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 16, padding: 24,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-              minWidth: 340, maxWidth: 400,
-            }}
-          >
-            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#f1f5f9' }}>
-              Delete this project?
-            </h3>
-            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8' }}>
-              This cannot be undone.
-            </p>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowDeleteConfirm(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, boxShadow: '0 24px 64px rgba(0,0,0,0.5)', minWidth: 340, maxWidth: 400 }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#f1f5f9' }}>Delete this project?</h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8' }}>This cannot be undone.</p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                style={{
-                  padding: '8px 16px', borderRadius: 8,
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#e2e8f0', fontSize: 13, fontWeight: 500,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteProject}
-                style={{
-                  padding: '8px 16px', borderRadius: 8,
-                  background: 'rgba(248,113,113,0.15)',
-                  border: '1px solid rgba(248,113,113,0.3)',
-                  color: '#f87171', fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Delete
-              </button>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '8px 16px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleDeleteProject} style={{ padding: '8px 16px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main content: LEFT = Chat, RIGHT = Canvas */}
-      <div
-        ref={containerRef}
-        className="main-panels"
-        style={{
-          flex: 1, minHeight: 0, display: 'flex', position: 'relative',
-        }}
-      >
-        {/* LEFT: Chat panel */}
-        <div
-          className="chat-side"
-          style={{
-            width: `${splitRatio * 100}%`,
-            display: 'flex', flexDirection: 'column', minHeight: 0,
-            background: '#0A0A0A',
-            transformOrigin: 'unset',
-            zoom: 1,
-          }}
-        >
-          <ChatPanel
-            messages={projectMessages}
-            onSend={handleSend}
-            onExportCode={() => generatedTree && setShowCodeExport(true)}
-            isGenerating={isGenerating}
-            initialPrompt={initialPrompt}
-            onFlowScreenClick={handleFlowScreenClick}
-            hasScreens={hasScreens}
-            selectedScreenName={activeGenerated?.name}
-            selectedScreenTree={activeGenerated?.tree}
-            onSelectedScreenClick={() => {
-              if (activeGeneratedId) {
-                const el = phoneFrameRefs.current.get(activeGeneratedId)
-                el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-              }
-            }}
-            onDeselectScreen={() => setActiveGeneratedId(null)}
-            focusTrigger={focusTrigger}
-          />
+      {/* Main content */}
+      <div ref={containerRef} className="main-panels" style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
+        {/* Chat panel */}
+        <div className="chat-side" style={{ width: `${splitRatio * 100}%`, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#0A0A0A' }}>
+          <ErrorBoundary fallbackMessage="Chat panel encountered an error">
+            <ChatPanel
+              messages={screens.projectMessages} onSend={ai.handleSend}
+              onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
+              isGenerating={ai.isGenerating} initialPrompt={initialPrompt}
+              onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens}
+              selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
+              onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
+              onDeselectScreen={() => screens.setActiveGeneratedId(null)} focusTrigger={focusTrigger}
+            />
+          </ErrorBoundary>
         </div>
 
-        {/* Draggable divider */}
-        <div
-          onMouseDown={startDragging}
-          style={{
-            width: 1,
-            cursor: 'col-resize',
-            background: 'rgba(255,255,255,0.06)',
-            position: 'relative',
-            flexShrink: 0,
-            transition: 'background 0.2s',
-            zIndex: 10,
-          }}
+        {/* Divider */}
+        <div onMouseDown={startDragging} style={{ width: 1, cursor: 'col-resize', background: 'rgba(255,255,255,0.06)', flexShrink: 0, transition: 'background 0.2s', zIndex: 10 }}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.width = '3px' }}
           onMouseLeave={e => { if (!isDragging.current) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.width = '1px' } }}
         />
 
-        {/* RIGHT: Canvas */}
-        <div
-          ref={canvasRef}
-          className="canvas-side"
-          onMouseDown={handleCanvasMouseDown}
-          onClick={handleCanvasClick}
-          onDragOver={handleCanvasDragOver}
-          onDragLeave={handleCanvasDragLeave}
-          onDrop={handleCanvasDrop}
-          style={{
-            width: `${(1 - splitRatio) * 100}%`,
-            position: 'relative',
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#E8E8E8',
-            backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-            backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
-            cursor: canvasCursor,
-          }}
-        >
-          {/* Drop zone overlay for screenshot-to-screen */}
-          {canvasDragOver && (
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 50,
-              background: 'rgba(129,140,248,0.06)',
-              backdropFilter: 'blur(2px)',
-              border: '3px dashed rgba(129,140,248,0.5)',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              gap: 12, pointerEvents: 'none',
-              transition: 'all 0.2s ease',
+        {/* Canvas */}
+        <ErrorBoundary fallbackMessage="Canvas encountered an error">
+          <div ref={canvas.canvasRef} className="canvas-side"
+            onMouseDown={canvas.handleCanvasMouseDown} onClick={handleCanvasClick}
+            onDragOver={handleCanvasDragOver} onDragLeave={handleCanvasDragLeave} onDrop={handleCanvasDrop}
+            style={{
+              width: `${(1 - splitRatio) * 100}%`, position: 'relative', overflow: 'hidden',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: '#E8E8E8', backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)',
+              backgroundSize: '24px 24px', backgroundPosition: `${canvas.panOffset.x}px ${canvas.panOffset.y}px`,
+              cursor: canvas.canvasCursor,
             }}>
-              <ImagePlus size={48} style={{ color: '#818CF8', opacity: 0.8 }} />
-              <span style={{ color: '#818CF8', fontSize: 16, fontWeight: 600 }}>
-                Drop screenshot to generate screen
-              </span>
-              <span style={{ color: 'rgba(129,140,248,0.6)', fontSize: 13 }}>
-                PNG, JPG, or WEBP
-              </span>
-            </div>
-          )}
+            {canvasDragOver && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(129,140,248,0.06)', backdropFilter: 'blur(2px)', border: '3px dashed rgba(129,140,248,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, pointerEvents: 'none' }}>
+                <ImagePlus size={48} style={{ color: '#818CF8', opacity: 0.8 }} />
+                <span style={{ color: '#818CF8', fontSize: 16, fontWeight: 600 }}>Drop screenshot to generate screen</span>
+                <span style={{ color: 'rgba(129,140,248,0.6)', fontSize: 13 }}>PNG, JPG, or WEBP</span>
+              </div>
+            )}
 
-          {/* Canvas content — multi-screen infinite canvas */}
-          {!hasScreens && !isGenerating && referenceImages.length === 0 ? (
-            /* EMPTY STATE */
-            <div data-canvas-bg="true" style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-              pointerEvents: 'none', userSelect: 'none',
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-            }}>
-              <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>
-                Your designs will appear here
-              </span>
-            </div>
-          ) : (
-            /* ALL SCREENS + REFERENCE IMAGES */
-            <div
-              data-canvas-bg="true"
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 40,
-                padding: '40px 60px',
-                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel / 100})`,
-                transformOrigin: 'center center',
-                transition: isPanning.current ? 'none' : 'transform 0.15s ease-out',
-                cursor: panActive ? 'inherit' : 'default',
-              }}
-            >
-              {generatedScreens.map((screen, idx) => {
-                const isActive = screen.id === activeGeneratedId
-                const isScreenGenerating = isGenerating && isActive
-                const isImage = screen.type === 'image'
-                return (
-                  <div
-                    key={screen.id}
-                    onClick={(e) => handlePhoneClick(e, screen.id)}
-                    style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                      cursor: panActive ? 'inherit' : 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {/* Screen label */}
-                    {editingScreenLabel === screen.id ? (
-                      <input
-                        autoFocus
-                        value={editingScreenLabelValue}
-                        onChange={e => setEditingScreenLabelValue(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') commitScreenRename(); if (e.key === 'Escape') setEditingScreenLabel(null) }}
-                        onBlur={commitScreenRename}
-                        onClick={e => e.stopPropagation()}
-                        style={{
-                          fontSize: 11, fontWeight: 600,
-                          color: '#6366f1',
-                          textAlign: 'center', maxWidth: 200, width: 160,
-                          padding: '2px 8px', borderRadius: 6,
-                          background: 'rgba(99,102,241,0.1)',
-                          border: '1px solid rgba(99,102,241,0.4)',
-                          outline: 'none',
-                        }}
-                      />
-                    ) : (
-                      <span style={{
-                        fontSize: 11, fontWeight: 600,
-                        color: isActive ? '#6366f1' : '#888',
-                        textAlign: 'center', maxWidth: 200,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        transition: 'color 0.2s',
-                        padding: '2px 8px', borderRadius: 6,
-                        background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent',
-                      }}>
-                        {idx + 1}. {screen.name}
-                      </span>
-                    )}
+            {!screens.hasScreens && !ai.isGenerating && referenceImages.length === 0 ? (
+              <div data-canvas-bg="true" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, pointerEvents: 'none', userSelect: 'none', transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)` }}>
+                <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>Your designs will appear here</span>
+              </div>
+            ) : (
+              <div data-canvas-bg="true" style={{
+                display: 'flex', alignItems: 'flex-start', gap: 40, padding: '40px 60px',
+                transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px) scale(${canvas.zoomLevel / 100})`,
+                transformOrigin: 'center center', transition: canvas.isPanning.current ? 'none' : 'transform 0.15s ease-out',
+                cursor: canvas.panActive ? 'inherit' : 'default',
+              }}>
+                {screens.generatedScreens.map((screen, idx) => {
+                  const isActive = screen.id === screens.activeGeneratedId
+                  const isImage = screen.type === 'image'
+                  return (
+                    <div key={screen.id} onClick={(e) => handlePhoneClick(e, screen.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: canvas.panActive ? 'inherit' : 'pointer', flexShrink: 0 }}>
+                      {screens.editingScreenLabel === screen.id ? (
+                        <input autoFocus value={screens.editingScreenLabelValue} onChange={e => screens.setEditingScreenLabelValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') screens.commitScreenRename(); if (e.key === 'Escape') screens.setEditingScreenLabel(null) }}
+                          onBlur={screens.commitScreenRename} onClick={e => e.stopPropagation()}
+                          style={{ fontSize: 11, fontWeight: 600, color: '#6366f1', textAlign: 'center', maxWidth: 200, width: 160, padding: '2px 8px', borderRadius: 6, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.4)', outline: 'none' }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#6366f1' : '#888', textAlign: 'center', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'color 0.2s', padding: '2px 8px', borderRadius: 6, background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent' }}>
+                          {idx + 1}. {screen.name}
+                        </span>
+                      )}
 
-                    {/* Phone frame with selection highlight */}
-                    <div
-                      data-screen-id={screen.id}
-                      ref={el => { if (el) phoneFrameRefs.current.set(screen.id, el); else phoneFrameRefs.current.delete(screen.id) }}
-                      style={{
-                        borderRadius: 52,
-                        boxShadow: directEditMode && isActive
-                          ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(59,130,246,0.5), 0 0 20px rgba(59,130,246,0.15)'
-                          : isActive
-                            ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)'
-                            : '0 8px 32px rgba(0,0,0,0.2)',
-                        transition: 'box-shadow 0.25s',
-                        cursor: directEditMode ? 'crosshair' : undefined,
-                        position: 'relative',
-                      }}
-                      onMouseOverCapture={directEditMode ? handleDirectEditHover : undefined}
-                      onMouseOutCapture={directEditMode ? handleDirectEditHoverOut : undefined}
-                    >
-                      <PhoneFrame
-                        generatedTree={!isImage ? screen.tree : undefined}
-                        imageUrl={isImage ? screen.imageUrl : undefined}
-                        isGenerating={isScreenGenerating}
-                      />
-                      {/* Direct Edit: element toolbar */}
-                      {directEditMode && isActive && directEditSelectedEl && (
-                        <div data-direct-edit-toolbar="true">
-                          <DirectEditToolbar
-                            target={directEditSelectedEl}
-                            phoneFrameEl={phoneFrameRefs.current.get(screen.id)!}
-                            onClose={() => setDirectEditSelectedEl(null)}
-                            onChanged={() => setDirectEditDirty(true)}
-                          />
+                      <ErrorBoundary fallbackMessage="Screen render error">
+                        <div data-screen-id={screen.id}
+                          ref={el => { if (el) phoneFrameRefs.current.set(screen.id, el); else phoneFrameRefs.current.delete(screen.id) }}
+                          style={{
+                            borderRadius: 52, transition: 'box-shadow 0.25s', position: 'relative',
+                            cursor: directEdit.directEditMode ? 'crosshair' : undefined,
+                            boxShadow: directEdit.directEditMode && isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(59,130,246,0.5), 0 0 20px rgba(59,130,246,0.15)' : isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)' : '0 8px 32px rgba(0,0,0,0.2)',
+                          }}
+                          onMouseOverCapture={directEdit.directEditMode ? directEdit.handleDirectEditHover : undefined}
+                          onMouseOutCapture={directEdit.directEditMode ? directEdit.handleDirectEditHoverOut : undefined}
+                        >
+                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} />
+                          {directEdit.directEditMode && isActive && directEdit.directEditSelectedEl && (
+                            <div data-direct-edit-toolbar="true">
+                              <DirectEditToolbar target={directEdit.directEditSelectedEl} phoneFrameEl={phoneFrameRefs.current.get(screen.id)!} onClose={() => directEdit.setDirectEditSelectedEl(null)} onChanged={() => directEdit.setDirectEditDirty(true)} />
+                            </div>
+                          )}
                         </div>
+                      </ErrorBoundary>
+
+                      {isImage && (
+                        <button onClick={(e) => { e.stopPropagation(); ai.handleGenerateFromImage(screen) }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', boxShadow: '0 2px 8px rgba(99,102,241,0.4)', transition: 'all 0.2s' }}
+                          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+                        ><Sparkles size={12} />Generate from this</button>
                       )}
                     </div>
+                  )
+                })}
 
-                    {/* "Generate from this" button for uploaded images */}
-                    {isImage && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleGenerateFromImage(screen) }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '6px 14px', borderRadius: 20,
-                          background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                          color: '#fff', fontSize: 11, fontWeight: 600,
-                          border: 'none', cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(99,102,241,0.4)',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)' }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
-                      >
-                        <Sparkles size={12} />
-                        Generate from this
-                      </button>
-                    )}
+                {referenceImages.map(img => (
+                  <div key={img.id} onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0, position: 'relative' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#888', padding: '2px 8px', borderRadius: 6 }}>Ref: {img.name}</span>
+                    <div style={{ position: 'relative' }}>
+                      <img src={img.url} alt={img.name} style={{ maxWidth: 280, maxHeight: 500, borderRadius: 12, border: '2px solid rgba(0,0,0,0.15)', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', objectFit: 'contain', background: '#fff' }} />
+                      <button onClick={() => setReferenceImages(prev => prev.filter(i => i.id !== img.id))} style={{ position: 'absolute', top: -8, right: -8, width: 22, height: 22, borderRadius: '50%', background: '#1a1a1a', color: '#fff', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.3)', transition: 'all 0.15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f87171'; e.currentTarget.style.borderColor = '#f87171' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#1a1a1a'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+                        title="Remove reference image"
+                      ><X size={12} /></button>
+                    </div>
                   </div>
-                )
-              })}
+                ))}
+              </div>
+            )}
 
-              {/* Reference images from toolbar upload */}
-              {referenceImages.map(img => (
-                <div
-                  key={img.id}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                    flexShrink: 0, position: 'relative',
-                  }}
-                >
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, color: '#888',
-                    padding: '2px 8px', borderRadius: 6,
-                  }}>
-                    Ref: {img.name}
-                  </span>
-                  <div style={{ position: 'relative' }}>
-                    <img
-                      src={img.url}
-                      alt={img.name}
-                      style={{
-                        maxWidth: 280, maxHeight: 500,
-                        borderRadius: 12,
-                        border: '2px solid rgba(0,0,0,0.15)',
-                        boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                        objectFit: 'contain',
-                        background: '#fff',
-                      }}
-                    />
-                    {/* Remove button */}
-                    <button
-                      onClick={() => removeReferenceImage(img.id)}
-                      style={{
-                        position: 'absolute', top: -8, right: -8,
-                        width: 22, height: 22, borderRadius: '50%',
-                        background: '#1a1a1a', color: '#fff',
-                        border: '2px solid rgba(255,255,255,0.2)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', fontSize: 12,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#f87171'; e.currentTarget.style.borderColor = '#f87171' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = '#1a1a1a'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
-                      title="Remove reference image"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            <ScreenContextToolbar
+              visible={!!screens.activeGeneratedId && !!screens.activeGenerated?.tree}
+              screenName={screens.activeGenerated?.name || ''} screenTree={screens.activeGenerated?.tree}
+              screenId={screens.activeGeneratedId || ''}
+              onRegenerate={ai.handleRegenerate} onOpenVariations={() => setShowVariationsPanel(true)}
+              onEditViaChat={handleEditViaChat} onChangeColorScheme={handleChangeColorScheme}
+              onMakeDarker={handleMakeDarker} onMakeLighter={handleMakeLighter}
+              onPreviewNewTab={handlePreviewNewTab} onShowQrCode={handleShowQrCode}
+              onResizeMobile={() => setToastMessage('Resized to iPhone 14 (390×844)')}
+              onResizeTablet={() => setToastMessage('Resized to iPad (768×1024)')}
+              onExportCode={() => { if (screens.generatedTree) setShowCodeExport(true) }}
+              onDownloadImage={handleDownloadImage}
+              onDuplicate={() => { screens.handleDuplicateScreen(); setToastMessage('Screen duplicated!') }}
+              onRename={screens.handleRenameScreen}
+              onDelete={() => setShowDeleteScreenConfirm(true)}
+              onToast={setToastMessage} onDirectEdit={directEdit.enterDirectEdit}
+            />
 
-          {/* Screen Context Toolbar — appears when a screen is selected */}
-          <ScreenContextToolbar
-            visible={!!activeGeneratedId && !!activeGenerated?.tree}
-            screenName={activeGenerated?.name || ''}
-            screenTree={activeGenerated?.tree}
-            screenId={activeGeneratedId || ''}
-            onRegenerate={handleRegenerate}
-            onOpenVariations={() => setShowVariationsPanel(true)}
-            onEditViaChat={handleEditViaChat}
-            onChangeColorScheme={handleChangeColorScheme}
-            onMakeDarker={handleMakeDarker}
-            onMakeLighter={handleMakeLighter}
-            onPreviewNewTab={handlePreviewNewTab}
-            onShowQrCode={handleShowQrCode}
-            onResizeMobile={handleResizeMobile}
-            onResizeTablet={handleResizeTablet}
-            onExportCode={() => { if (generatedTree) setShowCodeExport(true) }}
-            onDownloadImage={handleDownloadImage}
-            onDuplicate={handleDuplicateScreen}
-            onRename={handleRenameScreen}
-            onDelete={() => setShowDeleteScreenConfirm(true)}
-            onToast={setToastMessage}
-            onDirectEdit={enterDirectEdit}
-          />
+            {directEdit.directEditMode && (
+              <div style={{ position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: 'rgba(59,130,246,0.12)', borderRadius: 10, border: '1px solid rgba(59,130,246,0.3)', zIndex: 60, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+                <PenTool size={14} color="#3B82F6" />
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#93C5FD' }}>Direct Edit Mode — Click any element to edit</span>
+                <button onClick={() => directEdit.exitDirectEdit(false)} style={{ padding: '4px 12px', borderRadius: 6, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0', fontSize: 11, fontWeight: 600, cursor: 'pointer', marginLeft: 4 }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                >Exit</button>
+              </div>
+            )}
 
-          {/* Direct Edit Mode Banner */}
-          {directEditMode && (
-            <div style={{
-              position: 'absolute',
-              top: 60,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '8px 16px',
-              background: 'rgba(59,130,246,0.12)',
-              borderRadius: 10,
-              border: '1px solid rgba(59,130,246,0.3)',
-              zIndex: 60,
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-            }}>
-              <PenTool size={14} color="#3B82F6" />
-              <span style={{ fontSize: 12, fontWeight: 500, color: '#93C5FD' }}>
-                Direct Edit Mode — Click any element to edit
-              </span>
-              <button
-                onClick={() => exitDirectEdit(false)}
-                style={{
-                  padding: '4px 12px', borderRadius: 6,
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  color: '#e2e8f0', fontSize: 11, fontWeight: 600,
-                  cursor: 'pointer', marginLeft: 4,
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
-              >
-                Exit
-              </button>
-            </div>
-          )}
+            {directEdit.directEditMode && directEdit.directEditDirty && (
+              <div style={{ position: 'absolute', bottom: 70, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, zIndex: 60 }}>
+                <button onClick={() => directEdit.exitDirectEdit(false)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0', fontSize: 12, fontWeight: 600, cursor: 'pointer', backdropFilter: 'blur(12px)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                ><RotateCcw size={14} />Discard changes</button>
+                <button onClick={directEdit.saveDirectEdits} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.4)', color: '#93C5FD', fontSize: 12, fontWeight: 600, cursor: 'pointer', backdropFilter: 'blur(12px)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.3)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.2)' }}
+                ><Check size={14} />Save changes</button>
+              </div>
+            )}
 
-          {/* Direct Edit: Save / Discard floating buttons */}
-          {directEditMode && directEditDirty && (
-            <div style={{
-              position: 'absolute',
-              bottom: 70,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              gap: 8,
-              zIndex: 60,
-            }}>
-              <button
-                onClick={() => exitDirectEdit(false)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '8px 16px', borderRadius: 10,
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  color: '#e2e8f0', fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(12px)',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
-              >
-                <RotateCcw size={14} />
-                Discard changes
-              </button>
-              <button
-                onClick={saveDirectEdits}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '8px 16px', borderRadius: 10,
-                  background: 'rgba(59,130,246,0.2)',
-                  border: '1px solid rgba(59,130,246,0.4)',
-                  color: '#93C5FD', fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(12px)',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.3)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.2)' }}
-              >
-                <Check size={14} />
-                Save changes
-              </button>
-            </div>
-          )}
-
-          {/* Bottom canvas toolbar */}
-          <div style={{
-            position: 'absolute',
-            bottom: 16,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '8px 16px',
-            background: '#1A1A1A',
-            borderRadius: 14,
-            border: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            zIndex: 20,
-            transformOrigin: 'unset',
-            zoom: 1,
-          }}>
-            {tbBtn('select', <MousePointer2 size={18} />, 'Select')}
-            {tbBtn('pan', <Hand size={18} />, 'Pan')}
-
-            {/* Separator */}
-            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
-
-            {tbBtn('zoomOut', <ZoomOut size={18} />, 'Zoom out', zoomOut)}
-            <button
-              title="Reset zoom"
-              onClick={resetZoom}
-              style={{
-                fontSize: 12, fontWeight: 600, color: '#999', minWidth: 36, textAlign: 'center',
-                userSelect: 'none', background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '4px 2px', borderRadius: 6, transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#999'; e.currentTarget.style.background = 'transparent' }}
-            >
-              {zoomLevel}%
-            </button>
-            {tbBtn('zoomIn', <ZoomIn size={18} />, 'Zoom in', zoomIn)}
-
-            {/* Separator */}
-            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
-
-            {/* Direct Edit pen tool — toggles direct edit mode */}
-            <button
-              title="Direct edit"
-              onClick={() => { if (directEditMode) exitDirectEdit(false); else enterDirectEdit() }}
-              style={{
-                width: 32, height: 32, borderRadius: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: directEditMode ? 'rgba(59,130,246,0.2)' : 'transparent',
-                color: directEditMode ? '#3B82F6' : '#999',
-                border: directEditMode ? '1px solid rgba(59,130,246,0.4)' : 'none',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { if (!directEditMode) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-              onMouseLeave={e => { if (!directEditMode) e.currentTarget.style.background = directEditMode ? 'rgba(59,130,246,0.2)' : 'transparent' }}
-            >
-              <PenTool size={18} />
-            </button>
-            {tbBtn('screenshot', <ImagePlus size={18} />, 'Screenshot to Screen', () => setShowScreenshotModal(true))}
-            {tbBtn('upload', <Upload size={18} />, 'Upload reference image', () => fileInputRef.current?.click())}
+            <CanvasToolbar activeTool={canvas.activeTool} zoomLevel={canvas.zoomLevel} directEditMode={directEdit.directEditMode}
+              setActiveTool={canvas.setActiveTool} zoomIn={canvas.zoomIn} zoomOut={canvas.zoomOut} resetZoom={canvas.resetZoom}
+              enterDirectEdit={directEdit.enterDirectEdit} exitDirectEdit={directEdit.exitDirectEdit}
+              onScreenshotModal={() => setShowScreenshotModal(true)} onUploadRef={() => fileInputRef.current?.click()} />
           </div>
-        </div>
+        </ErrorBoundary>
       </div>
 
-      {/* Responsive styles + toast animation */}
       <style>{`
-        @keyframes fadeInDown {
-          from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
-          to { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-        @media (max-width: 768px) {
-          .main-panels {
-            flex-direction: column !important;
-          }
-          .chat-side {
-            width: 100% !important;
-            height: 50% !important;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
-          }
-          .canvas-side {
-            width: 100% !important;
-            height: 50% !important;
-          }
-        }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateX(-50%) translateY(-8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @media (max-width: 768px) { .main-panels { flex-direction: column !important; } .chat-side { width: 100% !important; height: 50% !important; border-bottom: 1px solid rgba(255,255,255,0.06); } .canvas-side { width: 100% !important; height: 50% !important; } }
       `}</style>
 
-      {/* Code Export Modal */}
-      {showCodeExport && generatedTree && (
-        <CodeExportModal
-          tree={generatedTree}
-          onClose={() => setShowCodeExport(false)}
-        />
-      )}
+      {showCodeExport && screens.generatedTree && <CodeExportModal tree={screens.generatedTree} onClose={() => setShowCodeExport(false)} />}
+      <CommandPalette commands={commands} isOpen={showCommandPalette} onClose={() => setShowCommandPalette(false)} />
+      <ShareModal projectId={projectId || ''} projectName={screens.projectName} isOpen={showShareModal} onClose={() => setShowShareModal(false)} />
+      <VariationsPanel isOpen={showVariationsPanel} onClose={() => setShowVariationsPanel(false)} onGenerate={ai.handleGenerateVariations} isGenerating={ai.isGeneratingVariations} />
+      {showQrModal && <QrCodeModal url={qrUrl} onClose={() => setShowQrModal(false)} />}
+      {showScreenshotModal && <ScreenshotModal onClose={() => setShowScreenshotModal(false)} onGenerate={(imageData, imageMimeType, prompt) => { setShowScreenshotModal(false); ai.handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true) }} isGenerating={ai.isGenerating} />}
 
-      {/* Command Palette */}
-      <CommandPalette
-        commands={commands}
-        isOpen={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
-      />
-
-      {/* Share Modal */}
-      <ShareModal
-        projectId={projectId || ''}
-        projectName={projectName}
-        isOpen={showShareModal}
-        onClose={() => setShowShareModal(false)}
-      />
-
-      {/* Variations Panel */}
-      <VariationsPanel
-        isOpen={showVariationsPanel}
-        onClose={() => setShowVariationsPanel(false)}
-        onGenerate={handleGenerateVariations}
-        isGenerating={isGeneratingVariations}
-      />
-
-      {/* QR Code Modal */}
-      {showQrModal && (
-        <QrCodeModal
-          url={qrUrl}
-          onClose={() => setShowQrModal(false)}
-        />
-      )}
-
-      {/* Screenshot to Screen Modal */}
-      {showScreenshotModal && (
-        <ScreenshotModal
-          onClose={() => setShowScreenshotModal(false)}
-          onGenerate={(imageData, imageMimeType, prompt) => {
-            setShowScreenshotModal(false)
-            handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true)
-          }}
-          isGenerating={isGenerating}
-        />
-      )}
-
-      {/* Delete Screen Confirmation */}
       {showDeleteScreenConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 300,
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backdropFilter: 'blur(4px)',
-        }}
-          onClick={() => setShowDeleteScreenConfirm(false)}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: '#1A1A1A',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 16, padding: 24,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-              minWidth: 340, maxWidth: 400,
-            }}
-          >
-            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#f1f5f9' }}>
-              Delete this screen?
-            </h3>
-            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8' }}>
-              This cannot be undone.
-            </p>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }} onClick={() => setShowDeleteScreenConfirm(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, boxShadow: '0 24px 64px rgba(0,0,0,0.5)', minWidth: 340, maxWidth: 400 }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#f1f5f9' }}>Delete this screen?</h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8' }}>This cannot be undone.</p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowDeleteScreenConfirm(false)}
-                style={{
-                  padding: '8px 16px', borderRadius: 8,
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#e2e8f0', fontSize: 13, fontWeight: 500,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteScreen}
-                style={{
-                  padding: '8px 16px', borderRadius: 8,
-                  background: 'rgba(248,113,113,0.15)',
-                  border: '1px solid rgba(248,113,113,0.3)',
-                  color: '#f87171', fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Delete
-              </button>
+              <button onClick={() => setShowDeleteScreenConfirm(false)} style={{ padding: '8px 16px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={async () => { await screens.handleDeleteScreen(); setShowDeleteScreenConfirm(false); setToastMessage('Screen deleted') }} style={{ padding: '8px 16px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Delete</button>
             </div>
           </div>
         </div>
       )}
     </div>
   )
-}
-
-const hamburgerItemStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 10,
-  width: '100%', padding: '9px 12px', borderRadius: 8,
-  background: 'transparent', border: 'none',
-  color: '#e2e8f0', fontSize: 13, fontWeight: 500,
-  cursor: 'pointer', transition: 'background 0.15s',
-  textAlign: 'left',
-}
-
-const studioAvatarItemStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 10,
-  width: '100%', padding: '10px 12px', borderRadius: 8,
-  background: 'transparent', border: 'none',
-  color: '#e2e8f0', fontSize: 14, fontWeight: 500,
-  cursor: 'pointer', transition: 'background 0.15s',
-  textAlign: 'left',
 }
 
 export default App
