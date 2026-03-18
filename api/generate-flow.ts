@@ -1,5 +1,150 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, checkRateLimit, logUsage } from './_auth'
+import { createClient } from '@supabase/supabase-js'
+
+// ===== Inlined auth logic (no separate _auth module for Vercel compatibility) =====
+
+function getSupabaseConfig() {
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    ''
+  const key =
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    ''
+  return { url, key }
+}
+
+async function authenticateRequest(
+  req: VercelRequest,
+  res: VercelResponse
+): Promise<{ id: string; email?: string } | null> {
+  console.log('=== ENV VAR DEBUG ===', {
+    SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'MISSING',
+    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'MISSING',
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING',
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
+    VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'SET' : 'MISSING',
+    NODE_ENV: process.env.NODE_ENV,
+  })
+
+  const { url, key } = getSupabaseConfig()
+  const supabaseConfigured = Boolean(url && key)
+
+  if (!supabaseConfigured) {
+    console.warn('WARNING: Supabase not configured, auth disabled. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel dashboard.')
+    return { id: 'anonymous', email: undefined }
+  }
+
+  const rawHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
+  const headerValue = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader
+  console.log('Auth header:', headerValue ? 'present' : 'missing')
+
+  if (!headerValue || !headerValue.toLowerCase().startsWith('bearer ')) {
+    console.log('Auth rejected: no Bearer token in header')
+    res.status(401).json({ error: 'Please sign in to generate screens.' })
+    return null
+  }
+
+  const bearerToken = headerValue.replace(/^bearer\s+/i, '').trim()
+  if (!bearerToken) {
+    console.log('Auth rejected: empty token after Bearer prefix')
+    res.status(401).json({ error: 'Please sign in to generate screens.' })
+    return null
+  }
+
+  try {
+    const supabase = createClient(url, key)
+    const { data, error } = await supabase.auth.getUser(bearerToken)
+
+    if (error || !data.user) {
+      console.log('Auth rejected: token verification failed -', error?.message || 'no user returned')
+      res.status(401).json({ error: 'Invalid session. Please sign in again.' })
+      return null
+    }
+
+    console.log('Auth success: user', data.user.id)
+    return { id: data.user.id, email: data.user.email }
+  } catch (err) {
+    console.error('Auth error (Supabase call failed):', err)
+    res.status(500).json({ error: 'Authentication service error. Please try again.' })
+    return null
+  }
+}
+
+async function checkRateLimit(
+  userId: string,
+  res: VercelResponse,
+  dailyLimit = 10
+): Promise<boolean> {
+  if (userId === 'anonymous') return false
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return false
+  const supabase = createClient(url, key)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const { count, error } = await supabase
+    .from('usage_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', today.toISOString())
+
+  if (error) {
+    console.warn('Rate limit check failed (table may not exist yet):', error.message)
+    return false
+  }
+
+  if (count !== null && count >= dailyLimit) {
+    res.status(429).json({
+      error: `Daily limit reached (${count}/${dailyLimit}). Upgrade to Pro for unlimited generations.`,
+    })
+    return true
+  }
+
+  return false
+}
+
+function logUsage(params: {
+  userId: string
+  projectId?: string
+  modelUsed: string
+  tokensIn?: number
+  tokensOut?: number
+  generationType: 'new_screen' | 'edit' | 'flow' | 'variation' | 'regenerate'
+  promptPreview?: string
+  success: boolean
+}): void {
+  if (params.userId === 'anonymous') return
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return
+  const supabase = createClient(url, key)
+
+  supabase
+    .from('usage_logs')
+    .insert({
+      user_id: params.userId,
+      project_id: params.projectId || null,
+      model_used: params.modelUsed,
+      tokens_in: params.tokensIn || null,
+      tokens_out: params.tokensOut || null,
+      generation_type: params.generationType,
+      prompt_preview: params.promptPreview?.slice(0, 100) || null,
+      success: params.success,
+    })
+    .then(({ error }) => {
+      if (error) console.warn('Usage log insert failed:', error.message)
+    })
+}
+
+// ===== End inlined auth logic =====
 
 const FLOW_SYSTEM_PROMPT = `You are Mokkoi, an AI mobile app designer. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
