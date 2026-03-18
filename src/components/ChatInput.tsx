@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
+import { supabase } from '../lib/supabase'
 
 interface ChatMessage {
   id: string
@@ -63,9 +64,13 @@ export function ChatInput({ onScreenGenerated, initialPrompt }: ChatInputProps) 
     onScreenGenerated('__generating__')
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ prompt }),
       })
 

@@ -67,6 +67,18 @@ function isCreateIntent(prompt: string): boolean {
   return CREATE_KEYWORDS.some(kw => lower.includes(kw))
 }
 
+/** Get auth headers for API calls. Returns headers with Bearer token. */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) {
+    throw new Error('Not authenticated. Please sign in.')
+  }
+  return {
+    'Authorization': `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  }
+}
+
 function App() {
   const [searchParams] = useSearchParams()
   const { projectId } = useParams<{ projectId: string }>()
@@ -443,10 +455,11 @@ function App() {
       setIsGenerating(true)
 
       try {
+        const authHeaders = await getAuthHeaders()
         const res = await fetch('/api/generate-flow', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt }),
+          headers: authHeaders,
+          body: JSON.stringify({ prompt, projectId }),
         })
 
         if (!res.ok) {
@@ -525,11 +538,13 @@ function App() {
     setIsGenerating(true)
 
     try {
+      const authHeaders = await getAuthHeaders()
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
           prompt,
+          projectId,
           ...(editingScreen ? { currentScreen: editingScreen.tree } : {}),
           ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
         }),
@@ -982,10 +997,11 @@ ${settings.customInstructions ? 'Additional instructions: ' + settings.customIns
 Generate a new version of this screen as a variation. Return ONLY the JSON component tree.`
 
       try {
+        const authHeaders = await getAuthHeaders()
         const res = await fetch('/api/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: variationPrompt }),
+          headers: authHeaders,
+          body: JSON.stringify({ prompt: variationPrompt, projectId }),
         })
         if (!res.ok) throw new Error('Failed')
         const { tree } = await res.json()

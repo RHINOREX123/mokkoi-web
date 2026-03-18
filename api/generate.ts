@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { authenticateRequest, checkRateLimit, logUsage } from './_auth'
 
 const SYSTEM_PROMPT = `You are Mokkoi, an AI mobile screen designer. Generate a React Native component tree as JSON. Return a single JSON object with structure: { "type": string, "style": {}, "props": {}, "children": [] }. Each child is either another component object or a plain string for text content. Supported types: View, Text, TextInput, TouchableOpacity, ScrollView, Image, SafeAreaView.
 
@@ -32,6 +33,23 @@ CRITICAL MOBILE SCREEN SIZE RULES:
 - If you need more content, use tabs or pagination patterns, NOT vertical scrolling.
 - NEVER generate a screen taller than 568px of content.
 
+MOBILE DESIGN RULES (apply to every screen):
+1. SPACING: Use 8pt grid system. All padding/margins should be multiples of 4 or 8. Minimum padding: 16px.
+2. TOUCH TARGETS: All interactive elements minimum 44x44pt. Buttons minimum height 48px.
+3. TYPOGRAPHY: Maximum 3 font sizes per screen. Body text minimum 16px. Headers 24-32px. Clear hierarchy.
+4. COLOR: Maximum 3 brand colors + neutrals per screen. Ensure WCAG AA contrast (4.5:1 for text, 3:1 for large text). Always use dark backgrounds (#0A0A0A to #1A1A1A range) unless user specifies light theme.
+5. SAFE AREAS: Always wrap in SafeAreaView. Account for notch/status bar at top (44px) and home indicator at bottom (34px).
+6. SCROLLING: Wrap content in ScrollView when content exceeds viewport. Never nest ScrollViews.
+7. BOTTOM NAV: Maximum 5 items. Active item should be visually distinct. Use icons + labels.
+8. CARDS: Rounded corners (12-16px). Subtle border or shadow for depth. Consistent padding (16px).
+9. LOADING STATES: Include ActivityIndicator or skeleton screens for async content.
+10. EMPTY STATES: Include meaningful empty states for lists and feeds.
+11. ICONS: Use descriptive text labels with icons. Never icon-only for important actions.
+12. STATUS BAR: Style appropriately (light-content for dark themes, dark-content for light themes).
+13. LAYOUT: Use flexDirection column as default. Use flexDirection row for horizontal arrangements. Always set flex: 1 on root container.
+14. PLATFORM AWARENESS: Generate iOS-style by default (large titles, SF-style rounded elements, bottom tab bars).
+15. ACCESSIBILITY: Add accessibilityLabel to all interactive elements. Use accessibilityRole appropriately.
+
 Return ONLY valid JSON, no markdown, no explanation.`
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -39,12 +57,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  // --- Authentication ---
+  const user = await authenticateRequest(req, res)
+  if (!user) return // 401 already sent
+
+  // --- Rate limiting ---
+  const rateLimited = await checkRateLimit(user.id, res)
+  if (rateLimited) return // 429 already sent
+
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt, currentScreen, imageData, imageMimeType } = req.body ?? {}
+  const { prompt, currentScreen, imageData, imageMimeType, projectId } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
@@ -59,6 +85,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : 'claude-haiku-4-5-20251001'
   const maxTokens = (isNewScreen || isVariation || isRegenerate) ? 12000 : 8000
   console.log(`Using model: ${model} for: ${prompt.substring(0, 50)}...`)
+
+  // Determine generation type for usage logging
+  let generationType: 'new_screen' | 'edit' | 'variation' | 'regenerate' = 'new_screen'
+  if (isVariation) generationType = 'variation'
+  else if (isRegenerate) generationType = 'regenerate'
+  else if (currentScreen) generationType = 'edit'
 
   // Build user message — include current screen if editing, or image if attached
   let userContent: string | Array<{ type: string; [key: string]: unknown }>
@@ -109,6 +141,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!response.ok) {
       const errorBody = await response.text()
       console.error('Anthropic API error:', response.status, errorBody)
+      logUsage({
+        userId: user.id,
+        projectId: projectId || undefined,
+        modelUsed: model,
+        generationType,
+        promptPreview: prompt,
+        success: false,
+      })
       return res.status(502).json({ error: 'Failed to generate screen' })
     }
 
@@ -168,6 +208,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${jsonText.slice(0, 100)}` })
       }
     }
+
+    // --- Usage logging (fire-and-forget) ---
+    logUsage({
+      userId: user.id,
+      projectId: projectId || undefined,
+      modelUsed: model,
+      tokensIn: data.usage?.input_tokens,
+      tokensOut: data.usage?.output_tokens,
+      generationType,
+      promptPreview: prompt,
+      success: true,
+    })
 
     const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
     return res.status(200).json({ tree, modelUsed: modelLabel })
