@@ -70,11 +70,13 @@ function isCreateIntent(prompt: string): boolean {
 /** Get auth headers for API calls. Returns headers with Bearer token. */
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.access_token) {
+  const token = session?.access_token
+  console.log('Auth token being sent:', token ? `present (${token.substring(0, 20)}...)` : 'MISSING')
+  if (!token) {
     throw new Error('Not authenticated. Please sign in.')
   }
   return {
-    'Authorization': `Bearer ${session.access_token}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
   }
 }
