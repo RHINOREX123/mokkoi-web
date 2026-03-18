@@ -23,10 +23,22 @@ function authenticateMCPRequest(
 ): { id: string; email?: string; isMCP: true } | null {
   const rawSource = req.headers['x-mokkoi-source'] || ''
   const source = Array.isArray(rawSource) ? rawSource[0] : rawSource
-  if (source !== 'mcp') return null
 
+  // Also check if Bearer token is an API key (starts with sk-ant-)
+  const rawAuth = req.headers['authorization'] || req.headers['Authorization'] || ''
+  const authValue = Array.isArray(rawAuth) ? rawAuth[0] : rawAuth
+  const bearerToken = authValue.replace(/^bearer\s+/i, '').trim()
+  const isApiKeyAuth = bearerToken.startsWith('sk-ant-')
+
+  console.log('MCP auth check:', { hasSourceHeader: !!source, isApiKeyInBearer: isApiKeyAuth })
+
+  // Accept MCP if either: explicit header OR Bearer token is an API key (not a JWT)
+  if (source !== 'mcp' && !isApiKeyAuth) return null
+
+  // Try X-API-Key header first, then fall back to Bearer token
   const rawApiKey = req.headers['x-api-key'] || ''
-  const apiKey = Array.isArray(rawApiKey) ? rawApiKey[0] : rawApiKey
+  const apiKeyFromHeader = Array.isArray(rawApiKey) ? rawApiKey[0] : rawApiKey
+  const apiKey = apiKeyFromHeader || bearerToken
   const serverKey = process.env.ANTHROPIC_API_KEY || ''
 
   if (!apiKey || !serverKey) return null
