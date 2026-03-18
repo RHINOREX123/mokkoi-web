@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import type { ComponentNode } from '../types/mokkoi'
+import { ScreenRenderer } from './ScreenRenderer'
 
 export interface ChatMessage {
   id: string
@@ -25,6 +27,12 @@ interface ChatPanelProps {
   hasScreens?: boolean
   /** Name of the currently selected screen on canvas */
   selectedScreenName?: string
+  /** Component tree of the currently selected screen (for thumbnail) */
+  selectedScreenTree?: ComponentNode
+  /** Callback when user clicks the screen thumbnail to scroll to it */
+  onSelectedScreenClick?: () => void
+  /** Callback to deselect the current screen */
+  onDeselectScreen?: () => void
   /** Incrementing trigger to programmatically focus the chat input */
   focusTrigger?: number
 }
@@ -58,7 +66,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, focusTrigger }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -441,18 +449,71 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
       {/* Input bar */}
       <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', background: '#0c0c0e' }}>
-        {/* Selected screen indicator */}
+        {/* Selected screen indicator with thumbnail */}
         {selectedScreenName && (
           <div style={{
             marginBottom: 8,
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 11, color: '#818cf8', fontWeight: 500,
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 8px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(129,140,248,0.15)',
+            borderRadius: 10,
           }}>
-            <div style={{
-              width: 6, height: 6, borderRadius: '50%',
-              background: '#818cf8', flexShrink: 0,
-            }} />
-            Editing: {selectedScreenName}
+            {/* Mini screen thumbnail */}
+            {selectedScreenTree && (
+              <div
+                onClick={onSelectedScreenClick}
+                title="Click to scroll to screen"
+                style={{
+                  width: 36, height: 64, borderRadius: 8,
+                  overflow: 'hidden', flexShrink: 0,
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: '#0F172A',
+                  cursor: 'pointer',
+                  position: 'relative',
+                }}
+              >
+                <div style={{
+                  transform: 'scale(0.112)',
+                  transformOrigin: 'top left',
+                  width: 320, height: 568,
+                  pointerEvents: 'none',
+                }}>
+                  <ScreenRenderer tree={selectedScreenTree} />
+                </div>
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 10, color: '#64748B', fontWeight: 500,
+                marginBottom: 2,
+              }}>
+                Editing
+              </div>
+              <div style={{
+                fontSize: 12, color: '#818cf8', fontWeight: 600,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {selectedScreenName}
+              </div>
+            </div>
+            {/* Deselect button */}
+            {onDeselectScreen && (
+              <button
+                onClick={onDeselectScreen}
+                title="Deselect screen"
+                style={{
+                  width: 20, height: 20, borderRadius: 6,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#64748B', fontSize: 12, cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                &times;
+              </button>
+            )}
           </div>
         )}
         {/* Attached image preview */}

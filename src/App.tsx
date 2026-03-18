@@ -190,6 +190,7 @@ function App() {
           id: s.id,
           name: s.name,
           tree: s.component_tree as ComponentNode,
+          originalPrompt: s.original_prompt ?? undefined,
         }))
         setGeneratedScreens(loaded)
         setActiveGeneratedId(loaded[0].id)
@@ -230,6 +231,7 @@ function App() {
           project_id: projectId,
           name: s.name,
           component_tree: s.tree,
+          original_prompt: s.originalPrompt ?? null,
           order_index: i,
           updated_at: new Date().toISOString(),
         })
@@ -1782,6 +1784,14 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
             onFlowScreenClick={handleFlowScreenClick}
             hasScreens={hasScreens}
             selectedScreenName={activeGenerated?.name}
+            selectedScreenTree={activeGenerated?.tree}
+            onSelectedScreenClick={() => {
+              if (activeGeneratedId) {
+                const el = phoneFrameRefs.current.get(activeGeneratedId)
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+              }
+            }}
+            onDeselectScreen={() => setActiveGeneratedId(null)}
             focusTrigger={focusTrigger}
           />
         </div>

@@ -261,10 +261,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     /\b(create|build|design|make a|generate|new screen|from scratch)\b/i.test(prompt)
   const isVariation = /variation/i.test(prompt) || prompt.includes('VARIATION_PROMPT')
   const isRegenerate = /regenerate/i.test(prompt)
-  const model = (isNewScreen || isVariation || isRegenerate)
-    ? 'claude-sonnet-4-20250514'
-    : 'claude-haiku-4-5-20251001'
-  const maxTokens = (isNewScreen || isVariation || isRegenerate) ? 12000 : 8000
+  const hasImage = Boolean(imageData)
+
+  // Force Sonnet + higher token limit for image-based generation (prevents truncation)
+  let model: string
+  let maxTokens: number
+  if (hasImage) {
+    model = 'claude-sonnet-4-20250514'
+    maxTokens = 16000
+  } else if (isNewScreen || isVariation || isRegenerate) {
+    model = 'claude-sonnet-4-20250514'
+    maxTokens = 12000
+  } else {
+    model = 'claude-haiku-4-5-20251001'
+    maxTokens = 8000
+  }
   console.log(`Using model: ${model} for: ${prompt.substring(0, 50)}...`)
 
   // Determine generation type for usage logging
@@ -360,22 +371,45 @@ Generate a completely fresh design for this same type of screen. Use different l
       return res.status(502).json({ error: 'Empty response from AI service' })
     }
 
-    // Strip markdown code blocks if Claude wrapped the JSON
-    let jsonText = text.trim()
-    // Remove ```json ... ``` or ``` ... ``` wrappers
-    jsonText = jsonText.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-    jsonText = jsonText.trim()
+    // Robust JSON repair: strips markdown fences, extracts JSON, closes truncated structures
+    function repairJSON(raw: string): any {
+      let s = raw.trim()
+      // Strip markdown code fences
+      s = s.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim()
 
-    let tree: any
-    try {
-      tree = JSON.parse(jsonText)
-    } catch (jsonErr) {
-      // Attempt to repair truncated JSON by closing open brackets/braces
-      console.warn('Initial JSON parse failed, attempting repair...')
-      let repaired = jsonText
-      // Count unclosed braces and brackets
-      let openBraces = 0, openBrackets = 0
+      // Extract JSON between first { and last }
+      const firstBrace = s.indexOf('{')
+      if (firstBrace === -1) throw new Error('No JSON object found')
+      const lastBrace = s.lastIndexOf('}')
+      if (lastBrace > firstBrace) {
+        s = s.slice(firstBrace, lastBrace + 1)
+      } else {
+        // Truncated — take from first brace to end
+        s = s.slice(firstBrace)
+      }
+
+      // Try direct parse first
+      try { return JSON.parse(s) } catch {}
+
+      // Repair truncated JSON
+      let repaired = s
+      // Close any open string
       let inString = false, escaped = false
+      for (const ch of repaired) {
+        if (escaped) { escaped = false; continue }
+        if (ch === '\\') { escaped = true; continue }
+        if (ch === '"') { inString = !inString }
+      }
+      if (inString) repaired += '"'
+
+      // Remove trailing incomplete key-value pairs (e.g. `"key": "val` or `"key":`)
+      repaired = repaired.replace(/,\s*"[^"]*":\s*"?[^"}\]]*$/, '')
+      // Trim trailing comma, colon, or whitespace
+      repaired = repaired.replace(/[,:\s]+$/, '')
+
+      // Count and close unclosed braces/brackets
+      let openBraces = 0, openBrackets = 0
+      inString = false; escaped = false
       for (const ch of repaired) {
         if (escaped) { escaped = false; continue }
         if (ch === '\\') { escaped = true; continue }
@@ -386,19 +420,19 @@ Generate a completely fresh design for this same type of screen. Use different l
         else if (ch === '[') openBrackets++
         else if (ch === ']') openBrackets--
       }
-      // Close any open strings, then brackets/braces
-      if (inString) repaired += '"'
-      // Trim trailing comma or colon that would make JSON invalid
-      repaired = repaired.replace(/[,:\s]+$/, '')
       for (let i = 0; i < openBrackets; i++) repaired += ']'
       for (let i = 0; i < openBraces; i++) repaired += '}'
-      try {
-        tree = JSON.parse(repaired)
-        console.log('JSON repair succeeded')
-      } catch (repairErr) {
-        console.error('JSON repair also failed. Raw start:', jsonText.slice(0, 500))
-        return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${jsonText.slice(0, 100)}` })
-      }
+
+      return JSON.parse(repaired)
+    }
+
+    let tree: any
+    try {
+      tree = repairJSON(text)
+      console.log('JSON parse succeeded')
+    } catch (jsonErr) {
+      console.error('JSON repair failed. Raw start:', text.slice(0, 500))
+      return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
     }
 
     // --- Usage logging (fire-and-forget) ---
