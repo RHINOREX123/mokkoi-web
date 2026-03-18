@@ -16,6 +16,9 @@ const EDIT_KEYWORDS = [
   'change', 'update', 'modify', 'remove', 'add to', 'make it', 'make the',
   'replace', 'fix', 'adjust', 'tweak', 'edit', 'move', 'resize', 'recolor',
   'darker', 'lighter', 'bigger', 'smaller', 'add a', 'delete',
+  'recreate', 'with white', 'with black', 'with light', 'with dark',
+  'white background', 'light theme', 'dark theme', 'light mode', 'dark mode',
+  'this screen',
 ]
 
 const CREATE_KEYWORDS = [
