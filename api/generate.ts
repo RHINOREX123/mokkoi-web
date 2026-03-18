@@ -144,6 +144,42 @@ function logUsage(params: {
     })
 }
 
+/**
+ * Log edit diffs to the edit_diffs table. Fire-and-forget (does not block).
+ */
+function logEditDiff(params: {
+  userId: string
+  projectId?: string
+  screenId?: string
+  editType: 'ai_edit' | 'variation' | 'regenerate'
+  prompt?: string
+  treeBefore: any
+  treeAfter: any
+  modelUsed?: string
+}): void {
+  if (params.userId === 'anonymous') return
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return
+  const supabase = createClient(url, key)
+
+  supabase
+    .from('edit_diffs')
+    .insert({
+      user_id: params.userId,
+      project_id: params.projectId || null,
+      screen_id: params.screenId || null,
+      edit_type: params.editType,
+      prompt: params.prompt?.slice(0, 500) || null,
+      component_tree_before: params.treeBefore,
+      component_tree_after: params.treeAfter,
+      model_used: params.modelUsed || null,
+    })
+    .then(({ error }) => {
+      if (error) console.warn('Edit diff log insert failed:', error.message)
+    })
+}
+
 // ===== End inlined auth logic =====
 
 const SYSTEM_PROMPT = `You are Mokkoi, an AI mobile screen designer. Generate a React Native component tree as JSON. Return a single JSON object with structure: { "type": string, "style": {}, "props": {}, "children": [] }. Each child is either another component object or a plain string for text content. Supported types: View, Text, TextInput, TouchableOpacity, ScrollView, Image, SafeAreaView.
@@ -215,7 +251,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt, currentScreen, imageData, imageMimeType, projectId } = req.body ?? {}
+  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
@@ -365,6 +401,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       promptPreview: prompt,
       success: true,
     })
+
+    // --- Edit diff capture (fire-and-forget) ---
+    if (currentScreen && (generationType === 'edit' || generationType === 'variation' || generationType === 'regenerate')) {
+      const editType = generationType === 'edit' ? 'ai_edit' : generationType
+      logEditDiff({
+        userId: user.id,
+        projectId: projectId || undefined,
+        screenId: screenId || undefined,
+        editType: editType as 'ai_edit' | 'variation' | 'regenerate',
+        prompt,
+        treeBefore: currentScreen,
+        treeAfter: tree,
+        modelUsed: model,
+      })
+    }
 
     const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
     return res.status(200).json({ tree, modelUsed: modelLabel })

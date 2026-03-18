@@ -4,12 +4,13 @@ import { PhoneFrame } from './components/PhoneFrame'
 import { ChatPanel, type ChatMessage } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2, Check, RotateCcw } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, Sparkles, Download, Share2, Plus, X, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
 import { DirectEditToolbar } from './components/DirectEditToolbar'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
 import { ScreenContextToolbar } from './components/ScreenContextToolbar'
 import { VariationsPanel, type VariationSettings } from './components/VariationsPanel'
 import { QrCodeModal } from './components/QrCodeModal'
+import { ScreenshotModal } from './components/ScreenshotModal'
 import { convertTreeToJSX } from './components/CodeExportModal'
 import html2canvas from 'html2canvas'
 import type { ComponentNode } from './types/mokkoi'
@@ -125,6 +126,8 @@ function App() {
   const [editingScreenLabel, setEditingScreenLabel] = useState<string | null>(null)
   const [editingScreenLabelValue, setEditingScreenLabelValue] = useState('')
   const [isGeneratingVariations, setIsGeneratingVariations] = useState(false)
+  const [showScreenshotModal, setShowScreenshotModal] = useState(false)
+  const [canvasDragOver, setCanvasDragOver] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
   const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -560,7 +563,7 @@ function App() {
         body: JSON.stringify({
           prompt,
           projectId,
-          ...(editingScreen ? { currentScreen: editingScreen.tree } : {}),
+          ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
           ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
         }),
       })
@@ -647,6 +650,46 @@ function App() {
     handleSend('Recreate this screen design', base64, mimeType, true)
   }
 
+  // === Canvas drag-and-drop for screenshot-to-screen ===
+  const handleCanvasDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer.types.includes('Files')) {
+      setCanvasDragOver(true)
+    }
+  }, [])
+
+  const handleCanvasDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (rect) {
+      const { clientX, clientY } = e
+      if (clientX <= rect.left || clientX >= rect.right || clientY <= rect.top || clientY >= rect.bottom) {
+        setCanvasDragOver(false)
+      }
+    }
+  }, [])
+
+  const handleCanvasDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setCanvasDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return
+    if (file.size > 5 * 1024 * 1024) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+      if (!match) return
+      const [, mimeType, base64] = match
+      handleSend('Recreate this screen design', base64, mimeType, true)
+    }
+    reader.readAsDataURL(file)
+  }, [handleSend])
+
   // === Screen Context Toolbar Handlers ===
 
   // Regenerate: re-send the ORIGINAL clean prompt (no version labels)
@@ -730,6 +773,10 @@ function App() {
     directEditSnapshotRef.current.clear()
   }, [directEditDirty, activeGeneratedId])
 
+  // NOTE: Direct edits are DOM-level only. The component tree in generatedScreens
+  // is NOT updated during direct editing. Edit diff capture (before/after trees)
+  // is not possible until DOM-to-tree reverse parsing is implemented.
+  // See api/log-edit-diff.ts for the endpoint that will handle this in the future.
   const saveDirectEdits = useCallback(() => {
     if (!activeGeneratedId) return
     // The DOM has been directly edited. We need to persist these changes.
@@ -1757,6 +1804,9 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
           className="canvas-side"
           onMouseDown={handleCanvasMouseDown}
           onClick={handleCanvasClick}
+          onDragOver={handleCanvasDragOver}
+          onDragLeave={handleCanvasDragLeave}
+          onDrop={handleCanvasDrop}
           style={{
             width: `${(1 - splitRatio) * 100}%`,
             position: 'relative',
@@ -1771,6 +1821,28 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
             cursor: canvasCursor,
           }}
         >
+          {/* Drop zone overlay for screenshot-to-screen */}
+          {canvasDragOver && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 50,
+              background: 'rgba(129,140,248,0.06)',
+              backdropFilter: 'blur(2px)',
+              border: '3px dashed rgba(129,140,248,0.5)',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              gap: 12, pointerEvents: 'none',
+              transition: 'all 0.2s ease',
+            }}>
+              <ImagePlus size={48} style={{ color: '#818CF8', opacity: 0.8 }} />
+              <span style={{ color: '#818CF8', fontSize: 16, fontWeight: 600 }}>
+                Drop screenshot to generate screen
+              </span>
+              <span style={{ color: 'rgba(129,140,248,0.6)', fontSize: 13 }}>
+                PNG, JPG, or WEBP
+              </span>
+            </div>
+          )}
+
           {/* Canvas content — multi-screen infinite canvas */}
           {!hasScreens && !isGenerating && referenceImages.length === 0 ? (
             /* EMPTY STATE */
@@ -2130,6 +2202,7 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
             >
               <PenTool size={18} />
             </button>
+            {tbBtn('screenshot', <ImagePlus size={18} />, 'Screenshot to Screen', () => setShowScreenshotModal(true))}
             {tbBtn('upload', <Upload size={18} />, 'Upload reference image', () => fileInputRef.current?.click())}
           </div>
         </div>
@@ -2193,6 +2266,18 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
         <QrCodeModal
           url={qrUrl}
           onClose={() => setShowQrModal(false)}
+        />
+      )}
+
+      {/* Screenshot to Screen Modal */}
+      {showScreenshotModal && (
+        <ScreenshotModal
+          onClose={() => setShowScreenshotModal(false)}
+          onGenerate={(imageData, imageMimeType, prompt) => {
+            setShowScreenshotModal(false)
+            handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true)
+          }}
+          isGenerating={isGenerating}
         />
       )}
 
