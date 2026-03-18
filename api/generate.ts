@@ -17,10 +17,33 @@ function getSupabaseConfig() {
   return { url, key }
 }
 
+/** Check if this is an MCP request authenticated via API key */
+function authenticateMCPRequest(
+  req: VercelRequest
+): { id: string; email?: string; isMCP: true } | null {
+  const rawSource = req.headers['x-mokkoi-source'] || ''
+  const source = Array.isArray(rawSource) ? rawSource[0] : rawSource
+  if (source !== 'mcp') return null
+
+  const rawApiKey = req.headers['x-api-key'] || ''
+  const apiKey = Array.isArray(rawApiKey) ? rawApiKey[0] : rawApiKey
+  const serverKey = process.env.ANTHROPIC_API_KEY || ''
+
+  if (!apiKey || !serverKey) return null
+  if (apiKey !== serverKey) return null
+
+  console.log('MCP request authenticated via API key')
+  return { id: 'mcp', email: undefined, isMCP: true }
+}
+
 async function authenticateRequest(
   req: VercelRequest,
   res: VercelResponse
-): Promise<{ id: string; email?: string } | null> {
+): Promise<{ id: string; email?: string; isMCP?: boolean } | null> {
+  // --- MCP auth: check X-Mokkoi-Source header first ---
+  const mcpAuth = authenticateMCPRequest(req)
+  if (mcpAuth) return mcpAuth
+
   console.log('=== ENV VAR DEBUG ===', {
     SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'MISSING',
     VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'MISSING',
@@ -244,9 +267,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await authenticateRequest(req, res)
   if (!user) return // 401 already sent
 
-  // --- Rate limiting ---
-  const rateLimited = await checkRateLimit(user.id, res)
-  if (rateLimited) return // 429 already sent
+  // --- Rate limiting (skip for MCP — they use their own key via BYOK) ---
+  if (!user.isMCP) {
+    const rateLimited = await checkRateLimit(user.id, res)
+    if (rateLimited) return // 429 already sent
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {

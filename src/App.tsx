@@ -361,8 +361,11 @@ function App() {
                           style={{ fontSize: 11, fontWeight: 600, color: '#6366f1', textAlign: 'center', maxWidth: 200, width: 160, padding: '2px 8px', borderRadius: 6, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.4)', outline: 'none' }}
                         />
                       ) : (
-                        <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#6366f1' : '#888', textAlign: 'center', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'color 0.2s', padding: '2px 8px', borderRadius: 6, background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#6366f1' : '#888', textAlign: 'center', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'color 0.2s', padding: '2px 8px', borderRadius: 6, background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           {idx + 1}. {screen.name}
+                          {screen.source === 'mcp' && (
+                            <span style={{ fontSize: 8, fontWeight: 700, color: '#34d399', background: 'rgba(52,211,153,0.15)', padding: '1px 4px', borderRadius: 3, letterSpacing: '0.5px', flexShrink: 0 }} title="Created via MCP (Claude Code / Cursor)">MCP</span>
+                          )}
                         </span>
                       )}
 
@@ -372,7 +375,7 @@ function App() {
                           style={{
                             borderRadius: 52, transition: 'box-shadow 0.25s', position: 'relative',
                             cursor: directEdit.directEditMode ? 'crosshair' : undefined,
-                            boxShadow: directEdit.directEditMode && isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(59,130,246,0.5), 0 0 20px rgba(59,130,246,0.15)' : isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)' : '0 8px 32px rgba(0,0,0,0.2)',
+                            boxShadow: directEdit.directEditMode && isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(59,130,246,0.5), 0 0 20px rgba(59,130,246,0.15)' : isActive && screen.source === 'mcp' ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(52,211,153,0.5), 0 0 20px rgba(52,211,153,0.15)' : isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)' : screen.source === 'mcp' ? '0 8px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(52,211,153,0.3)' : '0 8px 32px rgba(0,0,0,0.2)',
                           }}
                           onMouseOverCapture={directEdit.directEditMode ? directEdit.handleDirectEditHover : undefined}
                           onMouseOutCapture={directEdit.directEditMode ? directEdit.handleDirectEditHoverOut : undefined}

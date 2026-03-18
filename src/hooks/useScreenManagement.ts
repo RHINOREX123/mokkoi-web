@@ -11,6 +11,7 @@ export interface GeneratedScreen {
   flowId?: string
   type?: 'generated' | 'image'
   imageUrl?: string
+  source?: 'web' | 'mcp'
 }
 
 export interface ScreenManagement {
@@ -83,7 +84,8 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
           id: s.id,
           name: s.name,
           tree: s.component_tree as ComponentNode,
-          originalPrompt: s.original_prompt ?? undefined,
+          originalPrompt: s.original_prompt ?? s.prompt ?? undefined,
+          source: (s.source as 'web' | 'mcp') ?? 'web',
         }))
         setGeneratedScreens(loaded)
         setActiveGeneratedId(loaded[0].id)
@@ -108,6 +110,73 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       projectLoadedRef.current = true
     }
     loadProject()
+  }, [projectId])
+
+  // Realtime subscription: listen for MCP-generated screens appearing on the canvas
+  useEffect(() => {
+    if (!projectId) return
+
+    const channel = supabase
+      .channel(`screens:${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'screens',
+          filter: `project_id=eq.${projectId}`,
+        },
+        (payload) => {
+          const newScreen = payload.new as Record<string, unknown>
+          // Only process screens from MCP (avoid duplicating our own inserts)
+          if (newScreen.source !== 'mcp') return
+
+          const screen: GeneratedScreen = {
+            id: newScreen.id as string,
+            name: newScreen.name as string,
+            tree: newScreen.component_tree as ComponentNode,
+            originalPrompt: (newScreen.original_prompt ?? newScreen.prompt ?? undefined) as string | undefined,
+            source: 'mcp',
+          }
+
+          setGeneratedScreens(prev => {
+            // Don't add if already exists
+            if (prev.some(s => s.id === screen.id)) return prev
+            return [...prev, screen]
+          })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'screens',
+          filter: `project_id=eq.${projectId}`,
+        },
+        (payload) => {
+          const updated = payload.new as Record<string, unknown>
+          if (updated.source !== 'mcp') return
+
+          setGeneratedScreens(prev =>
+            prev.map(s =>
+              s.id === updated.id
+                ? {
+                    ...s,
+                    name: updated.name as string,
+                    tree: updated.component_tree as ComponentNode,
+                    source: 'mcp',
+                  }
+                : s
+            )
+          )
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [projectId])
 
   // Auto-save screens to Supabase (debounced)
