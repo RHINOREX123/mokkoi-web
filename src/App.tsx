@@ -20,6 +20,8 @@ interface GeneratedScreen {
   id: string
   name: string
   tree: ComponentNode
+  /** The original user prompt used to generate this screen (clean, no version labels) */
+  originalPrompt?: string
   /** If this screen is part of a flow, all screens in the flow share the same flowId */
   flowId?: string
   /** Screen type: 'generated' for AI screens, 'image' for uploaded screenshots */
@@ -407,6 +409,15 @@ function App() {
   hasTreeRef.current = !!generatedTree
 
   const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean) => {
+    // Clear any previous error messages before starting a new generation
+    setProjectMessages(prev => {
+      const lastMsg = prev[prev.length - 1]
+      if (lastMsg?.role === 'assistant' && lastMsg.content.startsWith('Error:')) {
+        return prev.slice(0, -1)
+      }
+      return prev
+    })
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -450,6 +461,7 @@ function App() {
       const placeholderScreen: GeneratedScreen = {
         id: placeholderId,
         name: placeholderName,
+        originalPrompt: prompt,
         tree: { type: 'View', style: {}, children: [] },
       }
       setGeneratedScreens(prev => [...prev, placeholderScreen])
@@ -531,6 +543,7 @@ function App() {
       const newScreen: GeneratedScreen = {
         id: targetId,
         name: screenName,
+        originalPrompt: prompt,
         tree: { type: 'View', style: {}, children: [] },
       }
       setGeneratedScreens(prev => [...prev, newScreen])
@@ -636,12 +649,13 @@ function App() {
 
   // === Screen Context Toolbar Handlers ===
 
-  // Regenerate: re-send original prompt for the selected screen
+  // Regenerate: re-send the ORIGINAL clean prompt (no version labels)
   const handleRegenerate = useCallback(() => {
     if (!activeGenerated) return
-    const screenName = activeGenerated.name
-    // Use the screen name as the regeneration prompt
-    handleSend(`Regenerate: ${screenName}`, undefined, undefined, false)
+    // Prefer the stored original prompt; fall back to screen name with version labels stripped
+    const cleanPrompt = activeGenerated.originalPrompt
+      || activeGenerated.name.replace(/\s*v\d+/gi, '').replace(/\s*\(failed\)/gi, '').trim()
+    handleSend(cleanPrompt || activeGenerated.name, undefined, undefined, true)
   }, [activeGenerated, activeGeneratedId, generatedScreens, handleSend])
 
   // Edit via chat: focus chat input with editing context
@@ -978,6 +992,7 @@ function App() {
       const ph: GeneratedScreen = {
         id: crypto.randomUUID(),
         name: `${activeGenerated.name} v${i + 1}`,
+        originalPrompt: activeGenerated.originalPrompt,
         tree: { type: 'View', style: {}, children: [] },
       }
       placeholders.push(ph)
