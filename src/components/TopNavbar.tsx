@@ -323,7 +323,7 @@ export function TopNavbar({
               }}
             >
               <Zap size={12} />
-              {credits.remaining}
+              {credits.remaining} remaining
             </button>
             {showCreditsDropdown && (
               <div style={{
@@ -333,7 +333,7 @@ export function TopNavbar({
                 padding: 16, minWidth: 220,
               }}>
                 <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>
-                  Credits: {credits.remaining}/{credits.limit}
+                  {credits.remaining} of {credits.limit} screens remaining
                 </div>
                 {/* Progress bar */}
                 <div style={{
