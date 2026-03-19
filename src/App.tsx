@@ -20,6 +20,7 @@ import { NoCreditsModal } from './components/PricingPage'
 import html2canvas from 'html2canvas'
 
 import { supabase } from './lib/supabase'
+import { resetAnalytics } from './lib/analytics'
 import { useCanvasState } from './hooks/useCanvasState'
 import { useScreenManagement } from './hooks/useScreenManagement'
 import { useAIGeneration } from './hooks/useAIGeneration'
@@ -293,7 +294,7 @@ function App() {
     { id: 'rename-project', label: 'Rename Project', icon: <Pencil size={16} />, group: 'Project', action: () => setToastMessage('Use navbar to rename') },
     { id: 'upload-ref', label: 'Upload Reference Image', icon: <Upload size={16} />, group: 'Canvas', action: () => fileInputRef.current?.click() },
     { id: 'go-projects', label: 'Go to All Projects', icon: <span style={{ display: 'flex' }}>&larr;</span>, group: 'Navigation', action: () => navigate('/projects') },
-    { id: 'sign-out', label: 'Sign Out', icon: <LogOut size={16} />, group: 'Account', action: async () => { if (supabase) await supabase.auth.signOut(); navigate('/auth') } },
+    { id: 'sign-out', label: 'Sign Out', icon: <LogOut size={16} />, group: 'Account', action: async () => { resetAnalytics(); if (supabase) await supabase.auth.signOut(); navigate('/auth') } },
   ], [screens.generatedTree, canvas.zoomIn, canvas.zoomOut, canvas.resetZoom, navigate])
 
   return (

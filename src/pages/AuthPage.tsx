@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { trackEvent, identifyUser } from '../lib/analytics'
 
 export default function AuthPage() {
   const navigate = useNavigate()
@@ -46,10 +47,17 @@ export default function AuthPage() {
           options: { data: { full_name: fullName } },
         })
         if (error) throw error
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          trackEvent('signup_completed')
+          identifyUser(user.id, { email: user.email })
+        }
         await navigateAfterAuth()
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) identifyUser(user.id, { email: user.email })
         await navigateAfterAuth()
       }
     } catch (err: unknown) {

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
 import type { User } from '@supabase/supabase-js'
 import type { ComponentNode } from '../types/mokkoi'
@@ -118,6 +119,7 @@ export function TopNavbar({
   }, [])
 
   const handleSignOut = async () => {
+    resetAnalytics()
     if (supabase) await supabase.auth.signOut()
     navigate('/auth')
   }
@@ -448,11 +450,11 @@ export function TopNavbar({
               </div>
               <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '0 12px' }} />
               <div style={{ padding: '4px 8px' }}>
-                <button onClick={() => { setToastMessage('Coming soon'); setShowUserMenu(false) }} style={studioAvatarItemStyle}
+                <button onClick={() => { navigate('/settings'); setShowUserMenu(false) }} style={studioAvatarItemStyle}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                 ><Settings size={18} color="#94a3b8" />Settings</button>
-                <button onClick={() => { setToastMessage('Coming soon'); setShowUserMenu(false) }} style={studioAvatarItemStyle}
+                <button onClick={() => { navigate('/settings'); setShowUserMenu(false) }} style={studioAvatarItemStyle}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
                 ><UserIcon size={18} color="#94a3b8" />Manage account</button>

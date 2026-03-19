@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
+import { trackEvent, resetAnalytics } from '../lib/analytics'
 import {
   Search, MoreVertical, Trash2, Pencil, LogOut, Settings,
   FolderOpen, Users, Smartphone, ArrowUp,
@@ -186,7 +187,11 @@ export default function Dashboard() {
       .from('projects')
       .insert({ user_id: u.id, name: prompt.trim().slice(0, 30) })
       .select().single()
-    if (data) navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`)
+    if (data) {
+      trackEvent('dashboard_prompt_submitted')
+      trackEvent('project_created', { source: 'dashboard' })
+      navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`)
+    }
     setIsSubmitting(false)
   }
 
@@ -230,6 +235,7 @@ export default function Dashboard() {
   }
 
   const handleSignOut = async () => {
+    resetAnalytics()
     if (supabase) await supabase.auth.signOut()
     navigate('/auth')
   }

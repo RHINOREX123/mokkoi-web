@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { initAnalytics } from './lib/analytics'
 import './index.css'
 import App from './App'
 import LandingPage from './pages/LandingPage'
@@ -11,8 +12,11 @@ import PublicViewPage from './pages/PublicViewPage'
 import PreviewPage from './pages/PreviewPage'
 import PricingPage from './components/PricingPage'
 import AdminDashboard from './pages/AdminDashboard'
+import SettingsPage from './pages/SettingsPage'
 import AdminGuard from './components/AdminGuard'
 import { supabase } from './lib/supabase'
+
+initAnalytics()
 
 /** Root route: logged-in → Dashboard, logged-out → LandingPage */
 function RootPage() {
@@ -76,6 +80,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/app" element={<Navigate to="/" replace />} />
         <Route path="/view/:projectId" element={<PublicViewPage />} />
         <Route path="/preview/:projectId/:screenId" element={<PreviewPage />} />
+        <Route path="/settings" element={<AuthGuard><SettingsPage /></AuthGuard>} />
         <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
       </Routes>
     </BrowserRouter>

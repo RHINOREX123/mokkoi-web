@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import type { ChatMessage } from '../components/ChatPanel'
 import { supabase } from '../lib/supabase'
+import { trackEvent } from '../lib/analytics'
 import type { GeneratedScreen } from './useScreenManagement'
 import type { VariationSettings } from '../components/VariationsPanel'
 
@@ -48,6 +49,31 @@ function isCreateIntent(prompt: string): boolean {
 /** Returns true if the prompt is unambiguously a create request, even if a screen is selected */
 function isStrongCreateIntent(prompt: string): boolean {
   return STRONG_CREATE_PATTERN.test(prompt) || STRONG_NEW_PATTERN.test(prompt)
+}
+
+function getUserFriendlyError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+
+  if (message.includes('rate limit') || message.includes('429') || message.includes('credits'))
+    return "You've run out of credits. Upgrade your plan or wait for monthly reset."
+  if (message.includes('401') || message.includes('unauthorized') || message.includes('auth'))
+    return 'Your session has expired. Please sign in again.'
+  if (message.includes('timeout') || message.includes('504') || message.includes('TIMEOUT'))
+    return 'Generation took too long. Please try a simpler prompt or try again.'
+  if (message.includes('500') || message.includes('502') || message.includes('503'))
+    return 'Our servers are experiencing issues. Please try again in a moment.'
+  if (message.includes('network') || message.includes('fetch') || message.includes('Failed to fetch'))
+    return 'Network error. Please check your connection and try again.'
+  if (message.includes('overloaded') || message.includes('capacity'))
+    return 'AI is experiencing high demand. Please try again in a moment.'
+  if (message.includes('payment') || message.includes('stripe') || message.includes('checkout'))
+    return 'Payment processing error. Please try again or contact support.'
+  if (message.includes('invalid') || message.includes('Invalid'))
+    return 'Please provide a more detailed screen description and try again.'
+  if (message.includes('abort') || message.includes('cancel'))
+    return 'Generation cancelled.'
+
+  return 'Something went wrong. Please try again.'
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -148,6 +174,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     setProjectMessages(prev => [...prev, userMsg])
     saveMessage(userMsg)
 
+    const startTime = Date.now()
     const flowRequest = isFlowPrompt(prompt) && !imageData
 
     // Intent detection: strong create signals always win over edit
@@ -232,12 +259,12 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         }
         setProjectMessages(prev => [...prev, assistantMsg])
         saveMessage(assistantMsg)
+        trackEvent('flow_generated', { screen_count: screens.length, generation_time_ms: Date.now() - startTime })
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
         const errorMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `Error: ${errorMessage}`,
+          content: `Error: ${getUserFriendlyError(err)}`,
           timestamp: Date.now(),
         }
         setProjectMessages(prev => [...prev, errorMsg])
@@ -369,9 +396,11 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       }
       setProjectMessages(prev => [...prev, assistantMsg])
       saveMessage(assistantMsg)
+      trackEvent('screen_generated', { is_edit: Boolean(editingScreen), generation_time_ms: Date.now() - startTime, streaming: true })
     } catch (err) {
       // Don't show error for user-initiated cancellation
       if (err instanceof DOMException && err.name === 'AbortError') {
+        trackEvent('generation_cancelled')
         const cancelMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -381,11 +410,10 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         setProjectMessages(prev => [...prev, cancelMsg])
         saveMessage(cancelMsg)
       } else {
-        const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
         const errorMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `Error: ${errorMessage}`,
+          content: `Error: ${getUserFriendlyError(err)}`,
           timestamp: Date.now(),
         }
         setProjectMessages(prev => [...prev, errorMsg])

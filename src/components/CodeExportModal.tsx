@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
+import { trackEvent } from '../lib/analytics'
 
 interface CodeExportModalProps {
   tree: ComponentNode
@@ -172,6 +173,7 @@ export function CodeExportModal({ tree, onClose }: CodeExportModalProps) {
     await navigator.clipboard.writeText(code)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    trackEvent('screen_exported')
   }
 
   return (

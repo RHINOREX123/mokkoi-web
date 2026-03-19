@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { trackEvent } from '../lib/analytics'
 import { Check, X, ChevronDown, ChevronUp } from 'lucide-react'
 
 /* ─── plan data ─── */
@@ -97,6 +98,8 @@ export function NoCreditsModal({
   onTopUp: () => void
   onUpgrade: () => void
 }) {
+  useEffect(() => { trackEvent('credits_exhausted') }, [])
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999,
@@ -171,6 +174,8 @@ export default function PricingPage() {
   const [isAnnual, setIsAnnual] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
 
+  useEffect(() => { trackEvent('pricing_page_viewed') }, [])
+
   const handleCTA = async (planId: string) => {
     if (planId === 'free') {
       navigate('/auth')
@@ -178,6 +183,7 @@ export default function PricingPage() {
     }
 
     setLoading(planId)
+    trackEvent('checkout_initiated', { plan: planId, billing: isAnnual ? 'annual' : 'monthly' })
     try {
       const session = supabase ? (await supabase.auth.getSession()).data.session : null
       if (!session) {

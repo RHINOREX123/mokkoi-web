@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
-import { X, Check, Link2 } from 'lucide-react'
-import { FaWhatsapp, FaTelegramPlane, FaLinkedinIn } from 'react-icons/fa'
-import { FaXTwitter } from 'react-icons/fa6'
-import { HiOutlineMail } from 'react-icons/hi'
+import { X, Check, Link2, Mail, Linkedin, Send, MessageCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { trackEvent } from '../lib/analytics'
 
 interface ShareModalProps {
   projectId: string
@@ -51,6 +49,7 @@ export function ShareModal({ projectId, projectName, isOpen, onClose }: ShareMod
       .from('projects')
       .update({ is_public: newVal })
       .eq('id', projectId)
+    if (newVal) trackEvent('project_shared')
   }
 
   const copyLink = async () => {
@@ -65,31 +64,31 @@ export function ShareModal({ projectId, projectName, isOpen, onClose }: ShareMod
     {
       label: 'WhatsApp',
       bg: '#25D366',
-      icon: <FaWhatsapp size={20} color="#fff" />,
+      icon: <MessageCircle size={20} color="#fff" />,
       href: `https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`,
     },
     {
       label: 'Telegram',
       bg: '#0088cc',
-      icon: <FaTelegramPlane size={20} color="#fff" />,
+      icon: <Send size={20} color="#fff" />,
       href: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`,
     },
     {
       label: 'X',
       bg: '#000000',
-      icon: <FaXTwitter size={20} color="#fff" />,
+      icon: <span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>X</span>,
       href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent('Check out my design on Mokkoi')}`,
     },
     {
       label: 'LinkedIn',
       bg: '#0A66C2',
-      icon: <FaLinkedinIn size={20} color="#fff" />,
+      icon: <Linkedin size={20} color="#fff" />,
       href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
     },
     {
       label: 'Email',
       bg: '#6B7280',
-      icon: <HiOutlineMail size={20} color="#fff" />,
+      icon: <Mail size={20} color="#fff" />,
       href: `mailto:?subject=${encodeURIComponent('Check out my Mokkoi design')}&body=${encodeURIComponent(shareUrl)}`,
     },
   ]

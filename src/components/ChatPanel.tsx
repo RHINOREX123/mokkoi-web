@@ -322,6 +322,28 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 )}
                 {msg.content}
 
+                {/* Retry button for errors */}
+                {msg.content.startsWith('Error:') && idx > 0 && (() => {
+                  const prevUserMsg = [...messages].slice(0, idx).reverse().find(m => m.role === 'user')
+                  if (!prevUserMsg) return null
+                  return (
+                    <button
+                      onClick={() => onSend(prevUserMsg.content, prevUserMsg.imageData)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        marginTop: 8, padding: '4px 10px', borderRadius: 6,
+                        background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)',
+                        color: '#f87171', fontSize: 12, fontWeight: 500,
+                        cursor: 'pointer', transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.15)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
+                    >
+                      Try again
+                    </button>
+                  )
+                })()}
+
                 {/* Model indicator */}
                 {msg.role === 'assistant' && msg.modelUsed && !msg.content.startsWith('Error:') && (
                   <div style={{

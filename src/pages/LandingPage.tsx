@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { trackEvent } from '../lib/analytics';
 
 /* ─── tiny helpers ─── */
 function FadeIn({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -292,6 +293,7 @@ export default function LandingPage() {
   const goToApp = () => navigate(isLoggedIn ? '/projects' : '/auth');
   const goWithPrompt = async (prompt: string) => {
     if (!prompt.trim()) return;
+    trackEvent('hero_prompt_submitted');
     if (!isLoggedIn) {
       navigate(`/auth?prompt=${encodeURIComponent(prompt.trim())}`);
       return;
