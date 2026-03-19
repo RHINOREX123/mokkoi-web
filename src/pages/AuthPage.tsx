@@ -1,15 +1,36 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function AuthPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const pendingPrompt = searchParams.get('prompt') || ''
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const navigateAfterAuth = async () => {
+    // If there's a pending prompt from the landing page, create a project and navigate with it
+    if (pendingPrompt && supabase) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('projects')
+          .insert({ user_id: user.id, name: pendingPrompt.slice(0, 30) })
+          .select()
+          .single()
+        if (data) {
+          navigate(`/app/${data.id}?prompt=${encodeURIComponent(pendingPrompt)}`)
+          return
+        }
+      }
+    }
+    navigate('/projects')
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,11 +46,11 @@ export default function AuthPage() {
           options: { data: { full_name: fullName } },
         })
         if (error) throw error
-        navigate('/projects')
+        await navigateAfterAuth()
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        navigate('/projects')
+        await navigateAfterAuth()
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')

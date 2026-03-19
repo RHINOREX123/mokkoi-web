@@ -247,15 +247,45 @@ const SCREENS = [
 ];
 
 /* ─── MAIN LANDING PAGE ─── */
+const HERO_PLACEHOLDERS = [
+  'Create a fitness dashboard...',
+  'Design a coffee shop app...',
+  'Build an onboarding flow...',
+  'Make a social media feed...',
+  'Design a fintech wallet...',
+];
+
+const HERO_CHIPS = [
+  { label: 'Fitness Dashboard', prompt: 'A fitness dashboard with activity rings, step counter, and calorie tracker' },
+  { label: 'Login Screen', prompt: 'A login screen with email, password fields and social auth buttons for Google and Apple' },
+  { label: 'E-commerce Home', prompt: 'An e-commerce home screen with featured products, categories, and a search bar' },
+  { label: 'Social Feed', prompt: 'A social media feed with post cards, like buttons, comments, and story circles at the top' },
+  { label: 'Settings Page', prompt: 'A settings page with profile section, notification toggles, theme selector, and account options' },
+];
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [activeScreen, setActiveScreen] = useState(0);
   const [heroPrompt, setHeroPrompt] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
+  const [placeholderVisible, setPlaceholderVisible] = useState(true);
 
   // Check auth state
   useEffect(() => {
     supabase?.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
+  }, []);
+
+  // Cycle placeholder text
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderVisible(false);
+      setTimeout(() => {
+        setPlaceholderIdx((i) => (i + 1) % HERO_PLACEHOLDERS.length);
+        setPlaceholderVisible(true);
+      }, 300);
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   // Auth-aware navigation: logged in → /projects or create project, not logged in → /auth
@@ -263,7 +293,7 @@ export default function LandingPage() {
   const goWithPrompt = async (prompt: string) => {
     if (!prompt.trim()) return;
     if (!isLoggedIn) {
-      navigate('/auth');
+      navigate(`/auth?prompt=${encodeURIComponent(prompt.trim())}`);
       return;
     }
     // Create a project and navigate to it with the prompt
@@ -298,6 +328,7 @@ export default function LandingPage() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
         @keyframes float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-12px); } }
+        .hero-placeholder { transition: opacity 0.3s ease; }
         @keyframes glow-pulse { 0%,100% { opacity: .4; } 50% { opacity: .7; } }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         .landing-nav-links { display: flex; align-items: center; gap: 32px; }
@@ -495,38 +526,59 @@ export default function LandingPage() {
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,.4)'; e.currentTarget.style.boxShadow = '0 4px 32px rgba(99,102,241,.12), 0 0 0 1px rgba(99,102,241,.2)'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)'; e.currentTarget.style.boxShadow = '0 4px 32px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03)'; }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px 14px 20px' }}>
-                  <input
-                    type="text"
-                    value={heroPrompt}
-                    onChange={(e) => setHeroPrompt(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && heroPrompt.trim()) { goWithPrompt(heroPrompt.trim()); } }}
-                    placeholder="Describe a mobile screen..."
-                    style={{
-                      flex: 1,
-                      background: 'transparent',
-                      border: 'none',
-                      outline: 'none',
-                      color: '#f1f5f9',
-                      fontSize: 16,
-                      fontFamily: 'inherit',
-                    }}
-                  />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px 16px 24px', height: 56 }}>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={heroPrompt}
+                      onChange={(e) => setHeroPrompt(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && heroPrompt.trim()) { goWithPrompt(heroPrompt.trim()); } }}
+                      style={{
+                        width: '100%',
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        color: '#f1f5f9',
+                        fontSize: 18,
+                        fontFamily: 'inherit',
+                      }}
+                    />
+                    {!heroPrompt && (
+                      <span
+                        className="hero-placeholder"
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          pointerEvents: 'none',
+                          fontSize: 18,
+                          color: 'rgba(255,255,255,.25)',
+                          opacity: placeholderVisible ? 1 : 0,
+                        }}
+                      >
+                        {HERO_PLACEHOLDERS[placeholderIdx]}
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => { if (heroPrompt.trim()) goWithPrompt(heroPrompt.trim()); }}
                     style={{
                       background: heroPrompt.trim() ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,.06)',
                       border: 'none',
                       borderRadius: 10,
-                      padding: '10px 20px',
+                      padding: '10px 24px',
                       color: '#fff',
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: 600,
                       cursor: heroPrompt.trim() ? 'pointer' : 'default',
                       transition: 'all .2s',
                       fontFamily: 'inherit',
                       opacity: heroPrompt.trim() ? 1 : 0.5,
+                      flexShrink: 0,
                     }}
+                    onMouseEnter={(e) => { if (heroPrompt.trim()) { e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,.4)'; } }}
+                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
                   >
                     Generate
                   </button>
@@ -535,10 +587,10 @@ export default function LandingPage() {
 
               {/* Suggestion chips */}
               <div style={{ display: 'flex', flexWrap: 'wrap' as const, justifyContent: 'center', gap: 8, marginTop: 16 }}>
-                {['Fitness Dashboard', 'Login Screen', 'Chat Interface', 'E-commerce Product', 'Settings Page'].map((chip) => (
+                {HERO_CHIPS.map((chip) => (
                   <button
-                    key={chip}
-                    onClick={() => goWithPrompt(chip)}
+                    key={chip.label}
+                    onClick={() => setHeroPrompt(chip.prompt)}
                     style={{
                       background: 'transparent',
                       border: '1px solid rgba(255,255,255,.1)',
@@ -553,7 +605,7 @@ export default function LandingPage() {
                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,.4)'; e.currentTarget.style.color = '#c7d2fe'; e.currentTarget.style.background = 'rgba(99,102,241,.08)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)'; e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'transparent'; }}
                   >
-                    {chip}
+                    {chip.label}
                   </button>
                 ))}
               </div>
