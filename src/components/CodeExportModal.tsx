@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 
 interface CodeExportModalProps {
@@ -161,6 +161,12 @@ export function CodeExportModal({ tree, onClose }: CodeExportModalProps) {
   const [copied, setCopied] = useState(false)
   const code = useMemo(() => convertTreeToJSX(tree), [tree])
   const highlighted = useMemo(() => highlightCode(code), [code])
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [onClose])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code)

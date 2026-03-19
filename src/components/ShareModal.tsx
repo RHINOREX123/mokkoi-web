@@ -36,6 +36,13 @@ export function ShareModal({ projectId, projectName, isOpen, onClose }: ShareMod
       })
   }, [isOpen, projectId])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [isOpen, onClose])
+
   const togglePublic = async () => {
     if (!supabase) return
     const newVal = !isPublic

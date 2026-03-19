@@ -5,6 +5,8 @@ import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
 import { MousePointer2, Hand, ZoomIn, ZoomOut, PenTool, Sparkles, Download, Share2, Plus, X, Upload, Pencil, LogOut, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
+import { FlowConnectors, getFlows } from './components/FlowConnectors'
+import { FlowOverviewPanel } from './components/FlowOverviewPanel'
 import { DirectEditToolbar } from './components/DirectEditToolbar'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
 import { ScreenContextToolbar } from './components/ScreenContextToolbar'
@@ -151,6 +153,39 @@ function App() {
     }
     reader.readAsDataURL(file)
   }
+
+  // Flow detection
+  const flows = useMemo(() => getFlows(screens.generatedScreens), [screens.generatedScreens])
+
+  const handleViewFlow = useCallback((flow: { indices: number[] }) => {
+    // Zoom and pan to fit all screens in the flow
+    const canvasEl = canvas.canvasRef.current
+    if (!canvasEl || flow.indices.length === 0) return
+    const rect = canvasEl.getBoundingClientRect()
+
+    const PHONE_W = 261, PHONE_H = 560, GAP = 40, PAD_X = 60, PAD_Y = 40, LABEL_H = 26
+    const firstIdx = flow.indices[0]
+    const lastIdx = flow.indices[flow.indices.length - 1]
+    const leftEdge = PAD_X + firstIdx * (PHONE_W + GAP)
+    const rightEdge = PAD_X + lastIdx * (PHONE_W + GAP) + PHONE_W
+    const topEdge = PAD_Y
+    const bottomEdge = PAD_Y + LABEL_H + PHONE_H
+
+    const contentW = rightEdge - leftEdge + 80
+    const contentH = bottomEdge - topEdge + 80
+    const scaleX = rect.width / contentW
+    const scaleY = rect.height / contentH
+    const newZoom = Math.min(scaleX, scaleY) * 100
+    const clampedZoom = Math.max(25, Math.min(200, newZoom))
+
+    const centerX = (leftEdge + rightEdge) / 2
+    const centerY = (topEdge + bottomEdge) / 2
+    const panX = -(centerX * clampedZoom / 100 - rect.width / 2)
+    const panY = -(centerY * clampedZoom / 100 - rect.height / 2)
+
+    canvas.setZoomLevel(clampedZoom)
+    canvas.setPanOffset({ x: panX, y: panY })
+  }, [canvas.canvasRef, canvas.setZoomLevel, canvas.setPanOffset])
 
   const handleFlowScreenClick = (screenName: string) => {
     const screen = screens.generatedScreens.find(s => s.name === screenName && s.flowId)
@@ -359,6 +394,10 @@ function App() {
                 transformOrigin: 'center center', transition: canvas.isPanning.current ? 'none' : 'transform 0.15s ease-out',
                 cursor: canvas.panActive ? 'inherit' : 'default',
               }}>
+                {flows.length > 0 && (
+                  <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} />
+                )}
+
                 {screens.generatedScreens.map((screen, idx) => {
                   const isActive = screen.id === screens.activeGeneratedId
                   const isImage = screen.type === 'image'
@@ -467,6 +506,16 @@ function App() {
               setActiveTool={canvas.setActiveTool} zoomIn={canvas.zoomIn} zoomOut={canvas.zoomOut} resetZoom={canvas.resetZoom}
               enterDirectEdit={directEdit.enterDirectEdit} exitDirectEdit={directEdit.exitDirectEdit}
               onScreenshotModal={() => setShowScreenshotModal(true)} onUploadRef={() => fileInputRef.current?.click()} />
+
+            <FlowOverviewPanel
+              flows={flows}
+              activeScreenId={screens.activeGeneratedId}
+              onScreenClick={(id) => {
+                screens.setActiveGeneratedId(id)
+                phoneFrameRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+              }}
+              onViewFlow={handleViewFlow}
+            />
           </div>
         </ErrorBoundary>
       </div>

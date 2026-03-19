@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { ImagePlus, X, Upload, Loader2 } from 'lucide-react'
 
 interface ScreenshotModalProps {
@@ -16,6 +16,12 @@ export function ScreenshotModal({ onClose, onGenerate, isGenerating }: Screensho
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [onClose])
 
   const processFile = useCallback((file: File) => {
     setError('')

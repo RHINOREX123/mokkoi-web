@@ -22,6 +22,8 @@ CRITICAL DESIGN RULES:
 - Each screen must be a complete, beautiful, production-ready design
 - Include progress indicators, back/next buttons, or skip links to show flow connectivity
 
+FLOW CONSISTENCY RULES: All screens in this flow MUST use the exact same color palette. Pick ONE primary accent color, ONE secondary accent color, and ONE background color. Use these consistently across ALL screens. The navigation bar style, font sizes, and spacing should be identical across all screens to feel like one cohesive app. Every screen should share the same header height, the same bottom navigation style (if any), and the same card styling. This is critical — users will see these screens side by side on a canvas.
+
 CRITICAL MOBILE SCREEN SIZE RULES:
 - The screen viewport is 320px wide and 568px tall. ALL content MUST fit within this viewport WITHOUT scrolling.
 - Maximum 5-6 UI elements per screen. No more.
@@ -182,7 +184,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const text: string = data.content?.[0]?.text ?? ''
-    console.log('Claude flow response length:', text.length)
 
     if (!text) {
       return res.status(502).json({ error: 'Empty response from AI service' })
@@ -218,7 +219,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (let i = 0; i < openBrackets; i++) repaired += ']'
       try {
         screens = JSON.parse(repaired)
-        console.log('JSON repair succeeded')
       } catch {
         console.error('JSON repair also failed. Raw start:', jsonText.slice(0, 500))
         return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${jsonText.slice(0, 100)}` })

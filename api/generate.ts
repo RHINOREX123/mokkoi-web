@@ -167,7 +167,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     model = 'claude-haiku-4-5-20251001'
     maxTokens = 8000
   }
-  console.log(`Using model: ${model} (plan: ${userPlan}) for: ${prompt.substring(0, 50)}...`)
 
   // Determine generation type for usage logging
   let generationType: 'new_screen' | 'edit' | 'variation' | 'regenerate' = 'new_screen'
@@ -346,8 +345,6 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       }
 
       // Stream complete — parse the full response into a component tree
-      console.log('Streaming complete. Full text length:', fullText.length)
-
       if (!fullText) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Empty response from AI service' })}\n\n`)
         return res.end()
@@ -408,8 +405,6 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     }
 
     const text: string = data.content?.[0]?.text ?? ''
-    console.log('Claude raw response length:', text.length)
-
     if (!text) {
       return res.status(502).json({ error: 'Empty response from AI service' })
     }
@@ -417,7 +412,6 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     let tree: any
     try {
       tree = repairJSON(text)
-      console.log('JSON parse succeeded')
     } catch (jsonErr) {
       console.error('JSON repair failed. Raw start:', text.slice(0, 500))
       return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })

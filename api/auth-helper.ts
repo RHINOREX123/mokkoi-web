@@ -28,7 +28,6 @@ export function authenticateMCPRequest(
   const bearerToken = authValue.replace(/^bearer\s+/i, '').trim()
   const isApiKeyAuth = bearerToken.startsWith('sk-ant-')
 
-  console.log('MCP auth check:', { hasSourceHeader: !!source, isApiKeyInBearer: isApiKeyAuth })
 
   // Accept MCP if either: explicit header OR Bearer token is an API key (not a JWT)
   if (source !== 'mcp' && !isApiKeyAuth) return null
@@ -42,7 +41,6 @@ export function authenticateMCPRequest(
   if (!apiKey || !serverKey) return null
   if (apiKey !== serverKey) return null
 
-  console.log('MCP request authenticated via API key')
   return { id: 'mcp', email: undefined, isMCP: true }
 }
 
@@ -54,17 +52,6 @@ export async function authenticateRequest(
   const mcpAuth = authenticateMCPRequest(req)
   if (mcpAuth) return mcpAuth
 
-  console.log('=== ENV VAR DEBUG ===', {
-    SUPABASE_URL: process.env.SUPABASE_URL ? 'SET' : 'MISSING',
-    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ? 'SET' : 'MISSING',
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING',
-    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
-    VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'SET' : 'MISSING',
-    NODE_ENV: process.env.NODE_ENV,
-  })
-
   const { url, key } = getSupabaseConfig()
   const supabaseConfigured = Boolean(url && key)
 
@@ -75,17 +62,13 @@ export async function authenticateRequest(
 
   const rawHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
   const headerValue = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader
-  console.log('Auth header:', headerValue ? 'present' : 'missing')
-
   if (!headerValue || !headerValue.toLowerCase().startsWith('bearer ')) {
-    console.log('Auth rejected: no Bearer token in header')
     res.status(401).json({ error: 'Please sign in to generate screens.' })
     return null
   }
 
   const bearerToken = headerValue.replace(/^bearer\s+/i, '').trim()
   if (!bearerToken) {
-    console.log('Auth rejected: empty token after Bearer prefix')
     res.status(401).json({ error: 'Please sign in to generate screens.' })
     return null
   }
@@ -95,12 +78,11 @@ export async function authenticateRequest(
     const { data, error } = await supabase.auth.getUser(bearerToken)
 
     if (error || !data.user) {
-      console.log('Auth rejected: token verification failed -', error?.message || 'no user returned')
+      console.warn('Auth rejected: token verification failed -', error?.message || 'no user returned')
       res.status(401).json({ error: 'Invalid session. Please sign in again.' })
       return null
     }
 
-    console.log('Auth success: user', data.user.id)
     return { id: data.user.id, email: data.user.email }
   } catch (err) {
     console.error('Auth error (Supabase call failed):', err)

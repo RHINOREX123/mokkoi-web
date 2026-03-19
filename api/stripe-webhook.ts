@@ -182,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`)
+        console.warn(`Unhandled event type: ${event.type}`)
     }
   } catch (err) {
     console.error('Webhook handler error:', err)
