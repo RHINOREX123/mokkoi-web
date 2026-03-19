@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import type { ChatMessage } from '../components/ChatPanel'
 import { supabase } from '../lib/supabase'
@@ -68,11 +68,13 @@ export interface AIGeneration {
   isGeneratingVariations: boolean
   isStreaming: boolean
   streamingText: string
+  partialTree: ComponentNode | null
 
   handleSend: (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => Promise<void>
   handleRegenerate: () => void
   handleGenerateVariations: (settings: VariationSettings) => Promise<void>
   handleGenerateFromImage: (screen: GeneratedScreen) => void
+  handleStopGenerating: () => void
 }
 
 interface AIGenerationDeps {
@@ -122,6 +124,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
   const [isGeneratingVariations, setIsGeneratingVariations] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
+  const [partialTree, setPartialTree] = useState<ComponentNode | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => {
     // Clear any previous error messages
@@ -270,6 +274,11 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     setIsGenerating(true)
     setIsStreaming(true)
     setStreamingText('')
+    setPartialTree(null)
+
+    // Create AbortController for cancellation
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
 
     try {
       const authHeaders = await getAuthHeaders()
@@ -290,6 +299,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
           'Accept': 'text/event-stream',
         },
         body: JSON.stringify(requestBody),
+        signal: abortController.signal,
       })
 
       if (!res.ok) {
@@ -326,6 +336,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
             if (event.type === 'text') {
               fullText += event.content
               setStreamingText(fullText)
+            } else if (event.type === 'partial_tree') {
+              setPartialTree(event.tree)
             } else if (event.type === 'complete') {
               finalTree = event.tree
               finalModelUsed = event.modelUsed || ''
@@ -358,19 +370,33 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       setProjectMessages(prev => [...prev, assistantMsg])
       saveMessage(assistantMsg)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
-      const errorMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: `Error: ${errorMessage}`,
-        timestamp: Date.now(),
+      // Don't show error for user-initiated cancellation
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        const cancelMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Generation cancelled.',
+          timestamp: Date.now(),
+        }
+        setProjectMessages(prev => [...prev, cancelMsg])
+        saveMessage(cancelMsg)
+      } else {
+        const errorMessage = err instanceof Error ? err.message : 'Something went wrong'
+        const errorMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Error: ${errorMessage}`,
+          timestamp: Date.now(),
+        }
+        setProjectMessages(prev => [...prev, errorMsg])
+        saveMessage(errorMsg)
       }
-      setProjectMessages(prev => [...prev, errorMsg])
-      saveMessage(errorMsg)
     } finally {
+      abortControllerRef.current = null
       setIsGenerating(false)
       setIsStreaming(false)
       setStreamingText('')
+      setPartialTree(null)
     }
   }, [activeGeneratedId, generatedScreens, saveMessage, projectId, projectMessages, setGeneratedScreens, setActiveGeneratedId, setProjectMessages])
 
@@ -452,6 +478,13 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     setToastMessage(`Generated ${settings.count} variations!`)
   }, [activeGenerated, projectId, setGeneratedScreens, setActiveGeneratedId, setToastMessage, setShowVariationsPanel])
 
+  const handleStopGenerating = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+  }, [])
+
   const handleGenerateFromImage = useCallback((screen: GeneratedScreen) => {
     if (!screen.imageUrl) return
     const match = screen.imageUrl.match(/^data:([^;]+);base64,(.+)$/)
@@ -465,9 +498,11 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     isGeneratingVariations,
     isStreaming,
     streamingText,
+    partialTree,
     handleSend,
     handleRegenerate,
     handleGenerateVariations,
     handleGenerateFromImage,
+    handleStopGenerating,
   }
 }

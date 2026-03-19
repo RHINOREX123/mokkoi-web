@@ -1,15 +1,24 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest } from './auth-helper.js'
 
+// TODO: Set these environment variables in Vercel with real Stripe price IDs:
+//   STRIPE_PRICE_PRO_MONTHLY=price_xxx
+//   STRIPE_PRICE_PRO_ANNUAL=price_xxx
+//   STRIPE_PRICE_MAX_MONTHLY=price_xxx
+//   STRIPE_PRICE_MAX_ANNUAL=price_xxx
 const PRICE_IDS: Record<string, Record<string, string>> = {
   pro: {
-    monthly: 'price_pro_monthly',
-    annual: 'price_pro_annual',
+    monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly',
+    annual: process.env.STRIPE_PRICE_PRO_ANNUAL || 'price_pro_annual',
   },
   max: {
-    monthly: 'price_max_monthly',
-    annual: 'price_max_annual',
+    monthly: process.env.STRIPE_PRICE_MAX_MONTHLY || 'price_max_monthly',
+    annual: process.env.STRIPE_PRICE_MAX_ANNUAL || 'price_max_annual',
   },
+}
+
+function isPlaceholderPriceId(priceId: string): boolean {
+  return !priceId.startsWith('price_') || /^price_(pro|max)_(monthly|annual)$/.test(priceId)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -32,6 +41,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!billingCycle || !['monthly', 'annual'].includes(billingCycle)) {
     return res.status(400).json({ error: 'Invalid billing cycle' })
+  }
+
+  const selectedPriceId = PRICE_IDS[plan][billingCycle]
+  if (isPlaceholderPriceId(selectedPriceId)) {
+    return res.status(200).json({
+      error: 'payments_not_configured',
+      message: 'Payments are being set up. Please try again later.',
+      checkoutUrl: null,
+    })
   }
 
   const Stripe = (await import('stripe')).default

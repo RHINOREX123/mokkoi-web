@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, checkRateLimit, logUsage, deductCredits, getUserPlan } from './auth-helper.js'
+import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './auth-helper.js'
 
 const FLOW_SYSTEM_PROMPT = `You are Mokkoi, an AI mobile app designer. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
@@ -113,14 +113,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await authenticateRequest(req, res)
   if (!user) return // 401 already sent
 
-  // --- Credit deduction (skip for MCP — they use their own key via BYOK) ---
+  // --- Credit check (skip for MCP — they use their own key via BYOK) ---
   if (!user.isMCP) {
-    const creditResult = await deductCredits(user.id, 'flow')
-    if (!creditResult.success) {
-      return res.status(429).json({
-        error: creditResult.error,
-        creditsRemaining: creditResult.creditsRemaining,
-        upgradeUrl: creditResult.upgradeUrl,
+    const creditCheck = await checkCredits(user.id, 'flow')
+    if (!creditCheck.hasCredits) {
+      return res.status(402).json({
+        error: creditCheck.error,
+        creditsRemaining: creditCheck.creditsRemaining,
+        upgradeUrl: creditCheck.upgradeUrl,
       })
     }
   }
@@ -241,6 +241,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       name: s.name || `Screen ${i + 1}`,
       tree: s.tree || { type: 'View', style: {}, children: [] },
     }))
+
+    // Deduct credits after successful generation
+    if (!user.isMCP) {
+      await deductCredits(user.id, 'flow')
+    }
 
     // --- Usage logging (fire-and-forget) ---
     logUsage({

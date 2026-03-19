@@ -11,6 +11,7 @@ import PublicViewPage from './pages/PublicViewPage'
 import PreviewPage from './pages/PreviewPage'
 import PricingPage from './components/PricingPage'
 import AdminDashboard from './pages/AdminDashboard'
+import AdminGuard from './components/AdminGuard'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -24,7 +25,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/app" element={<Navigate to="/projects" replace />} />
         <Route path="/view/:projectId" element={<PublicViewPage />} />
         <Route path="/preview/:projectId/:screenId" element={<PreviewPage />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

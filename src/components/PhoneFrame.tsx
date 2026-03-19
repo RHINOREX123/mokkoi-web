@@ -9,6 +9,8 @@ interface PhoneFrameProps {
   isGenerating?: boolean
   /** Whether the response is actively streaming */
   isStreaming?: boolean
+  /** Partial tree during streaming generation */
+  streamingTree?: ComponentNode | null
   /** Data URL for uploaded screenshot images */
   imageUrl?: string
 }
@@ -91,7 +93,7 @@ function ShimmerSkeleton({ isStreaming }: { isStreaming?: boolean }) {
   )
 }
 
-export function PhoneFrame({ generatedTree, isGenerating, isStreaming, imageUrl }: PhoneFrameProps) {
+export function PhoneFrame({ generatedTree, isGenerating, isStreaming, streamingTree, imageUrl }: PhoneFrameProps) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -133,7 +135,44 @@ export function PhoneFrame({ generatedTree, isGenerating, isStreaming, imageUrl 
               scrollbarWidth: 'none',
             }}
           >
-            {isGenerating ? (
+            {isGenerating && isStreaming && streamingTree ? (
+              <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                {/* Streaming progress indicator */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+                  height: 2, background: 'rgba(129,140,248,0.15)', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: '40%', height: '100%',
+                    background: 'linear-gradient(90deg, transparent, #818CF8, transparent)',
+                    animation: 'mokkoi-stream-progress 1.5s ease-in-out infinite',
+                  }} />
+                </div>
+                {/* "Generating..." badge */}
+                <div style={{
+                  position: 'absolute', top: 6, right: 6, zIndex: 10,
+                  padding: '2px 8px', borderRadius: 8,
+                  background: 'rgba(129,140,248,0.15)',
+                  border: '1px solid rgba(129,140,248,0.25)',
+                  fontSize: 9, fontWeight: 600, color: '#818CF8',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  <div style={{
+                    width: 4, height: 4, borderRadius: '50%', background: '#818CF8',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }} />
+                  Generating...
+                </div>
+                {/* Render partial tree */}
+                <ScreenRenderer tree={streamingTree} />
+                <style>{`
+                  @keyframes mokkoi-stream-progress {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(350%); }
+                  }
+                `}</style>
+              </div>
+            ) : isGenerating ? (
               <ShimmerSkeleton isStreaming={isStreaming} />
             ) : imageUrl ? (
               <img

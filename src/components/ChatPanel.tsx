@@ -37,6 +37,8 @@ interface ChatPanelProps {
   onDeselectScreen?: () => void
   /** Incrementing trigger to programmatically focus the chat input */
   focusTrigger?: number
+  /** Callback to cancel in-progress generation */
+  onStopGenerating?: () => void
 }
 
 const PLACEHOLDERS = [
@@ -68,7 +70,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -487,6 +489,41 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* Stop generating button */}
+            {onStopGenerating && (
+              <button
+                onClick={onStopGenerating}
+                style={{
+                  marginTop: 10,
+                  padding: '5px 14px',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: '#f87171',
+                  background: 'rgba(248,113,113,0.08)',
+                  border: '1px solid rgba(248,113,113,0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(248,113,113,0.15)'
+                  e.currentTarget.style.borderColor = 'rgba(248,113,113,0.4)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(248,113,113,0.08)'
+                  e.currentTarget.style.borderColor = 'rgba(248,113,113,0.2)'
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <rect x="2" y="2" width="8" height="8" rx="1.5" fill="#f87171" />
+                </svg>
+                Stop generating
+              </button>
             )}
           </div>
         )}

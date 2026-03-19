@@ -353,6 +353,7 @@ function App() {
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
               onDeselectScreen={() => screens.setActiveGeneratedId(null)} focusTrigger={focusTrigger}
+              onStopGenerating={ai.isGenerating ? ai.handleStopGenerating : undefined}
             />
           </ErrorBoundary>
         </div>
@@ -429,7 +430,7 @@ function App() {
                           onMouseOverCapture={directEdit.directEditMode ? directEdit.handleDirectEditHover : undefined}
                           onMouseOutCapture={directEdit.directEditMode ? directEdit.handleDirectEditHoverOut : undefined}
                         >
-                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} />
+                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} />
                           {directEdit.directEditMode && isActive && directEdit.directEditSelectedEl && (
                             <div data-direct-edit-toolbar="true">
                               <DirectEditToolbar target={directEdit.directEditSelectedEl} phoneFrameEl={phoneFrameRefs.current.get(screen.id)!} onClose={() => directEdit.setDirectEditSelectedEl(null)} onChanged={() => directEdit.setDirectEditDirty(true)} />

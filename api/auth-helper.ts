@@ -1,5 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { timingSafeEqual } from 'crypto'
+
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
 
 export function getSupabaseConfig() {
   const url =
@@ -39,7 +45,7 @@ export function authenticateMCPRequest(
   const serverKey = process.env.ANTHROPIC_API_KEY || ''
 
   if (!apiKey || !serverKey) return null
-  if (apiKey !== serverKey) return null
+  if (!safeCompare(apiKey, serverKey)) return null
 
   return { id: 'mcp', email: undefined, isMCP: true }
 }
@@ -133,6 +139,47 @@ const CREDIT_COSTS: Record<string, Record<string, number>> = {
   free: { new_screen: 5, edit: 1, flow: 15, screenshot: 8 },
   pro: { new_screen: 5, edit: 1, flow: 15, screenshot: 8 },
   max: { new_screen: 3, edit: 1, flow: 10, screenshot: 5 },
+}
+
+export async function checkCredits(
+  userId: string,
+  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot'
+): Promise<{ hasCredits: boolean; creditsRemaining: number; cost: number; error?: string; upgradeUrl?: string }> {
+  if (userId === 'anonymous' || userId === 'mcp') {
+    return { hasCredits: true, creditsRemaining: -1, cost: 0 }
+  }
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return { hasCredits: true, creditsRemaining: -1, cost: 0 }
+
+  const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY || key)
+
+  let { data: sub } = await supabase
+    .from('subscriptions')
+    .select('plan, credits_remaining')
+    .eq('user_id', userId)
+    .single()
+
+  if (!sub) {
+    // Default free tier
+    sub = { plan: 'free', credits_remaining: 50 }
+  }
+
+  const plan = sub.plan || 'free'
+  const costs = CREDIT_COSTS[plan] || CREDIT_COSTS.free
+  const cost = costs[generationType] || 1
+
+  if (sub.credits_remaining < cost) {
+    return {
+      hasCredits: false,
+      creditsRemaining: sub.credits_remaining,
+      cost,
+      error: 'No credits remaining',
+      upgradeUrl: '/pricing',
+    }
+  }
+
+  return { hasCredits: true, creditsRemaining: sub.credits_remaining, cost }
 }
 
 export async function deductCredits(

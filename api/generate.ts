@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, checkRateLimit, logUsage, logEditDiff, deductCredits, getUserPlan } from './auth-helper.js'
+import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan } from './auth-helper.js'
 
 const SYSTEM_PROMPT = `You are Mokkoi, an AI mobile screen designer. Generate a React Native component tree as JSON. Return a single JSON object with structure: { "type": string, "style": {}, "props": {}, "children": [] }. Each child is either another component object or a plain string for text content. Supported types: View, Text, TextInput, TouchableOpacity, ScrollView, Image, SafeAreaView.
 
@@ -133,12 +133,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : (isNewScreen || isVariation || isRegenerate) ? 'new_screen' : 'edit'
 
   if (!user.isMCP) {
-    const creditResult = await deductCredits(user.id, creditType)
-    if (!creditResult.success) {
-      return res.status(429).json({
-        error: creditResult.error,
-        creditsRemaining: creditResult.creditsRemaining,
-        upgradeUrl: creditResult.upgradeUrl,
+    const creditCheck = await checkCredits(user.id, creditType)
+    if (!creditCheck.hasCredits) {
+      return res.status(402).json({
+        error: creditCheck.error,
+        creditsRemaining: creditCheck.creditsRemaining,
+        upgradeUrl: creditCheck.upgradeUrl,
       })
     }
   }
@@ -256,6 +256,58 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     return JSON.parse(repaired)
   }
 
+  // Partial tree parser: tries to extract a renderable tree from incomplete JSON
+  function attemptPartialTreeParse(text: string): any | null {
+    try {
+      // Find the start of a JSON object with a "type" key
+      const jsonMatch = text.match(/\{[\s\S]*"type"\s*:/)
+      if (!jsonMatch) return null
+
+      let jsonStr = text.slice(text.indexOf(jsonMatch[0]))
+
+      // Remove any trailing incomplete key-value pair
+      jsonStr = jsonStr.replace(/,\s*"[^"]*"?\s*:?\s*$/, '')
+      jsonStr = jsonStr.replace(/,\s*$/, '')
+
+      // Close unclosed strings
+      let inString = false, escaped = false
+      for (const ch of jsonStr) {
+        if (escaped) { escaped = false; continue }
+        if (ch === '\\') { escaped = true; continue }
+        if (ch === '"') { inString = !inString }
+      }
+      if (inString) jsonStr += '"'
+
+      // Remove trailing incomplete values after closing the string
+      jsonStr = jsonStr.replace(/,\s*"[^"]*":\s*"?[^"}\]]*$/, '')
+      jsonStr = jsonStr.replace(/[,:\s]+$/, '')
+
+      // Count unclosed brackets/braces
+      let openBraces = 0, openBrackets = 0
+      inString = false; escaped = false
+      for (const ch of jsonStr) {
+        if (escaped) { escaped = false; continue }
+        if (ch === '\\') { escaped = true; continue }
+        if (ch === '"') { inString = !inString; continue }
+        if (inString) continue
+        if (ch === '{') openBraces++
+        else if (ch === '}') openBraces--
+        else if (ch === '[') openBrackets++
+        else if (ch === ']') openBrackets--
+      }
+
+      // Close arrays then objects
+      for (let i = 0; i < openBrackets; i++) jsonStr += ']'
+      for (let i = 0; i < openBraces; i++) jsonStr += '}'
+
+      const parsed = JSON.parse(jsonStr)
+      if (parsed && parsed.type) return parsed
+      return null
+    } catch {
+      return null
+    }
+  }
+
   const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
   const apiPayload = {
     model,
@@ -311,6 +363,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       let outputTokens = 0
       const decoder = new TextDecoder()
       let sseBuffer = ''
+      let lastPartialTreeLen = 0
 
       for await (const chunk of reader) {
         const text = typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true })
@@ -333,6 +386,15 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
               fullText += deltaText
               // Forward text chunk to client
               res.write(`data: ${JSON.stringify({ type: 'text', content: deltaText })}\n\n`)
+
+              // Every ~500 chars, attempt to parse a partial tree
+              if (fullText.length - lastPartialTreeLen >= 500) {
+                const partialTree = attemptPartialTreeParse(fullText)
+                if (partialTree) {
+                  res.write(`data: ${JSON.stringify({ type: 'partial_tree', tree: partialTree })}\n\n`)
+                  lastPartialTreeLen = fullText.length
+                }
+              }
             } else if (event.type === 'message_delta' && event.usage) {
               outputTokens = event.usage.output_tokens || 0
             } else if (event.type === 'message_start' && event.message?.usage) {
@@ -352,6 +414,12 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
 
       try {
         const tree = repairJSON(fullText)
+
+        // Deduct credits after successful generation
+        if (!user.isMCP) {
+          await deductCredits(user.id, creditType)
+        }
+
         res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel })}\n\n`)
 
         // Usage logging
@@ -415,6 +483,11 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     } catch (jsonErr) {
       console.error('JSON repair failed. Raw start:', text.slice(0, 500))
       return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
+    }
+
+    // Deduct credits after successful generation
+    if (!user.isMCP) {
+      await deductCredits(user.id, creditType)
     }
 
     logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, generationType, promptPreview: prompt, success: true })

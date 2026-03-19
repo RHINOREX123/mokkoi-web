@@ -60,21 +60,44 @@ export function TopNavbar({
   const projectNameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    let realtimeSub: ReturnType<NonNullable<typeof supabase>['channel']> | null = null
+
     supabase?.auth.getUser().then(({ data: { user } }) => {
       setUser(user)
+      if (!user || !supabase) return
+
       // Fetch credits
-      if (user && supabase) {
-        supabase.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
-          .eq('user_id', user.id).single()
-          .then(({ data }) => {
-            if (data) {
-              setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })
-            } else {
-              setCredits({ plan: 'free', remaining: 50, limit: 50 })
-            }
+      supabase.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
+        .eq('user_id', user.id).single()
+        .then(({ data }) => {
+          if (data) {
+            setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })
+          } else {
+            setCredits({ plan: 'free', remaining: 50, limit: 50 })
+          }
+        })
+
+      // Subscribe to realtime updates on credits
+      realtimeSub = supabase.channel('credits-updates')
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'subscriptions',
+          filter: `user_id=eq.${user.id}`,
+        }, (payload: { new: { plan?: string; credits_remaining?: number; credits_monthly_limit?: number } }) => {
+          const row = payload.new
+          setCredits({
+            plan: row.plan || 'free',
+            remaining: row.credits_remaining ?? 0,
+            limit: row.credits_monthly_limit ?? 50,
           })
-      }
+        })
+        .subscribe()
     })
+
+    return () => {
+      if (realtimeSub) supabase?.removeChannel(realtimeSub)
+    }
   }, [])
 
   useEffect(() => {

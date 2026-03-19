@@ -33,8 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ received: true })
   }
 
+  // STRIPE_WEBHOOK_SECRET must be set in Vercel env vars for webhook signature verification.
+  // Without it, any POST body would be accepted as a valid Stripe event — a security risk.
   if (!webhookSecret) {
-    console.warn('STRIPE_WEBHOOK_SECRET not set, processing without signature verification')
+    console.error('STRIPE_WEBHOOK_SECRET not set — rejecting webhook. Set it in Vercel env vars.')
+    return res.status(500).json({ error: 'Webhook not configured' })
   }
 
   const { url, key } = getSupabaseConfig()
@@ -52,12 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const stripe = new Stripe(stripeKey)
     const rawBody = await getRawBody(req)
 
-    if (webhookSecret) {
-      const sig = req.headers['stripe-signature'] as string
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
-    } else {
-      event = JSON.parse(rawBody.toString())
+    const sig = req.headers['stripe-signature'] as string
+    if (!sig) {
+      return res.status(400).json({ error: 'Missing stripe-signature header' })
     }
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
   } catch (err) {
     console.error('Webhook signature verification failed:', err)
     return res.status(400).json({ error: 'Webhook verification failed' })
