@@ -1,0 +1,41 @@
+name: Publish MCP Server
+on:
+  push:
+    paths:
+      - 'mcp-server/package.json'
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install and Build
+        working-directory: ./mcp-server
+        run: |
+          npm install
+          npm run build
+      - name: Check version change
+        id: version
+        working-directory: ./mcp-server
+        run: |
+          CURRENT=$(npm view mokkoi-mcp version 2>/dev/null || echo "0.0.0")
+          NEW=$(node -p "require('./package.json').version")
+          if [ "$CURRENT" != "$NEW" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Version changed: $CURRENT → $NEW"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged: $CURRENT"
+          fi
+      - name: Publish to npm
+        if: steps.version.outputs.changed == 'true'
+        working-directory: ./mcp-server
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

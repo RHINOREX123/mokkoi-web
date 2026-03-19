@@ -730,6 +730,104 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── MCP SERVER ─── */}
+      <section style={{ padding: '80px 24px 100px', borderTop: '1px solid rgba(255,255,255,.06)' }}>
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+          <FadeIn>
+            <div style={{ textAlign: 'center', marginBottom: 56 }}>
+              <div style={{ color: '#818cf8', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 12 }}>MCP SERVER</div>
+              <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 16 }}>Works with Claude Code &amp; Cursor</h2>
+              <p style={{ color: '#94a3b8', fontSize: 17, lineHeight: 1.7, maxWidth: 600, margin: '0 auto' }}>
+                The only React Native MCP server. Generate screens from your terminal that appear on the canvas in real-time.
+              </p>
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={0.1}>
+            <div style={{
+              background: '#0a0a0a',
+              border: '1px solid rgba(255,255,255,.08)',
+              borderRadius: 16,
+              padding: '32px',
+              fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+              fontSize: 14,
+              lineHeight: 1.8,
+              marginBottom: 48,
+              overflow: 'auto',
+            }}>
+              <div style={{ color: '#64748b' }}>$ claude mcp add mokkoi -- npx mokkoi-mcp</div>
+              <div style={{ color: '#64748b' }}>$ claude</div>
+              <div style={{ color: '#e2e8f0', marginTop: 8 }}>
+                <span style={{ color: '#818cf8' }}>&gt;</span> Create a 4-screen onboarding flow for my fitness app
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <div style={{ color: '#34d399' }}>✓ Generated screens/Welcome.tsx</div>
+                <div style={{ color: '#34d399' }}>✓ Generated screens/Goals.tsx</div>
+                <div style={{ color: '#34d399' }}>✓ Generated screens/FitnessLevel.tsx</div>
+                <div style={{ color: '#34d399' }}>✓ Generated screens/Personalization.tsx</div>
+                <div style={{ color: '#34d399' }}>✓ Synced to mokkoi.com canvas</div>
+              </div>
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={0.2}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 16,
+              marginBottom: 48,
+            }}>
+              {[
+                { tool: 'generate_screen', desc: 'Text to React Native screen' },
+                { tool: 'edit_screen', desc: 'Modify existing screens' },
+                { tool: 'screenshot_to_screen', desc: 'Screenshot to code' },
+                { tool: 'generate_flow', desc: 'Multi-screen flows' },
+                { tool: 'sync_from_canvas', desc: 'Pull canvas edits' },
+                { tool: 'watch_canvas', desc: 'Track changes' },
+                { tool: 'list_templates', desc: '28 ready templates' },
+              ].map((t) => (
+                <div key={t.tool} style={{
+                  background: 'rgba(255,255,255,.03)',
+                  border: '1px solid rgba(255,255,255,.06)',
+                  borderRadius: 12,
+                  padding: '16px 20px',
+                }}>
+                  <div style={{ color: '#818cf8', fontSize: 13, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 600, marginBottom: 4 }}>{t.tool}</div>
+                  <div style={{ color: '#94a3b8', fontSize: 14 }}>{t.desc}</div>
+                </div>
+              ))}
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={0.3}>
+            <div style={{ textAlign: 'center' }}>
+              <a
+                href="https://www.npmjs.com/package/mokkoi-mcp"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '14px 32px',
+                  background: '#818cf8',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 16,
+                  borderRadius: 12,
+                  textDecoration: 'none',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#6366f1')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#818cf8')}
+              >
+                Get Started with MCP →
+              </a>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
+
       {/* ─── HOW IT WORKS ─── */}
       <section id="how-it-works" style={{ padding: '80px 24px 100px' }}>
         <div style={{ maxWidth: 700, margin: '0 auto' }}>
