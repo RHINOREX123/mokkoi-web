@@ -35,7 +35,8 @@ export interface ComponentNode {
   children?: (ComponentNode | string)[];
 }
 
-const TIMEOUT_MS = 60_000;
+const SCREEN_TIMEOUT_MS = 90_000;
+const FLOW_TIMEOUT_MS = 180_000;
 const MAX_RETRIES = 1;
 
 function getConfig() {
@@ -62,7 +63,8 @@ async function fetchWithTimeout(
 async function apiRequest<T>(
   path: string,
   body: unknown,
-  retries = MAX_RETRIES
+  retries = MAX_RETRIES,
+  timeoutMs = SCREEN_TIMEOUT_MS
 ): Promise<T> {
   const { apiUrl, apiKey } = getConfig();
 
@@ -85,7 +87,7 @@ async function apiRequest<T>(
       const response = await fetchWithTimeout(
         url,
         { method: 'POST', headers, body: JSON.stringify(body) },
-        TIMEOUT_MS
+        timeoutMs
       );
 
       if (response.ok) {
@@ -103,7 +105,7 @@ async function apiRequest<T>(
       );
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`API request timed out after ${TIMEOUT_MS / 1000}s`);
+        throw new Error(`API request timed out after ${timeoutMs / 1000}s`);
       }
       // Retry network errors once
       if (attempt < retries && !(err instanceof Error && err.message.startsWith('API request failed'))) {
@@ -125,5 +127,5 @@ export async function generateScreen(
 export async function generateFlow(
   req: GenerateFlowRequest
 ): Promise<GenerateFlowResponse> {
-  return apiRequest<GenerateFlowResponse>('/api/generate-flow', req);
+  return apiRequest<GenerateFlowResponse>('/api/generate-flow', req, MAX_RETRIES, FLOW_TIMEOUT_MS);
 }

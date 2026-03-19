@@ -24,6 +24,14 @@ function getProjectId(): string | null {
 }
 
 export function isCanvasSyncEnabled(): boolean {
+  const hasUrl = !!process.env.MOKKOI_SUPABASE_URL;
+  const hasKey = !!process.env.MOKKOI_SUPABASE_ANON_KEY;
+  const hasProjectId = !!process.env.MOKKOI_PROJECT_ID;
+  console.error('[MCP Supabase] isCanvasSyncEnabled check:', {
+    MOKKOI_SUPABASE_URL: hasUrl ? 'SET' : 'NOT SET',
+    MOKKOI_SUPABASE_ANON_KEY: hasKey ? 'SET' : 'NOT SET',
+    MOKKOI_PROJECT_ID: hasProjectId ? `SET (${process.env.MOKKOI_PROJECT_ID})` : 'NOT SET',
+  });
   return !!(getClient() && getProjectId());
 }
 
@@ -56,32 +64,57 @@ export async function saveScreenToProject(screenData: {
 }): Promise<{ id: string } | null> {
   const client = getClient();
   const projectId = getProjectId();
-  if (!client || !projectId) return null;
+  if (!client || !projectId) {
+    console.error('[MCP Supabase] saveScreenToProject: no client or projectId, skipping.', {
+      hasClient: !!client,
+      projectId,
+    });
+    return null;
+  }
 
   try {
+    console.error('[MCP Supabase] Attempting Supabase save...', {
+      projectId,
+      screenName: screenData.name,
+      treeType: typeof screenData.componentTree,
+      treeIsArray: Array.isArray(screenData.componentTree),
+      treeKeys: screenData.componentTree ? Object.keys(screenData.componentTree) : 'null',
+    });
+
     const position = await getNextPosition(client, projectId);
+    const orderIndex = Math.floor(position.x / 400);
+
+    const insertObj = {
+      project_id: projectId,
+      name: screenData.name,
+      component_tree: screenData.componentTree,
+      prompt: screenData.originalPrompt,
+      order_index: orderIndex,
+      source: 'mcp',
+    };
+
+    console.error('[MCP Supabase] Insert object:', JSON.stringify(insertObj, null, 2).slice(0, 1000));
 
     const { data, error } = await client
       .from('screens')
-      .insert({
-        project_id: projectId,
-        name: screenData.name,
-        component_tree: screenData.componentTree,
-        prompt: screenData.originalPrompt,
-        order_index: Math.floor(position.x / 400),
-        source: 'mcp',
-      })
+      .insert(insertObj)
       .select('id')
       .single();
 
     if (error) {
-      console.error('Failed to save screen to Supabase:', error.message);
+      console.error('[MCP Supabase] INSERT FAILED:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       return null;
     }
 
+    console.error('[MCP Supabase] Supabase save successful!', { id: data.id });
     return { id: data.id };
   } catch (err) {
-    console.error('Supabase save error:', err);
+    console.error('[MCP Supabase] Supabase save EXCEPTION:', err);
     return null;
   }
 }
