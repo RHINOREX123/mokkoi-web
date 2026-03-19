@@ -57,7 +57,7 @@ export function TopNavbar({
   const projectNameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setUser(user))
+    supabase?.auth.getUser().then(({ data: { user } }) => setUser(user))
   }, [])
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export function TopNavbar({
   }, [])
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    if (supabase) await supabase.auth.signOut()
     navigate('/auth')
   }
 

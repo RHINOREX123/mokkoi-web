@@ -24,6 +24,7 @@ export function ShareModal({ projectId, projectName, isOpen, onClose }: ShareMod
   useEffect(() => {
     if (!isOpen) return
     setLoading(true)
+    if (!supabase) { setLoading(false); return }
     supabase
       .from('projects')
       .select('is_public')
@@ -36,6 +37,7 @@ export function ShareModal({ projectId, projectName, isOpen, onClose }: ShareMod
   }, [isOpen, projectId])
 
   const togglePublic = async () => {
+    if (!supabase) return
     const newVal = !isPublic
     setIsPublic(newVal)
     await supabase

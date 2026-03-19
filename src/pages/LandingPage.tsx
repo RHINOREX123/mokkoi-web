@@ -255,7 +255,7 @@ export default function LandingPage() {
 
   // Check auth state
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
+    supabase?.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
   }, []);
 
   // Auth-aware navigation: logged in → /projects or create project, not logged in → /auth
@@ -267,6 +267,7 @@ export default function LandingPage() {
       return;
     }
     // Create a project and navigate to it with the prompt
+    if (!supabase) { navigate('/auth'); return; }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate('/auth'); return; }
     const { data } = await supabase

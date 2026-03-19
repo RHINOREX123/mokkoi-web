@@ -17,6 +17,7 @@ export default function AuthPage() {
     setLoading(true)
 
     try {
+      if (!supabase) throw new Error('Supabase is not configured. Please set environment variables.')
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({
           email,

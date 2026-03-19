@@ -13,18 +13,22 @@ const FLOW_KEYWORDS = [
 ]
 
 const EDIT_KEYWORDS = [
-  'change', 'update', 'modify', 'remove', 'add to', 'make it', 'make the',
+  'change the', 'update the', 'modify', 'remove', 'add to', 'make it', 'make this',
   'replace', 'fix', 'adjust', 'tweak', 'edit', 'move', 'resize', 'recolor',
-  'darker', 'lighter', 'bigger', 'smaller', 'add a', 'delete',
+  'darker', 'lighter', 'bigger', 'smaller', 'delete',
   'recreate', 'with white', 'with black', 'with light', 'with dark',
   'white background', 'light theme', 'dark theme', 'light mode', 'dark mode',
   'this screen',
 ]
 
 const CREATE_KEYWORDS = [
-  'create', 'build', 'make a', 'design a', 'new', 'generate a',
-  'create a', 'build a', 'design', 'make me',
+  'create a', 'create an', 'build a', 'build an', 'design a', 'design an',
+  'generate a', 'generate an', 'new screen', 'make a new', 'make me a', 'make me an',
 ]
+
+// Strong create signal: if prompt matches these patterns, ALWAYS create (never edit)
+const STRONG_CREATE_PATTERN = /\b(create|build|design|generate)\s+(a|an|me)\b/i
+const STRONG_NEW_PATTERN = /\bnew\b/i
 
 function isFlowPrompt(prompt: string): boolean {
   const lower = prompt.toLowerCase()
@@ -41,7 +45,13 @@ function isCreateIntent(prompt: string): boolean {
   return CREATE_KEYWORDS.some(kw => lower.includes(kw))
 }
 
+/** Returns true if the prompt is unambiguously a create request, even if a screen is selected */
+function isStrongCreateIntent(prompt: string): boolean {
+  return STRONG_CREATE_PATTERN.test(prompt) || STRONG_NEW_PATTERN.test(prompt)
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (!supabase) throw new Error('Not authenticated. Please sign in.')
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
   if (!token) {
@@ -117,19 +127,26 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
 
     const flowRequest = isFlowPrompt(prompt) && !imageData
 
-    // Intent detection
+    // Intent detection: strong create signals always win over edit
     let editingScreenId: string | null = null
     if (!forceNew && activeGeneratedId) {
-      const hasEditIntent = isEditIntent(prompt)
-      const hasCreateIntent = isCreateIntent(prompt)
-      if (hasEditIntent && !hasCreateIntent) {
-        editingScreenId = activeGeneratedId
-      } else if (!hasEditIntent && hasCreateIntent) {
+      // If prompt contains "new" or starts with "create/build/design/generate a", always create
+      if (isStrongCreateIntent(prompt)) {
         editingScreenId = null
-      } else if (hasEditIntent && hasCreateIntent) {
-        editingScreenId = activeGeneratedId
       } else {
-        editingScreenId = activeGeneratedId
+        const hasEditIntent = isEditIntent(prompt)
+        const hasCreateIntent = isCreateIntent(prompt)
+        if (hasEditIntent && !hasCreateIntent) {
+          editingScreenId = activeGeneratedId
+        } else if (!hasEditIntent && hasCreateIntent) {
+          editingScreenId = null
+        } else if (!hasEditIntent && !hasCreateIntent) {
+          // No clear intent — default to editing selected screen
+          editingScreenId = activeGeneratedId
+        } else {
+          // Both edit and create detected but no strong create signal — default to edit
+          editingScreenId = activeGeneratedId
+        }
       }
     }
 

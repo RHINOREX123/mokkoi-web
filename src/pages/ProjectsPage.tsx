@@ -71,11 +71,13 @@ export default function ProjectsPage() {
   }, [toastMessage])
 
   const loadUser = async () => {
+    if (!supabase) return
     const { data: { user } } = await supabase.auth.getUser()
     setUser(user)
   }
 
   const loadProjects = async () => {
+    if (!supabase) { setLoading(false); return }
     setLoading(true)
     const { data: projectRows } = await supabase
       .from('projects')
@@ -83,9 +85,10 @@ export default function ProjectsPage() {
       .order('updated_at', { ascending: false })
 
     if (projectRows) {
+      const sb = supabase
       const projectsWithCounts: Project[] = await Promise.all(
         projectRows.map(async (p) => {
-          const { count } = await supabase
+          const { count } = await sb
             .from('screens')
             .select('*', { count: 'exact', head: true })
             .eq('project_id', p.id)
@@ -98,6 +101,7 @@ export default function ProjectsPage() {
   }
 
   const createProject = async () => {
+    if (!supabase) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const { data } = await supabase
@@ -109,12 +113,14 @@ export default function ProjectsPage() {
   }
 
   const deleteProject = async (id: string) => {
+    if (!supabase) return
     await supabase.from('projects').delete().eq('id', id)
     setProjects(prev => prev.filter(p => p.id !== id))
     setMenuOpen(null)
   }
 
   const renameProject = async (id: string, name: string) => {
+    if (!supabase) return
     const trimmed = name.trim() || 'Untitled Project'
     await supabase.from('projects').update({ name: trimmed }).eq('id', id)
     setProjects(prev => prev.map(p => p.id === id ? { ...p, name: trimmed } : p))
@@ -122,7 +128,7 @@ export default function ProjectsPage() {
   }
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    if (supabase) await supabase.auth.signOut()
     navigate('/auth')
   }
 

@@ -33,6 +33,7 @@ export default function PublicViewPage() {
   useEffect(() => {
     if (!projectId) return
     const load = async () => {
+      if (!supabase) { setError(true); setLoading(false); return }
       const { data: project } = await supabase
         .from('projects')
         .select('name, is_public')

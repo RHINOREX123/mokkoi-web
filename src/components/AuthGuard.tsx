@@ -7,6 +7,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
+    if (!supabase) {
+      navigate('/auth', { replace: true })
+      return
+    }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
         navigate('/auth', { replace: true })

@@ -39,6 +39,7 @@ export default function PreviewPage() {
   useEffect(() => {
     if (!projectId || !screenId) return
     const load = async () => {
+      if (!supabase) { setError('Not configured'); setLoading(false); return }
       // Check project access: public OR owned by authenticated user
       const { data: project } = await supabase
         .from('projects')

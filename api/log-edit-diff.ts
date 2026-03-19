@@ -1,65 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-
-// ===== Inlined auth logic (no separate _auth module for Vercel compatibility) =====
-
-function getSupabaseConfig() {
-  const url =
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    ''
-  const key =
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    ''
-  return { url, key }
-}
-
-async function authenticateRequest(
-  req: VercelRequest,
-  res: VercelResponse
-): Promise<{ id: string; email?: string } | null> {
-  const { url, key } = getSupabaseConfig()
-  const supabaseConfigured = Boolean(url && key)
-
-  if (!supabaseConfigured) {
-    return { id: 'anonymous', email: undefined }
-  }
-
-  const rawHeader = req.headers['authorization'] || req.headers['Authorization'] || ''
-  const headerValue = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader
-
-  if (!headerValue || !headerValue.toLowerCase().startsWith('bearer ')) {
-    res.status(401).json({ error: 'Please sign in.' })
-    return null
-  }
-
-  const bearerToken = headerValue.replace(/^bearer\s+/i, '').trim()
-  if (!bearerToken) {
-    res.status(401).json({ error: 'Please sign in.' })
-    return null
-  }
-
-  try {
-    const supabase = createClient(url, key)
-    const { data, error } = await supabase.auth.getUser(bearerToken)
-
-    if (error || !data.user) {
-      res.status(401).json({ error: 'Invalid session. Please sign in again.' })
-      return null
-    }
-
-    return { id: data.user.id, email: data.user.email }
-  } catch (err) {
-    console.error('Auth error:', err)
-    res.status(500).json({ error: 'Authentication service error.' })
-    return null
-  }
-}
-
-// ===== End inlined auth logic =====
+import { authenticateRequest, getSupabaseConfig } from './auth-helper.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

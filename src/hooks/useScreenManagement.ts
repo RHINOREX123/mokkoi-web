@@ -65,6 +65,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   useEffect(() => {
     if (!projectId) return
     const loadProject = async () => {
+      if (!supabase) return
       const { data: project } = await supabase
         .from('projects')
         .select('*')
@@ -116,6 +117,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   useEffect(() => {
     if (!projectId) return
 
+    if (!supabase) return
     const channel = supabase
       .channel(`screens:${projectId}`)
       .on(
@@ -175,18 +177,19 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase!.removeChannel(channel)
     }
   }, [projectId])
 
   // Auto-save screens to Supabase (debounced)
   useEffect(() => {
-    if (!projectId || !projectLoadedRef.current) return
+    if (!projectId || !projectLoadedRef.current || !supabase) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    const sb = supabase
     saveTimerRef.current = setTimeout(async () => {
       for (let i = 0; i < generatedScreens.length; i++) {
         const s = generatedScreens[i]
-        await supabase.from('screens').upsert({
+        await sb.from('screens').upsert({
           id: s.id,
           project_id: projectId,
           name: s.name,
@@ -197,18 +200,18 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
           source: s.source ?? 'web',
         })
       }
-      await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
+      await sb.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
     }, 2000)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [generatedScreens, projectId])
 
   const saveProjectName = useCallback(async (name: string) => {
-    if (!projectId) return
+    if (!projectId || !supabase) return
     await supabase.from('projects').update({ name, updated_at: new Date().toISOString() }).eq('id', projectId)
   }, [projectId])
 
   const saveMessage = useCallback(async (msg: ChatMessage) => {
-    if (!projectId) return
+    if (!projectId || !supabase) return
     await supabase.from('messages').insert({
       id: msg.id,
       project_id: projectId,
@@ -246,7 +249,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   }, [editingScreenLabel, editingScreenLabelValue])
 
   const handleDeleteScreen = useCallback(async () => {
-    if (!activeGeneratedId || !projectId) return
+    if (!activeGeneratedId || !projectId || !supabase) return
     await supabase.from('screens').delete().eq('id', activeGeneratedId)
     setGeneratedScreens(prev => prev.filter(s => s.id !== activeGeneratedId))
     setActiveGeneratedId(null)

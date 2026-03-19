@@ -64,7 +64,7 @@ export function ChatInput({ onScreenGenerated, initialPrompt }: ChatInputProps) 
     onScreenGenerated('__generating__')
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase!.auth.getSession()
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: {
