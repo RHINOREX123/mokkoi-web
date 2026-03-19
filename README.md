@@ -1,73 +1,83 @@
-# React + TypeScript + Vite
+# Mokkoi — AI-Powered React Native Screen Designer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The only design tool where AI agents create mobile screens that appear on a live canvas.
 
-Currently, two official plugins are available:
+## What is Mokkoi?
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Mokkoi is an AI-powered design tool for React Native mobile apps. It combines:
+- **Visual Canvas** — Figma-style infinite canvas with phone frame previews
+- **AI Generation** — Claude Sonnet/Haiku generates production-ready React Native screens
+- **MCP Server** — The only React Native MCP server. Works with Claude Code and Cursor.
+- **Bidirectional Sync** — Generate from CLI → edit on canvas → sync back to code
 
-## React Compiler
+## Quick Start
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Web App (mokkoi.com)
+Visit [mokkoi.com](https://mokkoi.com), sign up, and start designing.
 
-## Expanding the ESLint configuration
+### MCP Server (for developers)
+```bash
+# Add to Claude Code
+claude mcp add mokkoi -- npx mokkoi-mcp
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Or run directly
+npx mokkoi-mcp
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Set your Anthropic API key:
 ```
+MOKKOI_API_KEY=sk-ant-your-key
+```
+
+Then in Claude Code:
+```
+> Create a fitness home screen with dark theme and bottom navigation
+```
+
+## Features
+
+- AI screen generation from text prompts
+- Screenshot-to-screen conversion (drop any screenshot → get RN code)
+- Multi-screen flow generation with navigation
+- Direct edit mode (click elements to change text, colors, sizes)
+- Smart model routing (Sonnet for new screens, Haiku for edits)
+- Prompt caching (90% token savings)
+- Canvas sync (MCP screens appear on web canvas in real-time)
+- Code export (production-ready .tsx files)
+- Project sharing with public links
+
+## Tech Stack
+
+- **Frontend:** React + TypeScript + Vite
+- **Backend:** Vercel Serverless Functions
+- **Database:** Supabase (PostgreSQL + Realtime)
+- **AI:** Anthropic Claude (Sonnet 4 + Haiku 4.5)
+- **MCP Server:** TypeScript, published as `mokkoi-mcp` on npm
+- **Preview:** react-native-web for live phone frame rendering
+
+## MCP Server Tools
+
+| Tool | Description |
+|------|-------------|
+| generate_screen | Create a screen from text prompt |
+| edit_screen | Modify an existing screen |
+| screenshot_to_screen | Convert screenshot to RN code |
+| generate_flow | Create multi-screen flow with navigation |
+| list_templates | Browse 28 templates across 10 categories |
+| sync_from_canvas | Pull canvas changes to local files |
+| watch_canvas | Check for recent screen changes |
+
+## Open Source
+
+Mokkoi is open source. Self-host with your own API key (BYOK):
+```bash
+git clone https://github.com/rhinorex123/mokkoi-web.git
+cd mokkoi-web
+npm install
+cp .env.example .env  # Add your keys
+npm run dev
+```
+
+## License
+
+MIT

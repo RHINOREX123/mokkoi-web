@@ -220,7 +220,7 @@ MOBILE DESIGN RULES (apply to every screen):
 1. SPACING: Use 8pt grid system. All padding/margins should be multiples of 4 or 8. Minimum padding: 16px.
 2. TOUCH TARGETS: All interactive elements minimum 44x44pt. Buttons minimum height 48px.
 3. TYPOGRAPHY: Maximum 3 font sizes per screen. Body text minimum 16px. Headers 24-32px. Clear hierarchy.
-4. COLOR: Maximum 3 brand colors + neutrals per screen. Ensure WCAG AA contrast (4.5:1 for text, 3:1 for large text). Always use dark backgrounds (#0A0A0A to #1A1A1A range) unless user specifies light theme.
+4. COLOR: Maximum 3 brand colors + neutrals per screen. Ensure WCAG AA contrast (4.5:1 for text, 3:1 for large text). Default to dark backgrounds (#0A0A0A to #1A1A1A range). If the user asks for light theme, white background, light mode, or any light color scheme — use white/light backgrounds with dark text. Always respect the user's explicit color and theme requests over defaults.
 5. SAFE AREAS: Always wrap in SafeAreaView. Account for notch/status bar at top (44px) and home indicator at bottom (34px).
 6. SCROLLING: Wrap content in ScrollView when content exceeds viewport. Never nest ScrollViews.
 7. BOTTOM NAV: Maximum 5 items. Active item should be visually distinct. Use icons + labels.
