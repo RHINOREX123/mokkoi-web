@@ -20,6 +20,8 @@ interface ChatPanelProps {
   onSend: (prompt: string, imageData?: string, imageMimeType?: string) => void
   onExportCode?: () => void
   isGenerating: boolean
+  isStreaming?: boolean
+  streamingText?: string
   initialPrompt?: string
   /** Callback when user clicks a screen name in a flow message */
   onFlowScreenClick?: (screenName: string) => void
@@ -66,7 +68,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -184,6 +186,10 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <style>{`
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      `}</style>
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -398,7 +404,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
           </div>
         ))}
 
-        {/* Multi-step generating indicator */}
+        {/* Multi-step generating indicator with streaming text */}
         {isGenerating && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
             {/* Label */}
@@ -413,34 +419,75 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, initia
               </div>
               <span style={{ fontSize: 11, color: '#555', fontWeight: 500 }}>Mokkoi</span>
             </div>
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: 8,
-              minWidth: 200,
-            }}>
-              {GENERATING_STEPS.map((step, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  opacity: i <= genStep ? 1 : 0.3,
-                  transition: 'opacity 0.3s ease',
+
+            {isStreaming && streamingText ? (
+              /* Streaming text preview */
+              <div style={{ maxWidth: '90%' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
                 }}>
-                  {i < genStep ? (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <circle cx="7" cy="7" r="7" fill="rgba(52,211,153,0.2)" />
-                      <path d="M4 7l2 2 4-4" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  ) : i === genStep ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" className="animate-spin" style={{ animationDuration: '1.5s' }}>
-                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                    </svg>
-                  ) : (
-                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.15)' }} />
-                  )}
-                  <span style={{ fontSize: 12, color: i <= genStep ? '#94a3b8' : '#3e4a5e' }}>
-                    {step.text}
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%', background: '#818CF8',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }} />
+                  <span style={{ fontSize: 11, color: '#818CF8', fontWeight: 500 }}>
+                    Streaming response...
+                  </span>
+                  <span style={{ fontSize: 10, color: '#64748B' }}>
+                    {(streamingText.length / 1000).toFixed(1)}k chars
                   </span>
                 </div>
-              ))}
-            </div>
+                <div style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  color: '#64748B',
+                  maxHeight: 80,
+                  overflow: 'hidden',
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}>
+                  {streamingText.length > 200
+                    ? streamingText.slice(streamingText.length - 200)
+                    : streamingText}
+                  <span style={{ color: '#818CF8', animation: 'blink 1s step-end infinite' }}>|</span>
+                </div>
+              </div>
+            ) : (
+              /* Step-based progress (before stream starts) */
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: 8,
+                minWidth: 200,
+              }}>
+                {GENERATING_STEPS.map((step, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    opacity: i <= genStep ? 1 : 0.3,
+                    transition: 'opacity 0.3s ease',
+                  }}>
+                    {i < genStep ? (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <circle cx="7" cy="7" r="7" fill="rgba(52,211,153,0.2)" />
+                        <path d="M4 7l2 2 4-4" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : i === genStep ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" className="animate-spin" style={{ animationDuration: '1.5s' }}>
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg>
+                    ) : (
+                      <div style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.15)' }} />
+                    )}
+                    <span style={{ fontSize: 12, color: i <= genStep ? '#94a3b8' : '#3e4a5e' }}>
+                      {step.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

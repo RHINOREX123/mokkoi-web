@@ -66,6 +66,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export interface AIGeneration {
   isGenerating: boolean
   isGeneratingVariations: boolean
+  isStreaming: boolean
+  streamingText: string
 
   handleSend: (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => Promise<void>
   handleRegenerate: () => void
@@ -118,6 +120,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
 
   const [isGenerating, setIsGenerating] = useState(false)
   const [isGeneratingVariations, setIsGeneratingVariations] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
 
   const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => {
     // Clear any previous error messages
@@ -264,21 +268,28 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     }
 
     setIsGenerating(true)
+    setIsStreaming(true)
+    setStreamingText('')
 
     try {
       const authHeaders = await getAuthHeaders()
       const conversationHistory = buildConversationHistory(projectMessages)
-      const res = await fetch('/api/generate', {
+      const requestBody = {
+        prompt,
+        projectId,
+        conversationHistory,
+        ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
+        ...(regenerateTree ? { currentScreen: regenerateTree, screenName: screenName } : {}),
+        ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
+      }
+
+      const res = await fetch('/api/generate?stream=true', {
         method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({
-          prompt,
-          projectId,
-          conversationHistory,
-          ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
-          ...(regenerateTree ? { currentScreen: regenerateTree, screenName: screenName } : {}),
-          ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
-        }),
+        headers: {
+          ...authHeaders,
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify(requestBody),
       })
 
       if (!res.ok) {
@@ -286,10 +297,54 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         throw new Error(errData.error || 'Failed to generate screen')
       }
 
-      const { tree, modelUsed } = await res.json()
+      // Read SSE stream
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('Streaming not supported')
+
+      const decoder = new TextDecoder()
+      let fullText = ''
+      let finalTree: ComponentNode | null = null
+      let finalModelUsed = ''
+      let sseBuffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        sseBuffer += decoder.decode(value, { stream: true })
+        const lines = sseBuffer.split('\n')
+        sseBuffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') continue
+          if (!data) continue
+
+          try {
+            const event = JSON.parse(data)
+            if (event.type === 'text') {
+              fullText += event.content
+              setStreamingText(fullText)
+            } else if (event.type === 'complete') {
+              finalTree = event.tree
+              finalModelUsed = event.modelUsed || ''
+            } else if (event.type === 'error') {
+              throw new Error(event.message || 'Generation failed')
+            }
+          } catch (parseErr) {
+            // If it's a rethrown error, propagate it
+            if (parseErr instanceof Error && parseErr.message !== 'Unexpected end of JSON input') {
+              throw parseErr
+            }
+          }
+        }
+      }
+
+      if (!finalTree) throw new Error('No component tree received')
 
       setGeneratedScreens(prev => prev.map(s =>
-        s.id === targetId ? { ...s, tree } : s
+        s.id === targetId ? { ...s, tree: finalTree! } : s
       ))
 
       const action = editingScreen ? 'Updated' : 'Generated'
@@ -298,7 +353,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         role: 'assistant',
         content: `${action} Screen ${screenNumber}: ${screenName}`,
         timestamp: Date.now(),
-        modelUsed,
+        modelUsed: finalModelUsed,
       }
       setProjectMessages(prev => [...prev, assistantMsg])
       saveMessage(assistantMsg)
@@ -314,6 +369,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       saveMessage(errorMsg)
     } finally {
       setIsGenerating(false)
+      setIsStreaming(false)
+      setStreamingText('')
     }
   }, [activeGeneratedId, generatedScreens, saveMessage, projectId, projectMessages, setGeneratedScreens, setActiveGeneratedId, setProjectMessages])
 
@@ -406,6 +463,8 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
   return {
     isGenerating,
     isGeneratingVariations,
+    isStreaming,
+    streamingText,
     handleSend,
     handleRegenerate,
     handleGenerateVariations,

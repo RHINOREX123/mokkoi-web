@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { ScreenRenderer } from './ScreenRenderer'
 
@@ -6,6 +7,8 @@ interface PhoneFrameProps {
   generatedTree?: ComponentNode
   /** Whether a screen is currently being generated */
   isGenerating?: boolean
+  /** Whether the response is actively streaming */
+  isStreaming?: boolean
   /** Data URL for uploaded screenshot images */
   imageUrl?: string
 }
@@ -13,9 +16,47 @@ interface PhoneFrameProps {
 const PHONE_W = 261
 const PHONE_H = 560
 
-function ShimmerSkeleton() {
+const PROGRESS_MESSAGES = [
+  { text: 'Analyzing prompt...', icon: '🧠' },
+  { text: 'Creating layout...', icon: '📐' },
+  { text: 'Adding components...', icon: '🧩' },
+  { text: 'Applying styles...', icon: '🎨' },
+  { text: 'Finalizing design...', icon: '✨' },
+]
+
+function ShimmerSkeleton({ isStreaming }: { isStreaming?: boolean }) {
+  const [msgIdx, setMsgIdx] = useState(0)
+
+  useEffect(() => {
+    setMsgIdx(0)
+    const interval = setInterval(() => {
+      setMsgIdx(i => (i + 1) % PROGRESS_MESSAGES.length)
+    }, 3500)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <div style={{ width: '100%', height: '100%', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Progress message */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        padding: '10px 0 4px',
+      }}>
+        <span style={{ fontSize: 16 }}>{PROGRESS_MESSAGES[msgIdx].icon}</span>
+        <span style={{
+          fontSize: 12, fontWeight: 500, color: '#94A3B8',
+          transition: 'opacity 0.3s ease',
+        }}>
+          {PROGRESS_MESSAGES[msgIdx].text}
+        </span>
+        {isStreaming && (
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%', background: '#818CF8',
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }} />
+        )}
+      </div>
+
       {/* Header shimmer */}
       <div className="shimmer-bar" style={{ width: '60%', height: 20, borderRadius: 8 }} />
       <div className="shimmer-bar" style={{ width: '40%', height: 14, borderRadius: 6, opacity: 0.6 }} />
@@ -44,11 +85,13 @@ function ShimmerSkeleton() {
           <div key={i} className="shimmer-bar" style={{ width: 32, height: 32, borderRadius: 8 }} />
         ))}
       </div>
+
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
     </div>
   )
 }
 
-export function PhoneFrame({ generatedTree, isGenerating, imageUrl }: PhoneFrameProps) {
+export function PhoneFrame({ generatedTree, isGenerating, isStreaming, imageUrl }: PhoneFrameProps) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -91,7 +134,7 @@ export function PhoneFrame({ generatedTree, isGenerating, imageUrl }: PhoneFrame
             }}
           >
             {isGenerating ? (
-              <ShimmerSkeleton />
+              <ShimmerSkeleton isStreaming={isStreaming} />
             ) : imageUrl ? (
               <img
                 src={imageUrl}

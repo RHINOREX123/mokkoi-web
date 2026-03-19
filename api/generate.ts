@@ -182,6 +182,170 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     userContent = prompt
   }
 
+  // Robust JSON repair: strips markdown fences, extracts JSON, closes truncated structures
+  function repairJSON(raw: string): any {
+    let s = raw.trim()
+    s = s.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim()
+    const firstBrace = s.indexOf('{')
+    if (firstBrace === -1) throw new Error('No JSON object found')
+    const lastBrace = s.lastIndexOf('}')
+    if (lastBrace > firstBrace) {
+      s = s.slice(firstBrace, lastBrace + 1)
+    } else {
+      s = s.slice(firstBrace)
+    }
+    try { return JSON.parse(s) } catch {}
+    let repaired = s
+    let inString = false, escaped = false
+    for (const ch of repaired) {
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\') { escaped = true; continue }
+      if (ch === '"') { inString = !inString }
+    }
+    if (inString) repaired += '"'
+    repaired = repaired.replace(/,\s*"[^"]*":\s*"?[^"}\]]*$/, '')
+    repaired = repaired.replace(/[,:\s]+$/, '')
+    let openBraces = 0, openBrackets = 0
+    inString = false; escaped = false
+    for (const ch of repaired) {
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\') { escaped = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+      if (ch === '{') openBraces++
+      else if (ch === '}') openBraces--
+      else if (ch === '[') openBrackets++
+      else if (ch === ']') openBrackets--
+    }
+    for (let i = 0; i < openBrackets; i++) repaired += ']'
+    for (let i = 0; i < openBraces; i++) repaired += '}'
+    return JSON.parse(repaired)
+  }
+
+  const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
+  const apiPayload = {
+    model,
+    max_tokens: maxTokens,
+    system: [
+      {
+        type: 'text',
+        text: SYSTEM_PROMPT,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
+    messages: buildMessages(conversationHistory, userContent),
+  }
+
+  // --- SSE streaming path ---
+  const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
+
+  if (wantsStream) {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({ ...apiPayload, stream: true }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.text()
+        console.error('Anthropic streaming API error:', response.status, errorBody)
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, generationType, promptPreview: prompt, success: false })
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to generate screen' })}\n\n`)
+        return res.end()
+      }
+
+      const reader = response.body as any
+      if (!reader || typeof reader[Symbol.asyncIterator] !== 'function') {
+        // Fallback: read entire body if not iterable (shouldn't happen)
+        const text = await response.text()
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Streaming not supported in this environment' })}\n\n`)
+        return res.end()
+      }
+
+      let fullText = ''
+      let inputTokens = 0
+      let outputTokens = 0
+      const decoder = new TextDecoder()
+      let sseBuffer = ''
+
+      for await (const chunk of reader) {
+        const text = typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true })
+        sseBuffer += text
+
+        // Parse SSE events from Anthropic's streaming format
+        const lines = sseBuffer.split('\n')
+        sseBuffer = lines.pop() || '' // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (!data || data === '[DONE]') continue
+
+          try {
+            const event = JSON.parse(data)
+
+            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+              const deltaText = event.delta.text
+              fullText += deltaText
+              // Forward text chunk to client
+              res.write(`data: ${JSON.stringify({ type: 'text', content: deltaText })}\n\n`)
+            } else if (event.type === 'message_delta' && event.usage) {
+              outputTokens = event.usage.output_tokens || 0
+            } else if (event.type === 'message_start' && event.message?.usage) {
+              inputTokens = event.message.usage.input_tokens || 0
+            }
+          } catch {
+            // Skip unparseable SSE lines
+          }
+        }
+      }
+
+      // Stream complete — parse the full response into a component tree
+      console.log('Streaming complete. Full text length:', fullText.length)
+
+      if (!fullText) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Empty response from AI service' })}\n\n`)
+        return res.end()
+      }
+
+      try {
+        const tree = repairJSON(fullText)
+        res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel })}\n\n`)
+
+        // Usage logging
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: inputTokens, tokensOut: outputTokens, generationType, promptPreview: prompt, success: true })
+
+        // Edit diff capture
+        if (currentScreen && (generationType === 'edit' || generationType === 'variation' || generationType === 'regenerate')) {
+          const editType = generationType === 'edit' ? 'ai_edit' : generationType
+          logEditDiff({ userId: user.id, projectId: projectId || undefined, screenId: screenId || undefined, editType: editType as 'ai_edit' | 'variation' | 'regenerate', prompt, treeBefore: currentScreen, treeAfter: tree, modelUsed: model })
+        }
+      } catch (jsonErr) {
+        console.error('JSON repair failed on stream. Raw start:', fullText.slice(0, 500))
+        res.write(`data: ${JSON.stringify({ type: 'error', message: `AI returned invalid JSON. Raw start: ${fullText.slice(0, 100)}` })}\n\n`)
+      }
+
+      res.write('data: [DONE]\n\n')
+      return res.end()
+    } catch (err) {
+      console.error('Streaming generate error:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      res.write(`data: ${JSON.stringify({ type: 'error', message: `Failed to generate screen: ${message}` })}\n\n`)
+      return res.end()
+    }
+  }
+
+  // --- Non-streaming path (backward compatible for MCP / variations) ---
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -190,31 +354,13 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        system: [
-          {
-            type: 'text',
-            text: SYSTEM_PROMPT,
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
-        messages: buildMessages(conversationHistory, userContent),
-      }),
+      body: JSON.stringify(apiPayload),
     })
 
     if (!response.ok) {
       const errorBody = await response.text()
       console.error('Anthropic API error:', response.status, errorBody)
-      logUsage({
-        userId: user.id,
-        projectId: projectId || undefined,
-        modelUsed: model,
-        generationType,
-        promptPreview: prompt,
-        success: false,
-      })
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, generationType, promptPreview: prompt, success: false })
       return res.status(502).json({ error: 'Failed to generate screen' })
     }
 
@@ -228,65 +374,9 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
 
     const text: string = data.content?.[0]?.text ?? ''
     console.log('Claude raw response length:', text.length)
-    console.log('Claude raw response (first 300 chars):', text.slice(0, 300))
 
     if (!text) {
       return res.status(502).json({ error: 'Empty response from AI service' })
-    }
-
-    // Robust JSON repair: strips markdown fences, extracts JSON, closes truncated structures
-    function repairJSON(raw: string): any {
-      let s = raw.trim()
-      // Strip markdown code fences
-      s = s.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim()
-
-      // Extract JSON between first { and last }
-      const firstBrace = s.indexOf('{')
-      if (firstBrace === -1) throw new Error('No JSON object found')
-      const lastBrace = s.lastIndexOf('}')
-      if (lastBrace > firstBrace) {
-        s = s.slice(firstBrace, lastBrace + 1)
-      } else {
-        // Truncated — take from first brace to end
-        s = s.slice(firstBrace)
-      }
-
-      // Try direct parse first
-      try { return JSON.parse(s) } catch {}
-
-      // Repair truncated JSON
-      let repaired = s
-      // Close any open string
-      let inString = false, escaped = false
-      for (const ch of repaired) {
-        if (escaped) { escaped = false; continue }
-        if (ch === '\\') { escaped = true; continue }
-        if (ch === '"') { inString = !inString }
-      }
-      if (inString) repaired += '"'
-
-      // Remove trailing incomplete key-value pairs (e.g. `"key": "val` or `"key":`)
-      repaired = repaired.replace(/,\s*"[^"]*":\s*"?[^"}\]]*$/, '')
-      // Trim trailing comma, colon, or whitespace
-      repaired = repaired.replace(/[,:\s]+$/, '')
-
-      // Count and close unclosed braces/brackets
-      let openBraces = 0, openBrackets = 0
-      inString = false; escaped = false
-      for (const ch of repaired) {
-        if (escaped) { escaped = false; continue }
-        if (ch === '\\') { escaped = true; continue }
-        if (ch === '"') { inString = !inString; continue }
-        if (inString) continue
-        if (ch === '{') openBraces++
-        else if (ch === '}') openBraces--
-        else if (ch === '[') openBrackets++
-        else if (ch === ']') openBrackets--
-      }
-      for (let i = 0; i < openBrackets; i++) repaired += ']'
-      for (let i = 0; i < openBraces; i++) repaired += '}'
-
-      return JSON.parse(repaired)
     }
 
     let tree: any
@@ -298,34 +388,13 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
     }
 
-    // --- Usage logging (fire-and-forget) ---
-    logUsage({
-      userId: user.id,
-      projectId: projectId || undefined,
-      modelUsed: model,
-      tokensIn: data.usage?.input_tokens,
-      tokensOut: data.usage?.output_tokens,
-      generationType,
-      promptPreview: prompt,
-      success: true,
-    })
+    logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, generationType, promptPreview: prompt, success: true })
 
-    // --- Edit diff capture (fire-and-forget) ---
     if (currentScreen && (generationType === 'edit' || generationType === 'variation' || generationType === 'regenerate')) {
       const editType = generationType === 'edit' ? 'ai_edit' : generationType
-      logEditDiff({
-        userId: user.id,
-        projectId: projectId || undefined,
-        screenId: screenId || undefined,
-        editType: editType as 'ai_edit' | 'variation' | 'regenerate',
-        prompt,
-        treeBefore: currentScreen,
-        treeAfter: tree,
-        modelUsed: model,
-      })
+      logEditDiff({ userId: user.id, projectId: projectId || undefined, screenId: screenId || undefined, editType: editType as 'ai_edit' | 'variation' | 'regenerate', prompt, treeBefore: currentScreen, treeAfter: tree, modelUsed: model })
     }
 
-    const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
     return res.status(200).json({ tree, modelUsed: modelLabel })
   } catch (err) {
     console.error('Generate error:', err)

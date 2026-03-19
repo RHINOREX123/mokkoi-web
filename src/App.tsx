@@ -303,7 +303,7 @@ function App() {
             <ChatPanel
               messages={screens.projectMessages} onSend={ai.handleSend}
               onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
-              isGenerating={ai.isGenerating} initialPrompt={initialPrompt}
+              isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt}
               onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens}
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
@@ -380,7 +380,7 @@ function App() {
                           onMouseOverCapture={directEdit.directEditMode ? directEdit.handleDirectEditHover : undefined}
                           onMouseOutCapture={directEdit.directEditMode ? directEdit.handleDirectEditHoverOut : undefined}
                         >
-                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} />
+                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} />
                           {directEdit.directEditMode && isActive && directEdit.directEditSelectedEl && (
                             <div data-direct-edit-toolbar="true">
                               <DirectEditToolbar target={directEdit.directEditSelectedEl} phoneFrameEl={phoneFrameRefs.current.get(screen.id)!} onClose={() => directEdit.setDirectEditSelectedEl(null)} onChanged={() => directEdit.setDirectEditDirty(true)} />
