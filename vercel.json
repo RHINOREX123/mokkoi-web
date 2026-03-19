@@ -17,6 +17,12 @@
     },
     "api/stripe-webhook.ts": {
       "maxDuration": 30
+    },
+    "api/analyze-diffs.ts": {
+      "maxDuration": 30
+    },
+    "api/get-learned-defaults.ts": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
