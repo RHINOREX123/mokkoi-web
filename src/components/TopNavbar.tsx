@@ -141,7 +141,7 @@ export function TopNavbar({
       gap: 10, position: 'relative', zIndex: 50,
     }}>
       {/* Logo */}
-      <div onClick={() => navigate('/projects')} style={{
+      <div onClick={() => navigate('/')} style={{
         width: 26, height: 26, borderRadius: 7, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'linear-gradient(135deg, #6366f1, #818cf8)',
@@ -167,7 +167,7 @@ export function TopNavbar({
             border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 4,
             boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100, minWidth: 220,
           }}>
-            <button onClick={() => { navigate('/projects'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
+            <button onClick={() => { navigate('/'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
             ><ArrowLeft size={16} color="#94a3b8" />Go to all projects</button>

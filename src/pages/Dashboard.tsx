@@ -1,0 +1,804 @@
+import { useEffect, useState, useRef, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import type { User } from '@supabase/supabase-js'
+import {
+  Search, MoreVertical, Trash2, Pencil, LogOut, Settings,
+  FolderOpen, Users, Smartphone, ArrowUp,
+  Zap, Copy, Menu, X,
+} from 'lucide-react'
+
+interface Project {
+  id: string
+  name: string
+  is_public?: boolean
+  created_at: string
+  updated_at: string
+  screen_count?: number
+}
+
+const SUGGESTION_CHIPS = [
+  'A fitness tracking dashboard',
+  'An e-commerce product page',
+  'A social media profile',
+  'A banking app home screen',
+  'A music player interface',
+  'A food delivery order screen',
+]
+
+// Hash a string to pick a gradient pair
+const GRADIENT_PAIRS = [
+  ['#6366f1', '#818cf8'],
+  ['#8b5cf6', '#a78bfa'],
+  ['#ec4899', '#f472b6'],
+  ['#f97316', '#fb923c'],
+  ['#14b8a6', '#2dd4bf'],
+  ['#3b82f6', '#60a5fa'],
+  ['#e11d48', '#fb7185'],
+  ['#84cc16', '#a3e635'],
+]
+
+function hashString(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function groupProjectsByRecency(projects: Project[]) {
+  const now = new Date()
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  return {
+    last7Days: projects.filter(p => new Date(p.updated_at) > sevenDaysAgo),
+    last30Days: projects.filter(p => {
+      const d = new Date(p.updated_at)
+      return d <= sevenDaysAgo && d > thirtyDaysAgo
+    }),
+    older: projects.filter(p => new Date(p.updated_at) <= thirtyDaysAgo),
+  }
+}
+
+const sidebarItemStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  width: '100%', padding: '8px 10px', borderRadius: 8,
+  background: 'transparent', border: 'none',
+  color: '#e2e8f0', fontSize: 13, fontWeight: 500,
+  cursor: 'pointer', transition: 'background 0.15s',
+  textAlign: 'left',
+}
+
+const avatarMenuItemStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  width: '100%', padding: '10px 12px', borderRadius: 8,
+  background: 'transparent', border: 'none',
+  color: '#e2e8f0', fontSize: 14, fontWeight: 500,
+  cursor: 'pointer', transition: 'background 0.15s',
+  textAlign: 'left',
+}
+
+export default function Dashboard() {
+  const navigate = useNavigate()
+  const [user, setUser] = useState<User | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [prompt, setPrompt] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showCreditsDropdown, setShowCreditsDropdown] = useState(false)
+  const [credits, setCredits] = useState<{ plan: string; remaining: number; limit: number } | null>(null)
+  const [toastMessage, setToastMessage] = useState('')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+
+  const userMenuRef = useRef<HTMLDivElement>(null)
+  const creditsRef = useRef<HTMLDivElement>(null)
+  const renameRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Load user + projects + credits
+  useEffect(() => {
+    const sb = supabase
+    if (!sb) return
+    let realtimeSub: ReturnType<typeof sb.channel> | null = null
+
+    sb.auth.getUser().then(({ data: { user: u } }) => {
+      setUser(u)
+      if (!u) return
+      // Credits
+      sb.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
+        .eq('user_id', u.id).single()
+        .then(({ data }) => {
+          if (data) setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })
+          else setCredits({ plan: 'free', remaining: 50, limit: 50 })
+        })
+      // Realtime credits
+      realtimeSub = sb.channel('dashboard-credits')
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'subscriptions',
+          filter: `user_id=eq.${u.id}`,
+        }, (payload: { new: { plan?: string; credits_remaining?: number; credits_monthly_limit?: number } }) => {
+          const row = payload.new
+          setCredits({ plan: row.plan || 'free', remaining: row.credits_remaining ?? 0, limit: row.credits_monthly_limit ?? 50 })
+        })
+        .subscribe()
+    })
+
+    loadProjects()
+
+    return () => { if (realtimeSub) sb.removeChannel(realtimeSub) }
+  }, [])
+
+  useEffect(() => {
+    if (renamingId && renameRef.current) { renameRef.current.focus(); renameRef.current.select() }
+  }, [renamingId])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false)
+      if (creditsRef.current && !creditsRef.current.contains(e.target as Node)) setShowCreditsDropdown(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    if (toastMessage) { const t = setTimeout(() => setToastMessage(''), 2000); return () => clearTimeout(t) }
+  }, [toastMessage])
+
+  const loadProjects = async () => {
+    if (!supabase) { setLoading(false); return }
+    setLoading(true)
+    const { data: projectRows } = await supabase
+      .from('projects').select('*').order('updated_at', { ascending: false })
+    if (projectRows) {
+      const sb = supabase
+      const withCounts: Project[] = await Promise.all(
+        projectRows.map(async (p) => {
+          const { count } = await sb.from('screens')
+            .select('*', { count: 'exact', head: true }).eq('project_id', p.id)
+          return { ...p, screen_count: count ?? 0 }
+        })
+      )
+      setProjects(withCounts)
+    }
+    setLoading(false)
+  }
+
+  const handleSubmitPrompt = async () => {
+    if (!prompt.trim() || isSubmitting) return
+    setIsSubmitting(true)
+    if (!supabase) { navigate('/auth'); return }
+    const { data: { user: u } } = await supabase.auth.getUser()
+    if (!u) { navigate('/auth'); return }
+    const { data } = await supabase
+      .from('projects')
+      .insert({ user_id: u.id, name: prompt.trim().slice(0, 30) })
+      .select().single()
+    if (data) navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`)
+    setIsSubmitting(false)
+  }
+
+  const deleteProject = async (id: string) => {
+    if (!supabase) return
+    await supabase.from('projects').delete().eq('id', id)
+    setProjects(prev => prev.filter(p => p.id !== id))
+    setMenuOpen(null)
+  }
+
+  const renameProject = async (id: string, name: string) => {
+    if (!supabase) return
+    const trimmed = name.trim() || 'Untitled Project'
+    await supabase.from('projects').update({ name: trimmed }).eq('id', id)
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, name: trimmed } : p))
+    setRenamingId(null)
+  }
+
+  const duplicateProject = async (id: string) => {
+    if (!supabase || !user) return
+    const original = projects.find(p => p.id === id)
+    if (!original) return
+    const { data } = await supabase.from('projects')
+      .insert({ user_id: user.id, name: `${original.name} (copy)` })
+      .select().single()
+    if (data) {
+      // Copy screens
+      const { data: screens } = await supabase.from('screens')
+        .select('*').eq('project_id', id)
+      if (screens && screens.length > 0) {
+        await supabase.from('screens').insert(
+          screens.map((s: { name: string; component_tree: unknown; order_index: number }) => ({
+            project_id: data.id, name: s.name, component_tree: s.component_tree, order_index: s.order_index,
+          }))
+        )
+      }
+      loadProjects()
+      setToastMessage('Project duplicated')
+    }
+    setMenuOpen(null)
+  }
+
+  const handleSignOut = async () => {
+    if (supabase) await supabase.auth.signOut()
+    navigate('/auth')
+  }
+
+  const filtered = useMemo(() =>
+    projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase())),
+    [projects, search]
+  )
+
+  const grouped = useMemo(() => groupProjectsByRecency(filtered), [filtered])
+
+  const userInitial = user?.user_metadata?.full_name?.[0]?.toUpperCase()
+    || user?.email?.[0]?.toUpperCase() || '?'
+  const userName = user?.user_metadata?.full_name || user?.email || 'User'
+  const firstName = (user?.user_metadata?.full_name || user?.email || 'there').split(/[\s@]/)[0]
+
+  const hasProjects = projects.length > 0
+
+  // Render a project item for the sidebar
+  const renderProjectItem = (project: Project) => {
+    const gradientIdx = hashString(project.name) % GRADIENT_PAIRS.length
+    const [g1, g2] = GRADIENT_PAIRS[gradientIdx]
+    return (
+      <div key={project.id} style={{ position: 'relative' }}>
+        <button
+          onClick={() => { navigate(`/app/${project.id}`); setMobileSidebarOpen(false) }}
+          style={{
+            ...sidebarItemStyle,
+            gap: 10,
+            position: 'relative',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+        >
+          {/* Thumbnail */}
+          <div style={{
+            width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+            background: `linear-gradient(135deg, ${g1}, ${g2})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            opacity: 0.85,
+          }}>
+            <Smartphone size={18} color="rgba(255,255,255,0.8)" />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            {renamingId === project.id ? (
+              <input
+                ref={renameRef}
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') renameProject(project.id, renameValue)
+                  if (e.key === 'Escape') setRenamingId(null)
+                }}
+                onBlur={() => renameProject(project.id, renameValue)}
+                onClick={e => e.stopPropagation()}
+                style={{
+                  fontSize: 13, fontWeight: 500, color: '#f1f5f9',
+                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(99,102,241,0.4)',
+                  borderRadius: 4, padding: '1px 6px', outline: 'none', width: '100%',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              />
+            ) : (
+              <div style={{
+                fontSize: 13, fontWeight: 500, color: '#e2e8f0',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{project.name}</div>
+            )}
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+              {formatDate(project.updated_at)}
+            </div>
+          </div>
+        </button>
+        {/* Three-dot menu */}
+        <button
+          onClick={e => { e.stopPropagation(); setMenuOpen(menuOpen === project.id ? null : project.id) }}
+          style={{
+            position: 'absolute', top: 8, right: 4,
+            width: 24, height: 24, borderRadius: 4,
+            background: 'transparent', border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#64748b', opacity: 0.5,
+            transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '0.5' }}
+        >
+          <MoreVertical size={14} />
+        </button>
+        {/* Context menu */}
+        {menuOpen === project.id && (
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', top: 32, right: 4, zIndex: 60,
+              background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 10, padding: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              minWidth: 140,
+            }}
+          >
+            <button onClick={() => { setRenamingId(project.id); setRenameValue(project.name); setMenuOpen(null) }}
+              style={{ ...sidebarItemStyle, fontSize: 12 }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            ><Pencil size={13} /> Rename</button>
+            <button onClick={() => duplicateProject(project.id)}
+              style={{ ...sidebarItemStyle, fontSize: 12 }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            ><Copy size={13} /> Duplicate</button>
+            <button onClick={() => { setDeleteConfirmId(project.id); setMenuOpen(null) }}
+              style={{ ...sidebarItemStyle, fontSize: 12, color: '#f87171' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            ><Trash2 size={13} /> Delete</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderGroupedProjects = () => {
+    if (loading) return <div style={{ padding: 20, color: '#64748b', fontSize: 13 }}>Loading...</div>
+    if (filtered.length === 0) {
+      return <div style={{ padding: '20px 10px', color: '#64748b', fontSize: 13 }}>
+        {search ? 'No projects match your search' : 'No projects yet'}
+      </div>
+    }
+    return (
+      <>
+        {grouped.last7Days.length > 0 && (
+          <>
+            <div style={{ padding: '12px 10px 4px', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Last 7 days</div>
+            {grouped.last7Days.map(renderProjectItem)}
+          </>
+        )}
+        {grouped.last30Days.length > 0 && (
+          <>
+            <div style={{ padding: '12px 10px 4px', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Last 30 days</div>
+            {grouped.last30Days.map(renderProjectItem)}
+          </>
+        )}
+        {grouped.older.length > 0 && (
+          <>
+            <div style={{ padding: '12px 10px 4px', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Older</div>
+            {grouped.older.map(renderProjectItem)}
+          </>
+        )}
+      </>
+    )
+  }
+
+  const sidebarContent = (
+    <>
+      {/* Tabs */}
+      <button style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px', borderRadius: 10,
+        background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)',
+        color: '#818cf8', fontSize: 14, fontWeight: 600,
+        cursor: 'pointer', width: '100%', textAlign: 'left',
+      }}>
+        <FolderOpen size={18} /> My Projects
+      </button>
+      <button onClick={() => setToastMessage('Coming soon')} style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px', borderRadius: 10,
+        background: 'transparent', border: 'none',
+        color: '#64748b', fontSize: 14, fontWeight: 500,
+        cursor: 'pointer', width: '100%', textAlign: 'left',
+        marginTop: 4, transition: 'background 0.15s',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+      >
+        <Users size={18} /> Shared with me
+        <span style={{
+          marginLeft: 'auto', fontSize: 10, fontWeight: 600,
+          padding: '2px 8px', borderRadius: 10,
+          background: 'rgba(255,255,255,0.06)', color: '#64748b',
+        }}>Soon</span>
+      </button>
+
+      {/* Search */}
+      <div style={{ position: 'relative', marginTop: 12 }}>
+        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+        <input
+          type="text" placeholder="Search projects..." value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            width: '100%', padding: '8px 10px 8px 32px', borderRadius: 8,
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+            color: '#f1f5f9', fontSize: 13, outline: 'none',
+            fontFamily: "'DM Sans', sans-serif", boxSizing: 'border-box',
+            transition: 'border-color 0.2s',
+          }}
+          onFocus={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.4)' }}
+          onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+        />
+      </div>
+
+      {/* Project list */}
+      <div style={{ flex: 1, overflowY: 'auto', marginTop: 8, marginRight: -4, paddingRight: 4 }}>
+        {renderGroupedProjects()}
+      </div>
+    </>
+  )
+
+  return (
+    <div style={{
+      minHeight: '100vh', background: '#000000',
+      fontFamily: "'DM Sans', sans-serif",
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Toast */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+          padding: '8px 20px', borderRadius: 10,
+          background: '#1a1a2e', color: '#34d399', fontSize: 13, fontWeight: 500,
+          border: '1px solid rgba(52,211,153,0.2)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 200,
+          animation: 'fadeInDown 0.25s ease-out',
+        }}>{toastMessage}</div>
+      )}
+
+      {/* Navbar */}
+      <nav style={{
+        height: 56, borderBottom: '1px solid rgba(255,255,255,0.06)',
+        display: 'flex', alignItems: 'center', padding: '0 20px',
+        background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+        position: 'sticky', top: 0, zIndex: 50, flexShrink: 0,
+      }}>
+        {/* Mobile hamburger */}
+        <button
+          className="dashboard-mobile-hamburger"
+          onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+          style={{
+            display: 'none', width: 32, height: 32, borderRadius: 6,
+            background: 'transparent', border: 'none',
+            alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#94a3b8', marginRight: 8,
+          }}
+        >
+          <Menu size={20} />
+        </button>
+
+        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            color: '#fff', fontSize: 12, fontWeight: 800,
+          }}>M</div>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>Mokkoi</span>
+        </a>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Credits */}
+        {credits && (
+          <div ref={creditsRef} style={{ position: 'relative', flexShrink: 0, marginRight: 8 }}>
+            <button onClick={() => setShowCreditsDropdown(!showCreditsDropdown)} style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+              cursor: 'pointer', transition: 'all 0.2s',
+              color: credits.remaining === 0 ? '#ef4444' : credits.remaining < 20 ? '#f97316' : '#94a3b8',
+            }}>
+              <Zap size={12} /> {credits.remaining} remaining
+            </button>
+            {showCreditsDropdown && (
+              <div style={{
+                position: 'absolute', top: 34, right: 0, background: '#1A1A1A',
+                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12,
+                boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100, padding: 16, minWidth: 220,
+              }}>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>
+                  {credits.remaining} of {credits.limit} screens remaining
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', marginBottom: 12, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 3, transition: 'width 0.3s',
+                    width: `${Math.max(0, Math.min(100, (credits.remaining / credits.limit) * 100))}%`,
+                    background: credits.remaining === 0 ? '#ef4444' : credits.remaining < 20 ? '#f97316' : 'linear-gradient(90deg, #6366f1, #818cf8)',
+                  }} />
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {credits.plan} plan
+                </div>
+                <button onClick={() => { navigate('/pricing'); setShowCreditsDropdown(false) }} style={{
+                  width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff',
+                  border: 'none', cursor: 'pointer',
+                }}>
+                  {credits.plan === 'free' ? 'Upgrade to Pro' : 'View Plans'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Avatar */}
+        <div ref={userMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <div onClick={() => setShowUserMenu(!showUserMenu)} style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer',
+            transition: 'box-shadow 0.2s',
+            boxShadow: showUserMenu ? '0 0 0 2px rgba(99,102,241,0.4)' : 'none',
+          }} title={userName}>{userInitial}</div>
+          {showUserMenu && (
+            <div style={{
+              position: 'absolute', top: 40, right: 0, background: '#1A1A1A',
+              border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16,
+              boxShadow: '0 16px 48px rgba(0,0,0,0.5)', zIndex: 100, minWidth: 260, overflow: 'hidden',
+            }}>
+              <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
+                }}>{userInitial}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email || ''}</div>
+                </div>
+              </div>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '0 12px' }} />
+              <div style={{ padding: '4px 8px' }}>
+                <button onClick={() => { navigate('/settings'); setShowUserMenu(false) }} style={avatarMenuItemStyle}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                ><Settings size={18} color="#94a3b8" />Settings</button>
+                <button onClick={() => { navigate('/pricing'); setShowUserMenu(false) }} style={avatarMenuItemStyle}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                ><Zap size={18} color="#94a3b8" />Pricing</button>
+              </div>
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '0 12px' }} />
+              <div style={{ padding: '4px 8px 8px' }}>
+                <button onClick={handleSignOut} style={{ ...avatarMenuItemStyle, color: '#f87171' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                ><LogOut size={18} color="#f87171" />Sign Out</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {/* Main layout */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* Desktop sidebar */}
+        <div className="dashboard-sidebar" style={{
+          width: 300, flexShrink: 0, background: '#0A0A0A',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex', flexDirection: 'column', padding: '16px 12px',
+        }}>
+          {sidebarContent}
+        </div>
+
+        {/* Mobile sidebar overlay */}
+        {mobileSidebarOpen && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+          }} onClick={() => setMobileSidebarOpen(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              width: 300, height: '100%', background: '#0A0A0A',
+              borderRight: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex', flexDirection: 'column', padding: '16px 12px',
+              animation: 'slideInLeft 0.2s ease-out',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <button onClick={() => setMobileSidebarOpen(false)} style={{
+                  background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer',
+                }}><X size={20} /></button>
+              </div>
+              {sidebarContent}
+            </div>
+          </div>
+        )}
+
+        {/* Main content area */}
+        <div style={{
+          flex: 1, overflow: 'auto',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: hasProjects ? 'center' : 'center',
+          padding: '40px 24px',
+        }}>
+          <div style={{ width: '100%', maxWidth: 640 }}>
+            {/* Welcome */}
+            <h1 style={{
+              fontSize: hasProjects ? 28 : 32, fontWeight: 700, color: '#f1f5f9',
+              margin: '0 0 8px', letterSpacing: '-0.02em',
+              fontFamily: "'Outfit', 'DM Sans', sans-serif",
+            }}>
+              {hasProjects ? `Welcome back, ${firstName}` : 'What shall we design?'}
+            </h1>
+            {!hasProjects && (
+              <p style={{ fontSize: 15, color: '#64748b', margin: '0 0 24px', lineHeight: 1.5 }}>
+                Create your first screen — describe what you want below
+              </p>
+            )}
+
+            {/* Suggestion chips */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 8,
+              marginTop: hasProjects ? 4 : 0, marginBottom: 16,
+            }}>
+              {SUGGESTION_CHIPS.map(chip => (
+                <button key={chip} onClick={() => { setPrompt(chip); textareaRef.current?.focus() }} style={{
+                  padding: '6px 14px', borderRadius: 20,
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#94a3b8', fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer', transition: 'all 0.2s',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.color = '#818cf8' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
+                >{chip}</button>
+              ))}
+            </div>
+
+            {/* Chat input area */}
+            <div style={{
+              position: 'relative',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 16,
+              transition: 'border-color 0.2s',
+            }}>
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                onChange={e => setPrompt(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitPrompt() }
+                }}
+                placeholder="What mobile screen shall we design?"
+                rows={3}
+                style={{
+                  width: '100%', padding: '16px 16px 40px', borderRadius: 16,
+                  background: 'transparent', border: 'none',
+                  color: '#f1f5f9', fontSize: 15, outline: 'none',
+                  resize: 'none', fontFamily: "'DM Sans', sans-serif",
+                  lineHeight: 1.5, boxSizing: 'border-box',
+                }}
+                onFocus={e => { (e.currentTarget.parentElement as HTMLElement).style.borderColor = 'rgba(99,102,241,0.4)' }}
+                onBlur={e => { (e.currentTarget.parentElement as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)' }}
+              />
+              <button
+                onClick={handleSubmitPrompt}
+                disabled={!prompt.trim() || isSubmitting}
+                style={{
+                  position: 'absolute', bottom: 10, right: 10,
+                  width: 32, height: 32, borderRadius: 8,
+                  background: prompt.trim() ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,0.06)',
+                  border: 'none', cursor: prompt.trim() ? 'pointer' : 'default',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <ArrowUp size={16} color={prompt.trim() ? '#fff' : '#64748b'} />
+              </button>
+            </div>
+
+            {/* Credits indicator below input */}
+            {credits && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                marginTop: 12, fontSize: 12, color: '#475569',
+              }}>
+                <Zap size={11} />
+                {credits.remaining} credits remaining · {credits.plan} plan
+              </div>
+            )}
+
+            {/* Empty state example cards */}
+            {!hasProjects && !loading && (
+              <div style={{ marginTop: 40 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: '#64748b', margin: '0 0 12px' }}>
+                  Need inspiration?
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                  {[
+                    { name: 'Fitness Tracker', color: '#14b8a6' },
+                    { name: 'Food Delivery', color: '#f97316' },
+                    { name: 'Social Feed', color: '#ec4899' },
+                    { name: 'Banking App', color: '#3b82f6' },
+                  ].map(ex => (
+                    <button key={ex.name} onClick={() => { setPrompt(`A ${ex.name.toLowerCase()} app home screen`); textareaRef.current?.focus() }} style={{
+                      padding: 16, borderRadius: 12,
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                      cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
+                    >
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 8, marginBottom: 8,
+                        background: `${ex.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Smartphone size={16} color={ex.color} />
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{ex.name}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Example project</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId && (() => {
+        const project = projects.find(p => p.id === deleteConfirmId)
+        if (!project) return null
+        return (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 300,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }} onClick={() => setDeleteConfirmId(null)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 16, padding: 24,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.5)', maxWidth: 400, width: '90%',
+            }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: '#fff' }}>Delete project?</h3>
+              <p style={{ margin: '0 0 20px', fontSize: 14, color: '#94a3b8', lineHeight: 1.5 }}>
+                This will permanently delete &apos;{project.name}&apos; and all its screens. This action cannot be undone.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setDeleteConfirmId(null)} style={{
+                  padding: '8px 16px', borderRadius: 8,
+                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#e2e8f0', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                }}>Cancel</button>
+                <button onClick={() => { deleteProject(deleteConfirmId); setDeleteConfirmId(null) }} style={{
+                  padding: '8px 16px', borderRadius: 8,
+                  background: '#EF4444', border: 'none',
+                  color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}>Delete</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      <style>{`
+        @keyframes fadeInDown {
+          from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes slideInLeft {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
+        @media (max-width: 768px) {
+          .dashboard-sidebar { display: none !important; }
+          .dashboard-mobile-hamburger { display: flex !important; }
+        }
+      `}</style>
+    </div>
+  )
+}
