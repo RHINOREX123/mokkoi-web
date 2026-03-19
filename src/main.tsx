@@ -9,6 +9,7 @@ import ProjectsPage from './pages/ProjectsPage'
 import AuthGuard from './components/AuthGuard'
 import PublicViewPage from './pages/PublicViewPage'
 import PreviewPage from './pages/PreviewPage'
+import PricingPage from './components/PricingPage'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -16,6 +17,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
         <Route path="/projects" element={<AuthGuard><ProjectsPage /></AuthGuard>} />
         <Route path="/app/:projectId" element={<AuthGuard><App /></AuthGuard>} />
         <Route path="/app" element={<Navigate to="/projects" replace />} />

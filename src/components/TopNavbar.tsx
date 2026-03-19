@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight } from 'lucide-react'
+import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { convertTreeToJSX } from './CodeExportModal'
 import type { User } from '@supabase/supabase-js'
@@ -51,13 +51,30 @@ export function TopNavbar({
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false)
   const [showEditSubmenu, setShowEditSubmenu] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
+  const [showCreditsDropdown, setShowCreditsDropdown] = useState(false)
+  const [credits, setCredits] = useState<{ plan: string; remaining: number; limit: number } | null>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
+  const creditsRef = useRef<HTMLDivElement>(null)
   const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectNameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    supabase?.auth.getUser().then(({ data: { user } }) => setUser(user))
+    supabase?.auth.getUser().then(({ data: { user } }) => {
+      setUser(user)
+      // Fetch credits
+      if (user && supabase) {
+        supabase.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
+          .eq('user_id', user.id).single()
+          .then(({ data }) => {
+            if (data) {
+              setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })
+            } else {
+              setCredits({ plan: 'free', remaining: 50, limit: 50 })
+            }
+          })
+      }
+    })
   }, [])
 
   useEffect(() => {
@@ -71,6 +88,7 @@ export function TopNavbar({
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false)
       if (hamburgerMenuRef.current && !hamburgerMenuRef.current.contains(e.target as Node)) setShowHamburgerMenu(false)
+      if (creditsRef.current && !creditsRef.current.contains(e.target as Node)) setShowCreditsDropdown(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -130,6 +148,10 @@ export function TopNavbar({
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
             ><ArrowLeft size={16} color="#94a3b8" />Go to all projects</button>
+            <button onClick={() => { navigate('/pricing'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            ><Zap size={16} color="#94a3b8" />Pricing</button>
             <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px' }} />
 
             {/* Edit submenu */}
@@ -282,6 +304,93 @@ export function TopNavbar({
           onMouseEnter={e => { e.currentTarget.style.color = '#e2e8f0' }}
           onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8' }}
         ><Share2 size={14} />Share</button>
+
+        {/* Credits badge */}
+        {credits && (
+          <div ref={creditsRef} style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={() => setShowCreditsDropdown(!showCreditsDropdown)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                cursor: 'pointer', transition: 'all 0.2s',
+                color: credits.remaining === 0 ? '#ef4444'
+                  : credits.remaining < 20 ? '#f97316'
+                  : '#94a3b8',
+                animation: credits.remaining === 0 ? 'pulse 2s ease-in-out infinite' : undefined,
+              }}
+            >
+              <Zap size={12} />
+              {credits.remaining}
+            </button>
+            {showCreditsDropdown && (
+              <div style={{
+                position: 'absolute', top: 34, right: 0, background: '#1A1A1A',
+                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12,
+                boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100,
+                padding: 16, minWidth: 220,
+              }}>
+                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>
+                  Credits: {credits.remaining}/{credits.limit}
+                </div>
+                {/* Progress bar */}
+                <div style={{
+                  height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)',
+                  marginBottom: 12, overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: 3, transition: 'width 0.3s',
+                    width: `${Math.max(0, Math.min(100, (credits.remaining / credits.limit) * 100))}%`,
+                    background: credits.remaining === 0 ? '#ef4444'
+                      : credits.remaining < 20 ? '#f97316'
+                      : 'linear-gradient(90deg, #6366f1, #818cf8)',
+                  }} />
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {credits.plan} plan
+                </div>
+                {credits.plan === 'free' ? (
+                  <button onClick={() => { navigate('/pricing'); setShowCreditsDropdown(false) }} style={{
+                    width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff',
+                    border: 'none', cursor: 'pointer',
+                  }}>
+                    Upgrade to Pro
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={async () => {
+                      setShowCreditsDropdown(false)
+                      try {
+                        const session = supabase ? (await supabase.auth.getSession()).data.session : null
+                        if (!session) return
+                        const res = await fetch('/api/create-topup', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                          body: JSON.stringify({ userId: session.user.id, email: session.user.email }),
+                        })
+                        const data = await res.json()
+                        if (data.checkoutUrl) window.location.href = data.checkoutUrl
+                        else setToastMessage(data.error || 'Top-up not available yet')
+                      } catch { setToastMessage('Something went wrong') }
+                    }} style={{
+                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      background: 'rgba(99,102,241,0.1)', color: '#818cf8',
+                      border: '1px solid rgba(99,102,241,0.3)', cursor: 'pointer',
+                    }}>Top up</button>
+                    <button onClick={() => { navigate('/pricing'); setShowCreditsDropdown(false) }} style={{
+                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      background: 'transparent', color: '#94a3b8',
+                      border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer',
+                    }}>Upgrade</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* User avatar */}
         <div ref={userMenuRef} style={{ position: 'relative', flexShrink: 0 }}>

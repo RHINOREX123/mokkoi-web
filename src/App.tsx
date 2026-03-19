@@ -14,6 +14,7 @@ import { ScreenshotModal } from './components/ScreenshotModal'
 import { CanvasToolbar } from './components/CanvasToolbar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { TopNavbar } from './components/TopNavbar'
+import { NoCreditsModal } from './components/PricingPage'
 import html2canvas from 'html2canvas'
 
 import { supabase } from './lib/supabase'
@@ -53,6 +54,7 @@ function App() {
   const [qrUrl, setQrUrl] = useState('')
   const [showDeleteScreenConfirm, setShowDeleteScreenConfirm] = useState(false)
   const [showScreenshotModal, setShowScreenshotModal] = useState(false)
+  const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -112,12 +114,20 @@ function App() {
     return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp) }
   }, [])
 
-  // Auto-hide toast
+  // Auto-hide toast (and detect credit errors)
   useEffect(() => {
     if (!toastMessage) return
     const t = setTimeout(() => setToastMessage(''), 2000)
     return () => clearTimeout(t)
   }, [toastMessage])
+
+  // Detect "No credits" errors from chat messages and show modal
+  useEffect(() => {
+    const lastMsg = screens.projectMessages[screens.projectMessages.length - 1]
+    if (lastMsg?.role === 'assistant' && lastMsg.content.includes('No credits remaining')) {
+      setShowNoCreditsModal(true)
+    }
+  }, [screens.projectMessages])
 
   // --- Handlers ---
   const handleDeleteProject = async () => {
@@ -484,6 +494,28 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {showNoCreditsModal && (
+        <NoCreditsModal
+          onClose={() => setShowNoCreditsModal(false)}
+          onTopUp={async () => {
+            setShowNoCreditsModal(false)
+            try {
+              const session = supabase ? (await supabase.auth.getSession()).data.session : null
+              if (!session) return
+              const res = await fetch('/api/create-topup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                body: JSON.stringify({ userId: session.user.id, email: session.user.email }),
+              })
+              const data = await res.json()
+              if (data.checkoutUrl) window.location.href = data.checkoutUrl
+              else setToastMessage(data.error || 'Top-up not available yet')
+            } catch { setToastMessage('Something went wrong') }
+          }}
+          onUpgrade={() => { setShowNoCreditsModal(false); navigate('/pricing') }}
+        />
       )}
     </div>
   )

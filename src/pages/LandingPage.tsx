@@ -368,10 +368,10 @@ export default function LandingPage() {
 
           {/* Desktop links */}
           <div className="landing-nav-links">
-            {['Features', 'How it works', 'Playground'].map((l) => (
+            {['Features', 'How it works', 'Pricing', 'Playground'].map((l) => (
               <a
                 key={l}
-                href={l === 'Playground' ? (isLoggedIn ? '/projects' : '/auth') : `#${l.toLowerCase().replace(/\s/g, '-')}`}
+                href={l === 'Playground' ? (isLoggedIn ? '/projects' : '/auth') : l === 'Pricing' ? '/pricing' : `#${l.toLowerCase().replace(/\s/g, '-')}`}
                 style={{ color: '#94a3b8', fontSize: 14, textDecoration: 'none', transition: 'color .2s' }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = '#f1f5f9')}
                 onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}

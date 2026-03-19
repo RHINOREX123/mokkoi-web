@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, checkRateLimit, logUsage } from './auth-helper.js'
+import { authenticateRequest, checkRateLimit, logUsage, deductCredits, getUserPlan } from './auth-helper.js'
 
 const FLOW_SYSTEM_PROMPT = `You are Mokkoi, an AI mobile app designer. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
@@ -111,10 +111,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await authenticateRequest(req, res)
   if (!user) return // 401 already sent
 
-  // --- Rate limiting (skip for MCP — they use their own key via BYOK) ---
+  // --- Credit deduction (skip for MCP — they use their own key via BYOK) ---
   if (!user.isMCP) {
-    const rateLimited = await checkRateLimit(user.id, res)
-    if (rateLimited) return // 429 already sent
+    const creditResult = await deductCredits(user.id, 'flow')
+    if (!creditResult.success) {
+      return res.status(429).json({
+        error: creditResult.error,
+        creditsRemaining: creditResult.creditsRemaining,
+        upgradeUrl: creditResult.upgradeUrl,
+      })
+    }
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -127,7 +133,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
 
-  const model = 'claude-sonnet-4-20250514'
+  // Plan-based model routing: free always gets Haiku
+  const userPlan = await getUserPlan(user.id)
+  const model = userPlan === 'free' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-20250514'
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {

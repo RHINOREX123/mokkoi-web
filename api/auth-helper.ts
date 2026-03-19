@@ -145,6 +145,116 @@ export async function checkRateLimit(
   return false
 }
 
+// --- Credit-based system ---
+
+const CREDIT_COSTS: Record<string, Record<string, number>> = {
+  free: { new_screen: 5, edit: 1, flow: 15, screenshot: 8 },
+  pro: { new_screen: 5, edit: 1, flow: 15, screenshot: 8 },
+  max: { new_screen: 3, edit: 1, flow: 10, screenshot: 5 },
+}
+
+export async function deductCredits(
+  userId: string,
+  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot'
+): Promise<{ success: boolean; creditsRemaining: number; error?: string; upgradeUrl?: string }> {
+  if (userId === 'anonymous' || userId === 'mcp') {
+    return { success: true, creditsRemaining: -1 }
+  }
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return { success: true, creditsRemaining: -1 }
+
+  const supabaseAdmin = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY || key)
+
+  // Get or create subscription
+  let { data: sub, error } = await supabaseAdmin
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+
+  if (error || !sub) {
+    // Create default free subscription
+    const { data: newSub, error: insertError } = await supabaseAdmin
+      .from('subscriptions')
+      .insert({ user_id: userId, plan: 'free', credits_remaining: 50, credits_monthly_limit: 50, status: 'active' })
+      .select()
+      .single()
+
+    if (insertError) {
+      console.warn('Failed to create default subscription:', insertError.message)
+      return { success: true, creditsRemaining: -1 }
+    }
+    sub = newSub
+  }
+
+  const plan = sub.plan || 'free'
+  const costs = CREDIT_COSTS[plan] || CREDIT_COSTS.free
+  const cost = costs[generationType] || 1
+
+  if (sub.credits_remaining < cost) {
+    return {
+      success: false,
+      creditsRemaining: sub.credits_remaining,
+      error: 'No credits remaining',
+      upgradeUrl: '/pricing',
+    }
+  }
+
+  const newBalance = sub.credits_remaining - cost
+  await supabaseAdmin
+    .from('subscriptions')
+    .update({ credits_remaining: newBalance, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+
+  return { success: true, creditsRemaining: newBalance }
+}
+
+export async function getUserCredits(
+  userId: string
+): Promise<{ plan: string; creditsRemaining: number; creditsLimit: number }> {
+  if (userId === 'anonymous' || userId === 'mcp') {
+    return { plan: 'free', creditsRemaining: -1, creditsLimit: -1 }
+  }
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return { plan: 'free', creditsRemaining: -1, creditsLimit: -1 }
+
+  const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY || key)
+
+  const { data: sub } = await supabase
+    .from('subscriptions')
+    .select('plan, credits_remaining, credits_monthly_limit')
+    .eq('user_id', userId)
+    .single()
+
+  if (!sub) {
+    return { plan: 'free', creditsRemaining: 50, creditsLimit: 50 }
+  }
+
+  return {
+    plan: sub.plan || 'free',
+    creditsRemaining: sub.credits_remaining,
+    creditsLimit: sub.credits_monthly_limit,
+  }
+}
+
+export async function getUserPlan(userId: string): Promise<string> {
+  if (userId === 'anonymous' || userId === 'mcp') return 'pro' // MCP/anonymous get pro models
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return 'free'
+
+  const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY || key)
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('plan')
+    .eq('user_id', userId)
+    .single()
+
+  return data?.plan || 'free'
+}
+
 export function logUsage(params: {
   userId: string
   projectId?: string

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, checkRateLimit, logUsage, logEditDiff } from './auth-helper.js'
+import { authenticateRequest, checkRateLimit, logUsage, logEditDiff, deductCredits, getUserPlan } from './auth-helper.js'
 
 const SYSTEM_PROMPT = `You are Mokkoi, an AI mobile screen designer. Generate a React Native component tree as JSON. Return a single JSON object with structure: { "type": string, "style": {}, "props": {}, "children": [] }. Each child is either another component object or a plain string for text content. Supported types: View, Text, TextInput, TouchableOpacity, ScrollView, Image, SafeAreaView.
 
@@ -114,17 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await authenticateRequest(req, res)
   if (!user) return // 401 already sent
 
-  // --- Rate limiting (skip for MCP — they use their own key via BYOK) ---
-  if (!user.isMCP) {
-    const rateLimited = await checkRateLimit(user.id, res)
-    if (rateLimited) return // 429 already sent
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
-  }
-
+  // --- Credit deduction (skip for MCP — they use their own key via BYOK) ---
   const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId, screenName, conversationHistory } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
@@ -137,10 +127,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isRegenerate = /regenerate/i.test(prompt)
   const hasImage = Boolean(imageData)
 
-  // Force Sonnet + higher token limit for image-based generation (prevents truncation)
+  // Determine credit type for deduction
+  const creditType: 'new_screen' | 'edit' | 'screenshot' = hasImage
+    ? 'screenshot'
+    : (isNewScreen || isVariation || isRegenerate) ? 'new_screen' : 'edit'
+
+  if (!user.isMCP) {
+    const creditResult = await deductCredits(user.id, creditType)
+    if (!creditResult.success) {
+      return res.status(429).json({
+        error: creditResult.error,
+        creditsRemaining: creditResult.creditsRemaining,
+        upgradeUrl: creditResult.upgradeUrl,
+      })
+    }
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
+  }
+
+  // Plan-based model routing
+  const userPlan = await getUserPlan(user.id)
+
   let model: string
   let maxTokens: number
-  if (hasImage) {
+  if (userPlan === 'free') {
+    // Free plan: always Haiku
+    model = 'claude-haiku-4-5-20251001'
+    maxTokens = hasImage ? 16000 : (isNewScreen || isVariation || isRegenerate) ? 12000 : 8000
+  } else if (hasImage) {
     model = 'claude-sonnet-4-20250514'
     maxTokens = 16000
   } else if (isNewScreen || isVariation || isRegenerate) {
@@ -150,7 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     model = 'claude-haiku-4-5-20251001'
     maxTokens = 8000
   }
-  console.log(`Using model: ${model} for: ${prompt.substring(0, 50)}...`)
+  console.log(`Using model: ${model} (plan: ${userPlan}) for: ${prompt.substring(0, 50)}...`)
 
   // Determine generation type for usage logging
   let generationType: 'new_screen' | 'edit' | 'variation' | 'regenerate' = 'new_screen'
