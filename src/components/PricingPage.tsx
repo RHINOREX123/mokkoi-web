@@ -168,7 +168,7 @@ export default function PricingPage() {
     }}>
       <style>{`
         @keyframes glow-border { 0%,100% { box-shadow: 0 0 20px rgba(99,102,241,0.15), 0 0 60px rgba(99,102,241,0.05); } 50% { box-shadow: 0 0 30px rgba(99,102,241,0.25), 0 0 80px rgba(99,102,241,0.1); } }
-        .pricing-cards { display: flex; gap: 24px; justify-content: center; align-items: stretch; flex-wrap: wrap; }
+        .pricing-cards { display: flex; gap: 24px; justify-content: center; align-items: stretch; }
         @media (max-width: 900px) { .pricing-cards { flex-direction: column; align-items: center; } .pricing-cards > div { max-width: 400px; width: 100% !important; } }
       `}</style>
 
@@ -242,7 +242,7 @@ export default function PricingPage() {
 
             return (
               <div key={plan.id} style={{
-                width: 340, borderRadius: 20, padding: 1,
+                flex: '1 1 0', maxWidth: 360, minWidth: 280, borderRadius: 20, padding: 1,
                 background: isHighlighted
                   ? 'linear-gradient(135deg, rgba(99,102,241,0.5), rgba(129,140,248,0.3))'
                   : 'rgba(255,255,255,0.06)',
