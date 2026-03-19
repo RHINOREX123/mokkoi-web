@@ -165,6 +165,79 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       )
     }
 
+    case 'ActivityIndicator': {
+      const color = (node.props?.color as string) || style.color || '#818CF8'
+      const size = node.props?.size === 'large' ? 36 : 20
+      return (
+        <div
+          key={key}
+          style={{
+            ...VIEW_BASE,
+            width: size,
+            height: size,
+            border: `3px solid transparent`,
+            borderTopColor: color as string,
+            borderRightColor: color as string,
+            borderRadius: '50%',
+            animation: 'mokkoi-spin 0.8s linear infinite',
+            ...style,
+          }}
+        >
+          <style>{`@keyframes mokkoi-spin { to { transform: rotate(360deg) } }`}</style>
+        </div>
+      )
+    }
+
+    case 'Switch': {
+      const isOn = node.props?.value as boolean | undefined
+      const trackOn = (node.props?.trackColor as Record<string, string>)?.true || '#34D399'
+      const trackOff = (node.props?.trackColor as Record<string, string>)?.false || '#3F3F46'
+      const thumbColor = (node.props?.thumbColor as string) || '#FFFFFF'
+      return (
+        <div
+          key={key}
+          role="switch"
+          aria-checked={!!isOn}
+          style={{
+            width: 51,
+            height: 31,
+            borderRadius: 16,
+            backgroundColor: isOn ? trackOn : trackOff,
+            padding: 2,
+            cursor: 'pointer',
+            transition: 'background-color 0.2s',
+            flexShrink: 0,
+            ...style,
+          }}
+        >
+          <div
+            style={{
+              width: 27,
+              height: 27,
+              borderRadius: 14,
+              backgroundColor: thumbColor,
+              transform: isOn ? 'translateX(20px)' : 'translateX(0)',
+              transition: 'transform 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }}
+          />
+        </div>
+      )
+    }
+
+    case 'FlatList': {
+      const containerStyle = rnStyleToCSS(
+        node.props?.contentContainerStyle as Record<string, unknown> | undefined
+      )
+      return (
+        <div key={key} style={{ ...VIEW_BASE, ...style, overflow: 'auto', flex: style.flex ?? 1 }}>
+          <div style={{ ...VIEW_BASE, ...containerStyle }}>
+            {children}
+          </div>
+        </div>
+      )
+    }
+
     default:
       return (
         <div key={key} style={{ padding: 4 }}>
