@@ -194,6 +194,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
           original_prompt: s.originalPrompt ?? null,
           order_index: i,
           updated_at: new Date().toISOString(),
+          source: s.source ?? 'web',
         })
       }
       await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)

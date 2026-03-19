@@ -1,6 +1,6 @@
 {
   "name": "mokkoi-mcp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "AI-powered React Native screen generator — MCP server for Claude Code and Cursor",
   "bin": {
     "mokkoi-mcp": "dist/index.js"

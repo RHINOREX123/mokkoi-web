@@ -19,6 +19,8 @@ import { editScreenTool, handleEditScreen } from './tools/edit-screen.js';
 import { screenshotToScreenTool, handleScreenshotToScreen } from './tools/screenshot-to-screen.js';
 import { generateFlowTool, handleGenerateFlow } from './tools/generate-flow.js';
 import { listTemplatesTool, handleListTemplates } from './tools/list-templates.js';
+import { syncFromCanvasTool, handleSyncFromCanvas } from './tools/sync-from-canvas.js';
+import { watchCanvasTool, handleWatchCanvas } from './tools/watch-canvas.js';
 
 const server = new Server(
   {
@@ -39,6 +41,8 @@ const TOOLS = [
   screenshotToScreenTool,
   generateFlowTool,
   listTemplatesTool,
+  syncFromCanvasTool,
+  watchCanvasTool,
 ];
 
 // Handle tools/list
@@ -65,6 +69,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case 'list_templates':
       return handleListTemplates(args as Parameters<typeof handleListTemplates>[0]);
+
+    case 'sync_from_canvas':
+      return handleSyncFromCanvas(args as Parameters<typeof handleSyncFromCanvas>[0]);
+
+    case 'watch_canvas':
+      return handleWatchCanvas(args as Parameters<typeof handleWatchCanvas>[0]);
 
     default:
       return {

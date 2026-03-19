@@ -186,6 +186,93 @@ export async function findScreenByName(
 /**
  * Save multiple screens from a flow generation.
  */
+/**
+ * Fetch all screens for the current project.
+ */
+export async function getScreensByProject(): Promise<
+  Array<{ id: string; name: string; component_tree: ComponentNode; updated_at: string; source: string }>
+> {
+  const client = getClient();
+  const projectId = getProjectId();
+  if (!client || !projectId) return [];
+
+  try {
+    const { data, error } = await client
+      .from('screens')
+      .select('id, name, component_tree, updated_at, source')
+      .eq('project_id', projectId)
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      console.error('[MCP Supabase] getScreensByProject error:', error.message);
+      return [];
+    }
+    return (data ?? []) as Array<{ id: string; name: string; component_tree: ComponentNode; updated_at: string; source: string }>;
+  } catch (err) {
+    console.error('[MCP Supabase] getScreensByProject exception:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch screens updated in the last N minutes.
+ */
+export async function getRecentlyUpdatedScreens(
+  sinceMinutes: number
+): Promise<Array<{ id: string; name: string; updated_at: string; source: string }>> {
+  const client = getClient();
+  const projectId = getProjectId();
+  if (!client || !projectId) return [];
+
+  try {
+    const since = new Date(Date.now() - sinceMinutes * 60 * 1000).toISOString();
+    const { data, error } = await client
+      .from('screens')
+      .select('id, name, updated_at, source')
+      .eq('project_id', projectId)
+      .gte('updated_at', since)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('[MCP Supabase] getRecentlyUpdatedScreens error:', error.message);
+      return [];
+    }
+    return (data ?? []) as Array<{ id: string; name: string; updated_at: string; source: string }>;
+  } catch (err) {
+    console.error('[MCP Supabase] getRecentlyUpdatedScreens exception:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch a specific screen by name (ILIKE match).
+ */
+export async function getScreenByName(
+  name: string
+): Promise<{ id: string; name: string; component_tree: ComponentNode; updated_at: string; source: string } | null> {
+  const client = getClient();
+  const projectId = getProjectId();
+  if (!client || !projectId) return null;
+
+  try {
+    const { data, error } = await client
+      .from('screens')
+      .select('id, name, component_tree, updated_at, source')
+      .eq('project_id', projectId)
+      .ilike('name', name)
+      .limit(1)
+      .single();
+
+    if (error || !data) return null;
+    return data as { id: string; name: string; component_tree: ComponentNode; updated_at: string; source: string };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save multiple screens from a flow generation.
+ */
 export async function saveFlowToProject(
   screens: Array<{
     name: string;
