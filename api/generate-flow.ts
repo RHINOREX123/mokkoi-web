@@ -55,6 +55,35 @@ MOBILE DESIGN RULES (apply to every screen):
 Return ONLY a JSON array of screen objects. No markdown, no explanation. Example format:
 [{"id":"welcome","name":"Welcome","tree":{"type":"SafeAreaView","style":{},"children":[]}},{"id":"signup","name":"Sign Up","tree":{"type":"SafeAreaView","style":{},"children":[]}}]`
 
+/** Build a Claude-compatible messages array from conversation history + current prompt.
+ *  Ensures alternating user/assistant roles and that the first message is user. */
+function buildMessages(
+  conversationHistory: Array<{ role: string; content: string }> | undefined,
+  currentContent: string
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = []
+
+  if (Array.isArray(conversationHistory)) {
+    for (const m of conversationHistory.slice(-5)) {
+      const role = m.role === 'assistant' ? 'assistant' : 'user'
+      if (messages.length > 0 && messages[messages.length - 1].role === role) {
+        messages[messages.length - 1].content += '\n' + m.content
+      } else {
+        messages.push({ role, content: m.content })
+      }
+    }
+    if (messages.length > 0 && messages[0].role === 'assistant') {
+      messages.shift()
+    }
+  }
+
+  if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+    messages.push({ role: 'assistant', content: 'Understood, continuing.' })
+  }
+
+  return [...messages, { role: 'user', content: currentContent }]
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -75,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt, projectId } = req.body ?? {}
+  const { prompt, projectId, conversationHistory } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
@@ -100,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             cache_control: { type: 'ephemeral' },
           },
         ],
-        messages: [{ role: 'user', content: prompt }],
+        messages: buildMessages(conversationHistory, prompt),
       }),
     })
 

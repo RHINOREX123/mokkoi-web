@@ -87,6 +87,20 @@ interface AIGenerationDeps {
   setShowVariationsPanel: (show: boolean) => void
 }
 
+/** Build conversation history from recent messages for Claude context */
+function buildConversationHistory(messages: ChatMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
+  // Take last 5 non-error messages, skip any with image data (too large)
+  const eligible = messages.filter(m =>
+    !m.imageData && !(m.role === 'assistant' && m.content.startsWith('Error:'))
+  )
+  return eligible.slice(-5).map(m => ({
+    role: m.role,
+    content: m.role === 'assistant'
+      ? m.content // assistant messages are already summaries like "Generated Screen 1: Login"
+      : m.content,
+  }))
+}
+
 export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
   const {
     projectId,
@@ -95,6 +109,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     generatedScreens,
     setGeneratedScreens,
     setActiveGeneratedId,
+    projectMessages,
     setProjectMessages,
     saveMessage,
     setToastMessage,
@@ -170,10 +185,11 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
 
       try {
         const authHeaders = await getAuthHeaders()
+        const conversationHistory = buildConversationHistory(projectMessages)
         const res = await fetch('/api/generate-flow', {
           method: 'POST',
           headers: authHeaders,
-          body: JSON.stringify({ prompt, projectId }),
+          body: JSON.stringify({ prompt, projectId, conversationHistory }),
         })
 
         if (!res.ok) {
@@ -251,12 +267,14 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
 
     try {
       const authHeaders = await getAuthHeaders()
+      const conversationHistory = buildConversationHistory(projectMessages)
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
           prompt,
           projectId,
+          conversationHistory,
           ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
           ...(regenerateTree ? { currentScreen: regenerateTree, screenName: screenName } : {}),
           ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
@@ -297,7 +315,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     } finally {
       setIsGenerating(false)
     }
-  }, [activeGeneratedId, generatedScreens, saveMessage, projectId, setGeneratedScreens, setActiveGeneratedId, setProjectMessages])
+  }, [activeGeneratedId, generatedScreens, saveMessage, projectId, projectMessages, setGeneratedScreens, setActiveGeneratedId, setProjectMessages])
 
   const handleRegenerate = useCallback(() => {
     if (!activeGenerated) return

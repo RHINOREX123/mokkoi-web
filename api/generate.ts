@@ -54,6 +54,39 @@ EDIT MODE: When modifying an existing screen, preserve ALL content, layout, and 
 
 Return ONLY valid JSON, no markdown, no explanation.`
 
+/** Build a Claude-compatible messages array from conversation history + current prompt.
+ *  Ensures alternating user/assistant roles and that the first message is user. */
+function buildMessages(
+  conversationHistory: Array<{ role: string; content: string }> | undefined,
+  currentContent: string | Array<{ type: string; [key: string]: unknown }>
+): Array<{ role: 'user' | 'assistant'; content: string | Array<{ type: string; [key: string]: unknown }> }> {
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = []
+
+  if (Array.isArray(conversationHistory)) {
+    for (const m of conversationHistory.slice(-5)) {
+      const role = m.role === 'assistant' ? 'assistant' : 'user'
+      // Claude requires alternating roles — merge consecutive same-role messages
+      if (messages.length > 0 && messages[messages.length - 1].role === role) {
+        messages[messages.length - 1].content += '\n' + m.content
+      } else {
+        messages.push({ role, content: m.content })
+      }
+    }
+    // Claude requires first message to be user role
+    if (messages.length > 0 && messages[0].role === 'assistant') {
+      messages.shift()
+    }
+  }
+
+  // If last history message is user role, merge or insert assistant placeholder before current
+  if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+    // Need an assistant message before our new user message
+    messages.push({ role: 'assistant', content: 'Understood, continuing.' })
+  }
+
+  return [...messages, { role: 'user', content: currentContent }]
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -74,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId, screenName } = req.body ?? {}
+  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId, screenName, conversationHistory } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
@@ -167,7 +200,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
             cache_control: { type: 'ephemeral' },
           },
         ],
-        messages: [{ role: 'user', content: userContent }],
+        messages: buildMessages(conversationHistory, userContent),
       }),
     })
 
