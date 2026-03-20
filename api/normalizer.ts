@@ -1,5 +1,5 @@
 const SPACING_SCALE = [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]
-const FONT_SIZE_SCALE = [11, 12, 13, 14, 16, 17, 20, 24, 28, 34]
+const FONT_SIZE_SCALE = [11, 12, 13, 14, 16, 17, 20, 24, 28, 34, 40, 48]
 const BORDER_RADIUS_SCALE = [0, 4, 8, 12, 16, 24, 9999]
 const VALID_FONT_WEIGHTS = ['400', '500', '600', '700', 'normal', 'bold']
 const MIN_TOUCH_TARGET = 44
@@ -33,10 +33,12 @@ function normalizeStyle(style: Record<string, any>): Record<string, any> {
     }
   }
 
-  // Snap font sizes
-  if (typeof normalized.fontSize === 'number') {
-    if (normalized.fontSize <= 0) normalized.fontSize = 14
-    else normalized.fontSize = snapToScale(normalized.fontSize, FONT_SIZE_SCALE)
+  // Snap font sizes (handle string values like "16px")
+  if (normalized.fontSize !== undefined) {
+    let fs = normalized.fontSize
+    if (typeof fs === 'string') fs = parseFloat(fs)
+    if (typeof fs !== 'number' || isNaN(fs) || fs <= 0) normalized.fontSize = 14
+    else normalized.fontSize = snapToScale(fs, FONT_SIZE_SCALE)
   }
 
   // Snap border radius

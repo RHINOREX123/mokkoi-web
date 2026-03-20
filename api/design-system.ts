@@ -9,7 +9,8 @@ SPACING (all padding, margin, gap values must come from this scale):
   4, 8, 12, 16, 20, 24, 32, 40, 48, 64
 
 FONT SIZES (all fontSize values must come from this scale):
-  11, 12, 13, 14, 16, 17, 20, 24, 28, 34
+  11, 12, 13, 14, 16, 17, 20, 24, 28, 34, 40, 48
+  (11-17: body/labels, 20-28: headings, 34-48: hero/display/decorative emoji)
 
 FONT WEIGHTS (all fontWeight values must come from this scale):
   "400" (regular — body text, descriptions, long-form content)
@@ -17,11 +18,17 @@ FONT WEIGHTS (all fontWeight values must come from this scale):
   "600" (semibold — section headers, card titles, emphasis within body)
   "700" (bold — screen titles, primary headings, hero numbers)
 
-LINE HEIGHT (use 1.4-1.6x the font size, rounded to nearest 4):
+LINE HEIGHT (use 1.3-1.5x the font size, rounded to nearest 4):
   fontSize 11 → lineHeight 16, fontSize 12 → lineHeight 16, fontSize 13 → lineHeight 20,
   fontSize 14 → lineHeight 20, fontSize 16 → lineHeight 24, fontSize 17 → lineHeight 24,
   fontSize 20 → lineHeight 28, fontSize 24 → lineHeight 32, fontSize 28 → lineHeight 36,
-  fontSize 34 → lineHeight 44
+  fontSize 34 → lineHeight 44, fontSize 40 → lineHeight 52, fontSize 48 → lineHeight 60
+
+LETTER SPACING (optional, for refined typography):
+  fontSize 11-13: letterSpacing 0.4 (open up small text for readability)
+  fontSize 14-17: letterSpacing 0 (default, no adjustment needed)
+  fontSize 20-28: letterSpacing -0.2 (tighten headings slightly)
+  fontSize 34-48: letterSpacing -0.5 (tighten display/hero text)
 
 BORDER RADIUS:
   0 (sharp edges), 4 (subtle rounding), 8 (moderate — chips, badges),
@@ -34,7 +41,8 @@ AVATAR SIZES: 24 (tiny), 32 (small/chat), 40 (list item), 48 (card), 56 (profile
 
 TOUCH TARGET MINIMUM: 44px height and width for any tappable element.
 
-OPACITY LEVELS: 1.0 (primary), 0.7 (secondary), 0.4 (tertiary/hints), 0.1 (subtle dividers/backgrounds)
+OPACITY LEVELS: 1.0 (primary/default), 0.7 (secondary text/icons), 0.4 (tertiary/hints/timestamps), 0.1 (subtle dividers/tinted backgrounds)
+STATE OPACITY: pressed 0.7, disabled 0.4, hover 0.8 (apply to interactive elements)
 
 ELEVATION/SHADOW (use sparingly — max 3 levels):
   none: no shadow
@@ -219,7 +227,7 @@ export const QUALITY_CHECKLIST = `
 QUALITY CHECKLIST — Verify before generating output:
 1. Root element has flex: 1, surface-0 background, and proper safe area padding (paddingTop: 54, paddingBottom: 34)
 2. ALL spacing values come from: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64
-3. ALL font sizes come from: 11, 12, 13, 14, 16, 17, 20, 24, 28, 34
+3. ALL font sizes come from: 11, 12, 13, 14, 16, 17, 20, 24, 28, 34, 40, 48
 4. Typography has clear hierarchy: big+bold headings → medium labels → regular body → light hints
 5. Colors follow the surface/text/accent hierarchy — no random hex codes
 6. All buttons and touchable elements are at least 44px tall
