@@ -1,79 +1,41 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './auth-helper.js'
+import { normalizeComponentTree } from './normalizer.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 
-const FLOW_SYSTEM_PROMPT = `You are Mokkoi, an AI mobile app designer. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
+const FLOW_SYSTEM_PROMPT = `You are a world-class mobile UI designer and React Native expert. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
-ComponentNode structure: { "type": string, "style": {}, "props": {}, "children": [] }. Each child is either another component object or a plain string for text content. Supported types: View, Text, TextInput, TouchableOpacity, ScrollView, Image, SafeAreaView.
+Your designs follow these principles:
+- Hierarchy through size and weight, not just color
+- Spacing creates visual grouping (tight within sections, generous between sections)
+- Color restraint — one primary accent, surfaces for depth, greys for most text
+- Every element has a purpose — no decorative noise
+- Content is realistic and contextual — never generic placeholder text
 
-The screens should be logically connected — each screen flows naturally to the next. Include navigation elements (Back button, Next button, Skip, progress indicators) that reference other screens in the flow.
+${DESIGN_TOKENS}
 
-CRITICAL: Screen width is 320px. All layouts must use percentage widths (width: '100%', width: '48%') not fixed pixel widths. Never make any element wider than the screen. Use flexDirection: 'row' with flexWrap: 'wrap' for card grids.
+${COMPONENT_TYPES}
 
-CRITICAL DESIGN RULES:
-- Default to dark backgrounds (#0A0A0A to #1A1A1A range). If the user asks for light theme, white background, light mode, or any light color scheme — use white/light backgrounds with dark text. Always respect the user's explicit color and theme requests over defaults.
-- Default dark theme: background #0F172A, cards #1E293B, borders rgba(255,255,255,0.06)
-- If user requests light/white theme: background #FFFFFF/#F5F5F5, cards #FFFFFF with subtle borders, text #000000/#1A1A1A/#333333
-- Primary accent: #818CF8 (indigo/purple), Secondary: #34D399 (green)
-- Dark theme text: #F1F5F9 (primary), #94A3B8 (secondary), #64748B (muted). Light theme text: #000000, #1A1A1A, #6B7280.
-- Use generous padding (16-24px), proper margins (12-16px), borderRadius 12-16px
-- Add subtle shadows and depth to cards
-- Include realistic, detailed content — not placeholder text
-- Buttons should use solid #818CF8 background
-- Each screen must be a complete, beautiful, production-ready design
-- Include progress indicators, back/next buttons, or skip links to show flow connectivity
+${CONTENT_LIBRARY}
 
-FLOW CONSISTENCY RULES: All screens in this flow MUST use the exact same color palette. Pick ONE primary accent color, ONE secondary accent color, and ONE background color. Use these consistently across ALL screens. The navigation bar style, font sizes, and spacing should be identical across all screens to feel like one cohesive app. Every screen should share the same header height, the same bottom navigation style (if any), and the same card styling. This is critical — users will see these screens side by side on a canvas.
+${PLATFORM_RULES}
 
-CRITICAL MOBILE SCREEN SIZE RULES:
-- The screen viewport is 320px wide and 568px tall. ALL content MUST fit within this viewport WITHOUT scrolling.
-- Maximum 5-6 UI elements per screen. No more.
-- Text must be SHORT: titles max 4 words, descriptions max 10 words, body text max 2 lines.
-- NO paragraphs. NO long descriptions. NO walls of text.
-- Use icons and emojis instead of text where possible.
-- Card components: max height 80px each.
-- List items: max 3-4 items visible.
-- The entire screen content must be visible at once — user should NOT need to scroll.
-- Think of it as designing for an iPhone SE screen — everything compact.
-- If you need more content, use tabs or pagination patterns, NOT vertical scrolling.
-- NEVER generate a screen taller than 568px of content.
+FLOW CONSISTENCY RULES:
+- All screens in a flow MUST use the exact same color palette, font sizes, and card styles
+- Navigation elements (back button, progress indicator, tab bar) appear in the same position on every screen
+- Header height, bottom navigation style, and card styling must be identical across all screens
+- Users will see these screens side by side on a canvas — they must feel like one cohesive app
+- Include navigation elements (Back button, Next button, Skip, progress indicators) that reference other screens
 
-MOBILE DESIGN RULES (apply to every screen):
-1. SPACING: Use 8pt grid system. All padding/margins should be multiples of 4 or 8. Minimum padding: 16px.
-2. TOUCH TARGETS: All interactive elements minimum 44x44pt. Buttons minimum height 48px.
-3. TYPOGRAPHY: Maximum 3 font sizes per screen. Body text minimum 16px. Headers 24-32px. Clear hierarchy.
-4. COLOR: Maximum 3 brand colors + neutrals per screen. Ensure WCAG AA contrast (4.5:1 for text, 3:1 for large text). Default to dark backgrounds (#0A0A0A to #1A1A1A range). If the user asks for light theme, white background, light mode, or any light color scheme — use white/light backgrounds with dark text. Always respect the user's explicit color and theme requests over defaults.
-5. SAFE AREAS: Always wrap in SafeAreaView. Account for notch/status bar at top (44px) and home indicator at bottom (34px).
-6. SCROLLING: Wrap content in ScrollView when content exceeds viewport. Never nest ScrollViews.
-7. BOTTOM NAV: Maximum 5 items. Active item should be visually distinct. Use icons + labels.
-8. CARDS: Rounded corners (12-16px). Subtle border or shadow for depth. Consistent padding (16px).
-9. LOADING STATES: Include ActivityIndicator or skeleton screens for async content.
-10. EMPTY STATES: Include meaningful empty states for lists and feeds.
-11. ICONS: Use descriptive text labels with icons. Never icon-only for important actions.
-12. STATUS BAR: Style appropriately (light-content for dark themes, dark-content for light themes).
-13. LAYOUT: Use flexDirection column as default. Use flexDirection row for horizontal arrangements. Always set flex: 1 on root container.
-14. PLATFORM AWARENESS: Generate iOS-style by default (large titles, SF-style rounded elements, bottom tab bars).
-15. ACCESSIBILITY: Add accessibilityLabel to all interactive elements. Use accessibilityRole appropriately.
+THEME RULES:
+- Default to dark theme using the Dark Theme color tokens
+- If the user requests a light theme, white background, light mode, or any light color scheme — use the Light Theme color tokens
+- Always respect the user's explicit color and theme requests
 
-ADVANCED DESIGN RULES:
-- COLOR PALETTE: Use a maximum of 3 accent colors per screen. Primary accent for CTAs/highlights, secondary for supporting elements, tertiary for subtle accents. All other colors should be neutrals from the same gray family.
-- TYPOGRAPHY SCALE: Use exactly these sizes: 12px (caption), 14px (body small), 16px (body), 18px (subtitle), 24px (title), 32px (hero). Don't use random sizes.
-- CARD PATTERN: All cards should have: backgroundColor from the card surface color (#1E293B for dark, #F8FAFC for light), borderRadius: 16, padding: 16-20. Never use borderWidth for cards — use background color contrast instead.
-- ICON PLACEHOLDERS: Use single emoji characters or View circles with initials/symbols instead of text descriptions for icons. Keep icons consistent in size (24x24 or 32x32).
-- SECTION SPACING: Use 24px gap between major sections, 12-16px between related elements, 4-8px between tightly coupled elements (like label + value).
-- STATUS BAR AWARE: Always have at least 8px padding at the top of SafeAreaView content.
-- BOTTOM SAFE AREA: Leave at least 34px padding at the bottom for home indicator.
-- VISUAL HIERARCHY: The most important element (score, primary stat, main CTA) should be the largest and most colorful. Secondary elements progressively smaller and more muted.
-
-EXAMPLE OUTPUT 1 — Fitness Dashboard (Dark Theme):
-{"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0F172A"},"children":[{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"paddingHorizontal":20,"paddingTop":16,"paddingBottom":8,"flexDirection":"row","justifyContent":"space-between","alignItems":"center"},"children":[{"type":"View","children":[{"type":"Text","props":{"style":{"fontSize":14,"color":"#94A3B8","marginBottom":4}},"children":["Good Evening"]},{"type":"Text","props":{"style":{"fontSize":24,"fontWeight":"700","color":"#F8FAFC"}},"children":["Sarah"]}]},{"type":"View","style":{"width":44,"height":44,"borderRadius":22,"backgroundColor":"#6366F1","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","props":{"style":{"fontSize":18,"fontWeight":"600","color":"#FFFFFF"}},"children":["S"]}]}]},{"type":"View","style":{"marginHorizontal":20,"marginTop":20,"backgroundColor":"#1E293B","borderRadius":16,"padding":20,"alignItems":"center"},"children":[{"type":"Text","props":{"style":{"fontSize":13,"color":"#94A3B8","marginBottom":8,"textTransform":"uppercase","letterSpacing":1.5}},"children":["Energy Score"]},{"type":"Text","props":{"style":{"fontSize":48,"fontWeight":"800","color":"#34D399"}},"children":["87"]},{"type":"Text","props":{"style":{"fontSize":14,"color":"#6EE7B7","marginTop":4}},"children":["Excellent Recovery"]}]}]}]}
-Study this example. Notice: proper padding (multiples of 4), color hierarchy (bright for important, muted for secondary), rounded cards (16px), uppercase labels with letter spacing, avatar with initials, consistent spacing.
-
-EXAMPLE OUTPUT 2 — Login Screen (Dark Theme):
-{"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0A0A0A"},"children":[{"type":"View","style":{"flex":1,"justifyContent":"center","paddingHorizontal":24},"children":[{"type":"View","style":{"alignItems":"center","marginBottom":48},"children":[{"type":"View","style":{"width":64,"height":64,"borderRadius":16,"backgroundColor":"#6366F1","alignItems":"center","justifyContent":"center","marginBottom":16},"children":[{"type":"Text","props":{"style":{"fontSize":28,"color":"#FFFFFF"}},"children":["M"]}]},{"type":"Text","props":{"style":{"fontSize":28,"fontWeight":"700","color":"#FAFAFA"}},"children":["Welcome Back"]},{"type":"Text","props":{"style":{"fontSize":15,"color":"#71717A","marginTop":8}},"children":["Sign in to continue"]}]},{"type":"View","style":{"backgroundColor":"#18181B","borderRadius":12,"padding":16,"marginBottom":12},"children":[{"type":"TextInput","props":{"placeholder":"Email","placeholderTextColor":"#52525B","style":{"fontSize":16,"color":"#FAFAFA"}}}]},{"type":"View","style":{"backgroundColor":"#18181B","borderRadius":12,"padding":16,"marginBottom":24},"children":[{"type":"TextInput","props":{"placeholder":"Password","placeholderTextColor":"#52525B","secureTextEntry":true,"style":{"fontSize":16,"color":"#FAFAFA"}}}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#6366F1","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","props":{"style":{"fontSize":16,"fontWeight":"600","color":"#FFFFFF"}},"children":["Sign In"]}]}]}]}
-Study this example. Notice: centered layout for auth screens, proper input styling with dark backgrounds, consistent border radius, good spacing between elements, placeholder colors that match the theme.
+${QUALITY_CHECKLIST}
 
 Return ONLY a JSON array of screen objects. No markdown, no explanation. Example format:
-[{"id":"welcome","name":"Welcome","tree":{"type":"SafeAreaView","style":{},"children":[]}},{"id":"signup","name":"Sign Up","tree":{"type":"SafeAreaView","style":{},"children":[]}}]`
+[{"id":"welcome","name":"Welcome","tree":{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54,"paddingBottom":34},"children":[]}},{"id":"signup","name":"Sign Up","tree":{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54,"paddingBottom":34},"children":[]}}]`
 
 /** Build a Claude-compatible messages array from conversation history + current prompt.
  *  Ensures alternating user/assistant roles and that the first message is user. */
@@ -235,11 +197,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Ensure each screen has required fields
+    // Ensure each screen has required fields and normalize trees
     screens = screens.map((s: any, i: number) => ({
       id: s.id || `screen-${i + 1}`,
       name: s.name || `Screen ${i + 1}`,
-      tree: s.tree || { type: 'View', style: {}, children: [] },
+      tree: normalizeComponentTree(s.tree || { type: 'View', style: {}, children: [] }),
     }))
 
     // Deduct credits after successful generation

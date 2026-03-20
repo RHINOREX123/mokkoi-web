@@ -1,76 +1,95 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan } from './auth-helper.js'
+import { normalizeComponentTree } from './normalizer.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 
-const SYSTEM_PROMPT = `You are Mokkoi, an AI mobile screen designer. Generate a React Native component tree as JSON. Return a single JSON object with structure: { "type": string, "style": {}, "props": {}, "children": [] }. Each child is either another component object or a plain string for text content. Supported types: View, Text, TextInput, TouchableOpacity, ScrollView, Image, SafeAreaView.
+// --- Few-shot examples (compact JSON) ---
+// Each uses the correct format: style at top level, props for component-specific properties only.
 
-CRITICAL: Screen width is 320px. All layouts must use percentage widths (width: '100%', width: '48%') not fixed pixel widths. Never make any element wider than the screen. Use flexDirection: 'row' with flexWrap: 'wrap' for card grids.
+const EXAMPLE_LOGIN = `--- EXAMPLE ---
+User: "Create a modern login screen for a fitness app"
+Component tree:
+{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54,"paddingBottom":34},"children":[{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"paddingTop":64,"alignItems":"center","paddingHorizontal":24},"children":[{"type":"View","style":{"width":64,"height":64,"borderRadius":16,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":28,"color":"#FFFFFF"},"children":["\\u26A1"]}]},{"type":"Text","style":{"fontSize":28,"fontWeight":"700","color":"#FFFFFF","marginTop":24,"textAlign":"center"},"children":["Welcome back, athlete"]},{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8","marginTop":8,"textAlign":"center"},"children":["Sign in to crush your goals"]}]},{"type":"View","style":{"paddingHorizontal":24,"marginTop":40},"children":[{"type":"View","style":{"backgroundColor":"#222236","borderRadius":12,"height":48,"paddingHorizontal":16,"justifyContent":"center"},"children":[{"type":"TextInput","style":{"fontSize":16,"color":"#FFFFFF"},"props":{"placeholder":"Email","placeholderTextColor":"#6B6B80"}}]},{"type":"View","style":{"backgroundColor":"#222236","borderRadius":12,"height":48,"paddingHorizontal":16,"justifyContent":"center","marginTop":16},"children":[{"type":"TextInput","style":{"fontSize":16,"color":"#FFFFFF"},"props":{"placeholder":"Password","placeholderTextColor":"#6B6B80","secureTextEntry":true}}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#6C5CE7","borderRadius":24,"height":48,"alignItems":"center","justifyContent":"center","marginTop":24},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"700","color":"#FFFFFF"},"children":["Sign In"]}]},{"type":"Text","style":{"fontSize":14,"color":"#6C5CE7","textAlign":"center","marginTop":16},"children":["Forgot password?"]},{"type":"View","style":{"flexDirection":"row","alignItems":"center","marginTop":24},"children":[{"type":"View","style":{"flex":1,"height":1,"backgroundColor":"#2A2A3E"}},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginHorizontal":16},"children":["or continue with"]},{"type":"View","style":{"flex":1,"height":1,"backgroundColor":"#2A2A3E"}}]},{"type":"View","style":{"flexDirection":"row","justifyContent":"center","gap":16,"marginTop":24},"children":[{"type":"View","style":{"width":48,"height":48,"borderRadius":9999,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["G"]}]},{"type":"View","style":{"width":48,"height":48,"borderRadius":9999,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uF8FF"]}]}]},{"type":"View","style":{"flexDirection":"row","justifyContent":"center","marginTop":32},"children":[{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8"},"children":["Don't have an account? "]},{"type":"Text","style":{"fontSize":14,"fontWeight":"600","color":"#6C5CE7"},"children":["Sign Up"]}]}]}]}]}
+--- END EXAMPLE ---`
 
-DEFAULT THEME: Use dark backgrounds (#000000, #0A0A0A, #0F172A, #1E293B, #111827) with light text (#F1F5F9, #E2E8F0, #94A3B8, #CBD5E1) by default. However, if the user explicitly asks for light theme, white background, light mode, white/bright colors — ALWAYS respect their request. Use white/light backgrounds (#FFFFFF, #F5F5F5, #FAFAFA) with dark text (#000000, #1A1A1A, #333333) when the user asks for it. The user's explicit color/theme requests ALWAYS override defaults.
+const EXAMPLE_DASHBOARD = `--- EXAMPLE ---
+User: "Create a fitness dashboard home screen"
+Component tree:
+{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54},"children":[{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"paddingHorizontal":20,"paddingTop":16},"children":[{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center"},"children":[{"type":"View","children":[{"type":"Text","style":{"fontSize":14,"color":"#6B6B80"},"children":["Good morning"]},{"type":"Text","style":{"fontSize":24,"fontWeight":"600","color":"#FFFFFF","marginTop":4},"children":["Sarah"]}]},{"type":"View","style":{"width":40,"height":40,"borderRadius":9999,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["S"]}]}]},{"type":"Text","style":{"fontSize":13,"color":"#6B6B80","marginTop":4},"children":["Monday, March 20"]}]},{"type":"View","style":{"flexDirection":"row","gap":12,"paddingHorizontal":20,"marginTop":24},"children":[{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDC5F"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":8},"children":["8,450"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["steps"]}]},{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDD25"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":8},"children":["342"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["kcal burned"]}]},{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u2764\\uFE0F"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":8},"children":["72"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["bpm resting"]}]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":32},"children":[{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["Daily Goal"]},{"type":"Text","style":{"fontSize":14,"color":"#6C5CE7"},"children":["82%"]}]},{"type":"View","style":{"height":8,"backgroundColor":"#222236","borderRadius":12,"marginTop":12,"overflow":"hidden"},"children":[{"type":"View","style":{"width":"82%","height":8,"backgroundColor":"#6C5CE7","borderRadius":12}}]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":8},"children":["You're 82% to your daily goal!"]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":32},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF","marginBottom":16},"children":["Today's Workout"]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"overflow":"hidden"},"children":[{"type":"View","style":{"height":160,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":48},"children":["\\uD83C\\uDFCB\\uFE0F"]}]},{"type":"View","style":{"padding":16},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["Morning HIIT"]},{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8","marginTop":4},"children":["30 min · Intermediate"]},{"type":"TouchableOpacity","style":{"backgroundColor":"#6C5CE7","borderRadius":24,"height":40,"alignItems":"center","justifyContent":"center","marginTop":12},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"700","color":"#FFFFFF"},"children":["Start Workout"]}]}]}]}]},{"type":"View","style":{"flexDirection":"row","flexWrap":"wrap","gap":12,"paddingHorizontal":20,"marginTop":32,"paddingBottom":24},"children":[{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83C\\uDF4E"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Nutrition"]}]},{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83D\\uDCA7"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Hydration"]}]},{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83D\\uDE34"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Sleep"]}]},{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83D\\uDCCA"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Insights"]}]}]}]},{"type":"View","style":{"flexDirection":"row","backgroundColor":"#12121F","height":49,"paddingBottom":34,"paddingHorizontal":20,"justifyContent":"space-around","alignItems":"center","borderTopWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDFE0"]},{"type":"Text","style":{"fontSize":11,"color":"#6C5CE7","marginTop":4},"children":["Home"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u26A1"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Activity"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDF4E"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Nutrition"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDC64"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Profile"]}]}]}]}
+--- END EXAMPLE ---`
 
-CRITICAL DESIGN RULES:
-- Default dark theme: background #0F172A, cards #1E293B, borders rgba(255,255,255,0.06)
-- If user requests light/white theme: background #FFFFFF/#F5F5F5, cards #FFFFFF with subtle borders, text #000000/#1A1A1A/#333333
-- Primary accent: #818CF8 (indigo/purple), Secondary: #34D399 (green)
-- Dark theme text: #F1F5F9 (primary), #94A3B8 (secondary), #64748B (muted). Light theme text: #000000, #1A1A1A, #6B7280.
-- Use generous padding (16-24px), proper margins (12-16px), borderRadius 12-16px
-- Add subtle shadows and depth to cards
-- Include realistic, detailed content — not placeholder text
-- Make inputs have visible borders and proper placeholder styling
-- Buttons should have gradient backgrounds (linear-gradient not supported in RN, use solid #818CF8)
-- Add proper spacing between all elements
-- The screen should look like a premium, production-quality mobile app
+const EXAMPLE_PROFILE = `--- EXAMPLE ---
+User: "Create a social media profile page"
+Component tree:
+{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54},"children":[{"type":"View","style":{"flexDirection":"row","alignItems":"center","justifyContent":"space-between","paddingHorizontal":20,"height":44},"children":[{"type":"TouchableOpacity","style":{"width":44,"height":44,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"color":"#FFFFFF"},"children":["\\u2190"]}]},{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["Profile"]},{"type":"TouchableOpacity","style":{"width":44,"height":44,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"color":"#FFFFFF"},"children":["\\u2699"]}]}]},{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"alignItems":"center","paddingTop":24},"children":[{"type":"View","style":{"width":80,"height":80,"borderRadius":9999,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":34,"color":"#FFFFFF"},"children":["M"]}]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":16},"children":["Maya Chen"]},{"type":"Text","style":{"fontSize":14,"color":"#6B6B80","marginTop":4},"children":["@maya.creates"]},{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8","marginTop":12,"textAlign":"center","paddingHorizontal":40},"children":["Coffee enthusiast. Currently exploring Tokyo"]}]},{"type":"View","style":{"flexDirection":"row","justifyContent":"space-around","paddingVertical":24,"marginHorizontal":20,"borderBottomWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["3,241"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["Posts"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["12.4K"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["Followers"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["892"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["Following"]}]}]},{"type":"View","style":{"flexDirection":"row","gap":12,"paddingHorizontal":20,"marginTop":20},"children":[{"type":"TouchableOpacity","style":{"flex":1,"backgroundColor":"#6C5CE7","borderRadius":24,"height":40,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"700","color":"#FFFFFF"},"children":["Follow"]}]},{"type":"TouchableOpacity","style":{"flex":1,"backgroundColor":"#1A1A2E","borderRadius":24,"height":40,"alignItems":"center","justifyContent":"center","borderWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"600","color":"#FFFFFF"},"children":["Message"]}]}]},{"type":"View","style":{"flexDirection":"row","marginTop":24,"borderBottomWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"View","style":{"flex":1,"alignItems":"center","paddingBottom":12,"borderBottomWidth":3,"borderColor":"#6C5CE7"},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#6C5CE7"},"children":["Posts"]}]},{"type":"View","style":{"flex":1,"alignItems":"center","paddingBottom":12},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#6B6B80"},"children":["Reels"]}]},{"type":"View","style":{"flex":1,"alignItems":"center","paddingBottom":12},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#6B6B80"},"children":["Tagged"]}]}]},{"type":"View","style":{"flexDirection":"row","flexWrap":"wrap","gap":2,"padding":2,"paddingBottom":34},"children":[{"type":"View","style":{"width":"32.6%","aspectRatio":1,"backgroundColor":"#1A1A2E","borderRadius":0}},{"type":"View","style":{"width":"32.6%","aspectRatio":1,"backgroundColor":"#222236","borderRadius":0}},{"type":"View","style":{"width":"32.6%","aspectRatio":1,"backgroundColor":"#1A1A2E","borderRadius":0}},{"type":"View","style":{"width":"32.6%","aspectRatio":1,"backgroundColor":"#222236","borderRadius":0}},{"type":"View","style":{"width":"32.6%","aspectRatio":1,"backgroundColor":"#1A1A2E","borderRadius":0}},{"type":"View","style":{"width":"32.6%","aspectRatio":1,"backgroundColor":"#222236","borderRadius":0}}]}]}]}
+--- END EXAMPLE ---`
 
-CRITICAL MOBILE SCREEN SIZE RULES:
-- The screen viewport is 320px wide and 568px tall. ALL content MUST fit within this viewport WITHOUT scrolling.
-- Maximum 5-6 UI elements per screen. No more.
-- Text must be SHORT: titles max 4 words, descriptions max 10 words, body text max 2 lines.
-- NO paragraphs. NO long descriptions. NO walls of text.
-- Use icons and emojis instead of text where possible.
-- Card components: max height 80px each.
-- List items: max 3-4 items visible.
-- The entire screen content must be visible at once — user should NOT need to scroll.
-- Think of it as designing for an iPhone SE screen — everything compact.
-- If you need more content, use tabs or pagination patterns, NOT vertical scrolling.
-- NEVER generate a screen taller than 568px of content.
+const EXAMPLE_SETTINGS = `--- EXAMPLE ---
+User: "Create an app settings screen"
+Component tree:
+{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54},"children":[{"type":"View","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":20,"height":44},"children":[{"type":"TouchableOpacity","style":{"width":44,"height":44,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"color":"#FFFFFF"},"children":["\\u2190"]}]},{"type":"Text","style":{"fontSize":28,"fontWeight":"700","color":"#FFFFFF","marginLeft":8},"children":["Settings"]}]},{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":20,"paddingVertical":16,"marginTop":8},"children":[{"type":"View","style":{"width":48,"height":48,"borderRadius":9999,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"fontWeight":"600","color":"#FFFFFF"},"children":["S"]}]},{"type":"View","style":{"flex":1,"marginLeft":16},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"500","color":"#FFFFFF"},"children":["Sarah Mitchell"]},{"type":"Text","style":{"fontSize":13,"color":"#6B6B80","marginTop":4},"children":["sarah@email.com"]}]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]},{"type":"View","style":{"marginTop":24,"paddingHorizontal":20},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#6B6B80","textTransform":"uppercase","letterSpacing":1,"marginBottom":8},"children":["Account"]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"overflow":"hidden"},"children":[{"type":"View","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48,"borderBottomWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDD14"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["Notifications"]},{"type":"Switch","props":{"value":true,"trackColor":{"true":"#00B894","false":"#222236"},"thumbColor":"#FFFFFF"}}]},{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDEE1"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["Privacy & Security"]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]}]}]},{"type":"View","style":{"marginTop":24,"paddingHorizontal":20},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#6B6B80","textTransform":"uppercase","letterSpacing":1,"marginBottom":8},"children":["Preferences"]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"overflow":"hidden"},"children":[{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48,"borderBottomWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDFA8"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["Appearance"]},{"type":"Text","style":{"fontSize":14,"color":"#6B6B80","marginRight":8},"children":["Dark"]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]},{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48,"borderBottomWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDF10"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["Language"]},{"type":"Text","style":{"fontSize":14,"color":"#6B6B80","marginRight":8},"children":["English"]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]},{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDCCA"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["Data Usage"]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]}]}]},{"type":"View","style":{"marginTop":24,"paddingHorizontal":20},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#6B6B80","textTransform":"uppercase","letterSpacing":1,"marginBottom":8},"children":["Support"]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"overflow":"hidden"},"children":[{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48,"borderBottomWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u2753"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["Help Center"]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]},{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48,"borderBottomWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDCAC"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["Send Feedback"]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]},{"type":"TouchableOpacity","style":{"flexDirection":"row","alignItems":"center","paddingHorizontal":16,"height":48},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u2139\\uFE0F"]},{"type":"Text","style":{"flex":1,"fontSize":16,"color":"#FFFFFF","marginLeft":12},"children":["About"]},{"type":"Text","style":{"fontSize":14,"color":"#6B6B80","marginRight":8},"children":["v2.1.0"]},{"type":"Text","style":{"fontSize":16,"color":"#6B6B80"},"children":["\\u203A"]}]}]}]},{"type":"View","style":{"marginTop":32,"paddingHorizontal":20,"paddingBottom":34},"children":[{"type":"TouchableOpacity","style":{"height":48,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"500","color":"#E17055"},"children":["Log Out"]}]},{"type":"TouchableOpacity","style":{"height":48,"alignItems":"center","justifyContent":"center","marginTop":4},"children":[{"type":"Text","style":{"fontSize":14,"color":"#6B6B80"},"children":["Delete Account"]}]}]}]}]}
+--- END EXAMPLE ---`
 
-MOBILE DESIGN RULES (apply to every screen):
-1. SPACING: Use 8pt grid system. All padding/margins should be multiples of 4 or 8. Minimum padding: 16px.
-2. TOUCH TARGETS: All interactive elements minimum 44x44pt. Buttons minimum height 48px.
-3. TYPOGRAPHY: Maximum 3 font sizes per screen. Body text minimum 16px. Headers 24-32px. Clear hierarchy.
-4. COLOR: Maximum 3 brand colors + neutrals per screen. Ensure WCAG AA contrast (4.5:1 for text, 3:1 for large text). Default to dark backgrounds (#0A0A0A to #1A1A1A range). If the user asks for light theme, white background, or light mode — use white/light backgrounds with dark text. Always respect the user's explicit color/theme requests over defaults.
-5. SAFE AREAS: Always wrap in SafeAreaView. Account for notch/status bar at top (44px) and home indicator at bottom (34px).
-6. SCROLLING: Wrap content in ScrollView when content exceeds viewport. Never nest ScrollViews.
-7. BOTTOM NAV: Maximum 5 items. Active item should be visually distinct. Use icons + labels.
-8. CARDS: Rounded corners (12-16px). Subtle border or shadow for depth. Consistent padding (16px).
-9. LOADING STATES: Include ActivityIndicator or skeleton screens for async content.
-10. EMPTY STATES: Include meaningful empty states for lists and feeds.
-11. ICONS: Use descriptive text labels with icons. Never icon-only for important actions.
-12. STATUS BAR: Style appropriately (light-content for dark themes, dark-content for light themes).
-13. LAYOUT: Use flexDirection column as default. Use flexDirection row for horizontal arrangements. Always set flex: 1 on root container.
-14. PLATFORM AWARENESS: Generate iOS-style by default (large titles, SF-style rounded elements, bottom tab bars).
-15. ACCESSIBILITY: Add accessibilityLabel to all interactive elements. Use accessibilityRole appropriately.
+const EXAMPLE_PRODUCT = `--- EXAMPLE ---
+User: "Create a product detail page for a shoe store"
+Component tree:
+{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A"},"children":[{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"height":280,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":48},"children":["\\uD83D\\uDC5F"]},{"type":"View","style":{"position":"absolute","top":54,"left":16},"children":[{"type":"TouchableOpacity","style":{"width":44,"height":44,"borderRadius":9999,"backgroundColor":"rgba(0,0,0,0.3)","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"color":"#FFFFFF"},"children":["\\u2190"]}]}]}]},{"type":"View","style":{"paddingHorizontal":20,"paddingTop":20},"children":[{"type":"Text","style":{"fontSize":13,"color":"#6B6B80","textTransform":"uppercase","letterSpacing":1},"children":["Nike"]},{"type":"Text","style":{"fontSize":24,"fontWeight":"700","color":"#FFFFFF","marginTop":4},"children":["Air Max 270"]},{"type":"View","style":{"flexDirection":"row","alignItems":"center","marginTop":8,"gap":8},"children":[{"type":"Text","style":{"fontSize":24,"fontWeight":"700","color":"#6C5CE7"},"children":["$189.00"]},{"type":"View","style":{"flexDirection":"row","alignItems":"center","marginLeft":12},"children":[{"type":"Text","style":{"fontSize":14,"color":"#FDCB6E"},"children":["\\u2605 4.8"]},{"type":"Text","style":{"fontSize":14,"color":"#6C5CE7","marginLeft":4},"children":["(2.4k reviews)"]}]}]},{"type":"View","style":{"backgroundColor":"rgba(0, 184, 148, 0.1)","borderRadius":8,"paddingHorizontal":12,"paddingVertical":4,"alignSelf":"flex-start","marginTop":12},"children":[{"type":"Text","style":{"fontSize":12,"fontWeight":"500","color":"#00B894"},"children":["Free Shipping"]}]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":24},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#FFFFFF","marginBottom":12},"children":["Select Size"]},{"type":"View","style":{"flexDirection":"row","gap":8},"children":[{"type":"View","style":{"width":48,"height":40,"borderRadius":8,"backgroundColor":"#222236","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8"},"children":["8"]}]},{"type":"View","style":{"width":48,"height":40,"borderRadius":8,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"600","color":"#FFFFFF"},"children":["9"]}]},{"type":"View","style":{"width":48,"height":40,"borderRadius":8,"backgroundColor":"#222236","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8"},"children":["10"]}]},{"type":"View","style":{"width":48,"height":40,"borderRadius":8,"backgroundColor":"#222236","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8"},"children":["11"]}]},{"type":"View","style":{"width":48,"height":40,"borderRadius":8,"backgroundColor":"#222236","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8"},"children":["12"]}]}]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":24},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#FFFFFF","marginBottom":12},"children":["Color"]},{"type":"View","style":{"flexDirection":"row","gap":12},"children":[{"type":"View","style":{"width":32,"height":32,"borderRadius":9999,"backgroundColor":"#1A1A2E","borderWidth":2,"borderColor":"#6C5CE7"}},{"type":"View","style":{"width":32,"height":32,"borderRadius":9999,"backgroundColor":"#FFFFFF"}},{"type":"View","style":{"width":32,"height":32,"borderRadius":9999,"backgroundColor":"#E17055"}},{"type":"View","style":{"width":32,"height":32,"borderRadius":9999,"backgroundColor":"#74B9FF"}}]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":24},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["About this product"]},{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8","lineHeight":20,"marginTop":8},"children":["The Nike Air Max 270 delivers visible cushioning under every step. Updated for modern comfort, it nods to the original 1991 design with its exaggerated tongue top and heritage tongue logo."]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":24,"paddingBottom":100},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF","marginBottom":16},"children":["Reviews"]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"padding":16},"children":[{"type":"View","style":{"flexDirection":"row","alignItems":"center"},"children":[{"type":"View","style":{"width":32,"height":32,"borderRadius":9999,"backgroundColor":"#222236","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"600","color":"#FFFFFF"},"children":["A"]}]},{"type":"View","style":{"marginLeft":12},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#FFFFFF"},"children":["Alex K."]},{"type":"Text","style":{"fontSize":12,"color":"#FDCB6E","marginTop":2},"children":["\\u2605\\u2605\\u2605\\u2605\\u2605"]}]}]},{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8","marginTop":12,"lineHeight":20},"children":["Super comfortable, great for daily wear. The cushioning is amazing."]}]}]}]},{"type":"View","style":{"position":"absolute","bottom":0,"left":0,"right":0,"backgroundColor":"#12121F","paddingHorizontal":20,"paddingTop":16,"paddingBottom":34,"flexDirection":"row","gap":12,"borderTopWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"TouchableOpacity","style":{"width":48,"height":48,"borderRadius":9999,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u2661"]}]},{"type":"TouchableOpacity","style":{"flex":1,"backgroundColor":"#6C5CE7","borderRadius":24,"height":48,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"700","color":"#FFFFFF"},"children":["Add to Cart"]}]}]}]}
+--- END EXAMPLE ---`
 
-ADVANCED DESIGN RULES:
-- COLOR PALETTE: Use a maximum of 3 accent colors per screen. Primary accent for CTAs/highlights, secondary for supporting elements, tertiary for subtle accents. All other colors should be neutrals from the same gray family.
-- TYPOGRAPHY SCALE: Use exactly these sizes: 12px (caption), 14px (body small), 16px (body), 18px (subtitle), 24px (title), 32px (hero). Don't use random sizes.
-- CARD PATTERN: All cards should have: backgroundColor from the card surface color (#1E293B for dark, #F8FAFC for light), borderRadius: 16, padding: 16-20. Never use borderWidth for cards — use background color contrast instead.
-- ICON PLACEHOLDERS: Use single emoji characters or View circles with initials/symbols instead of text descriptions for icons. Keep icons consistent in size (24x24 or 32x32).
-- SECTION SPACING: Use 24px gap between major sections, 12-16px between related elements, 4-8px between tightly coupled elements (like label + value).
-- STATUS BAR AWARE: Always have at least 8px padding at the top of SafeAreaView content.
-- BOTTOM SAFE AREA: Leave at least 34px padding at the bottom for home indicator.
-- VISUAL HIERARCHY: The most important element (score, primary stat, main CTA) should be the largest and most colorful. Secondary elements progressively smaller and more muted.
+const FEW_SHOT_EXAMPLES = [EXAMPLE_LOGIN, EXAMPLE_DASHBOARD, EXAMPLE_PROFILE, EXAMPLE_SETTINGS, EXAMPLE_PRODUCT].join('\n\n')
 
-EXAMPLE OUTPUT 1 — Fitness Dashboard (Dark Theme):
-{"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0F172A"},"children":[{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"paddingHorizontal":20,"paddingTop":16,"paddingBottom":8,"flexDirection":"row","justifyContent":"space-between","alignItems":"center"},"children":[{"type":"View","children":[{"type":"Text","props":{"style":{"fontSize":14,"color":"#94A3B8","marginBottom":4}},"children":["Good Evening"]},{"type":"Text","props":{"style":{"fontSize":24,"fontWeight":"700","color":"#F8FAFC"}},"children":["Sarah"]}]},{"type":"View","style":{"width":44,"height":44,"borderRadius":22,"backgroundColor":"#6366F1","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","props":{"style":{"fontSize":18,"fontWeight":"600","color":"#FFFFFF"}},"children":["S"]}]}]},{"type":"View","style":{"marginHorizontal":20,"marginTop":20,"backgroundColor":"#1E293B","borderRadius":16,"padding":20,"alignItems":"center"},"children":[{"type":"Text","props":{"style":{"fontSize":13,"color":"#94A3B8","marginBottom":8,"textTransform":"uppercase","letterSpacing":1.5}},"children":["Energy Score"]},{"type":"Text","props":{"style":{"fontSize":48,"fontWeight":"800","color":"#34D399"}},"children":["87"]},{"type":"Text","props":{"style":{"fontSize":14,"color":"#6EE7B7","marginTop":4}},"children":["Excellent Recovery"]}]}]}]}
-Study this example. Notice: proper padding (multiples of 4), color hierarchy (bright for important, muted for secondary), rounded cards (16px), uppercase labels with letter spacing, avatar with initials, consistent spacing.
+// --- DESIGN.md parser ---
+function extractDesignMd(prompt: string): { cleanPrompt: string; designMd: string | null } {
+  const designMdPattern = /```(?:md|markdown|design)?\n([\s\S]*?(?:#\s*(?:Colors|Typography|Spacing|Components)[\s\S]*?))```/i
+  const match = prompt.match(designMdPattern)
 
-EXAMPLE OUTPUT 2 — Login Screen (Dark Theme):
-{"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0A0A0A"},"children":[{"type":"View","style":{"flex":1,"justifyContent":"center","paddingHorizontal":24},"children":[{"type":"View","style":{"alignItems":"center","marginBottom":48},"children":[{"type":"View","style":{"width":64,"height":64,"borderRadius":16,"backgroundColor":"#6366F1","alignItems":"center","justifyContent":"center","marginBottom":16},"children":[{"type":"Text","props":{"style":{"fontSize":28,"color":"#FFFFFF"}},"children":["M"]}]},{"type":"Text","props":{"style":{"fontSize":28,"fontWeight":"700","color":"#FAFAFA"}},"children":["Welcome Back"]},{"type":"Text","props":{"style":{"fontSize":15,"color":"#71717A","marginTop":8}},"children":["Sign in to continue"]}]},{"type":"View","style":{"backgroundColor":"#18181B","borderRadius":12,"padding":16,"marginBottom":12},"children":[{"type":"TextInput","props":{"placeholder":"Email","placeholderTextColor":"#52525B","style":{"fontSize":16,"color":"#FAFAFA"}}}]},{"type":"View","style":{"backgroundColor":"#18181B","borderRadius":12,"padding":16,"marginBottom":24},"children":[{"type":"TextInput","props":{"placeholder":"Password","placeholderTextColor":"#52525B","secureTextEntry":true,"style":{"fontSize":16,"color":"#FAFAFA"}}}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#6366F1","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","props":{"style":{"fontSize":16,"fontWeight":"600","color":"#FFFFFF"}},"children":["Sign In"]}]}]}]}
-Study this example. Notice: centered layout for auth screens, proper input styling with dark backgrounds, consistent border radius, good spacing between elements, placeholder colors that match the theme.
+  if (match) {
+    const designMd = match[1]
+    const cleanPrompt = prompt.replace(match[0], '').trim()
+    return { cleanPrompt, designMd }
+  }
 
-EDIT MODE: When modifying an existing screen, preserve ALL content, layout, and structure. Only change what the user specifically asks to change. If user says 'make it white background', change ONLY the background color and text colors for contrast — keep everything else identical. If user says 'recreate with light theme', keep the same layout, content, and elements but swap the color scheme. Never discard or replace existing screen content during edits.
+  return { cleanPrompt: prompt, designMd: null }
+}
+
+// --- Build system prompt ---
+function buildSystemPrompt(designMd: string | null): string {
+  let prompt = `You are a world-class mobile UI designer and React Native expert. You create screens that look like they were designed by senior designers at Airbnb, Spotify, Stripe, or Nike. Your output is production-quality — not a prototype, not a wireframe, but a polished, beautiful screen ready to ship.
+
+Your designs follow these principles:
+- Hierarchy through size and weight, not just color
+- Spacing creates visual grouping (tight within sections, generous between sections)
+- Color restraint — one primary accent, surfaces for depth, greys for most text
+- Every element has a purpose — no decorative noise
+- Content is realistic and contextual — never generic placeholder text
+
+Generate a React Native component tree as JSON. Return a single JSON object. Return ONLY valid JSON, no markdown, no explanation.
+
+${DESIGN_TOKENS}
+
+${COMPONENT_TYPES}
+
+${CONTENT_LIBRARY}
+
+${PLATFORM_RULES}
+
+DESIGN.MD SUPPORT:
+If the user's prompt contains a DESIGN.md block or references design tokens from an external source, extract and use those tokens instead of the defaults. Colors, typography, spacing, and component rules from DESIGN.md override Mokkoi defaults. If a DESIGN.md only partially defines tokens, use Mokkoi defaults for unspecified values. Look for markdown headers like "# Colors", "# Typography", "## Primary", "## Spacing" or code blocks containing token definitions.
+
+${FEW_SHOT_EXAMPLES}
+
+${QUALITY_CHECKLIST}
+
+EDIT MODE: When modifying an existing screen, preserve ALL content, layout, and structure. Only change what the user specifically asks to change. If user says 'make it white background', change ONLY the background color and text colors for contrast — keep everything else identical. If user says 'recreate with light theme', keep the same layout, content, and elements but swap to light theme color tokens. Never discard or replace existing screen content during edits.
 
 Return ONLY valid JSON, no markdown, no explanation.`
+
+  if (designMd) {
+    prompt += `\n\nThe user has provided a DESIGN.md with custom design tokens. Override the default tokens with these values where specified:\n${designMd}`
+  }
+
+  return prompt
+}
 
 /** Build a Claude-compatible messages array from conversation history + current prompt.
  *  Ensures alternating user/assistant roles and that the first message is user. */
@@ -174,13 +193,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   else if (isRegenerate) generationType = 'regenerate'
   else if (currentScreen) generationType = 'edit'
 
+  // Extract DESIGN.md if present in prompt
+  const { cleanPrompt, designMd } = extractDesignMd(prompt)
+  const systemPromptText = buildSystemPrompt(designMd)
+
   // Build user message — include current screen if editing, or image if attached
   let userContent: string | Array<{ type: string; [key: string]: unknown }>
   if (imageData && typeof imageData === 'string') {
     // Screenshot-to-screen: send image with text prompt
     const textPrompt = currentScreen
-      ? `Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${prompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
-      : `Analyze this screenshot and recreate it as a React Native component tree JSON. The user says: ${prompt}\n\nRecreate this design faithfully using the supported component types. Match the layout, colors, typography, and spacing as closely as possible. Remember: ALL backgrounds must be dark theme. Return ONLY valid JSON.`
+      ? `Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${cleanPrompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
+      : `Analyze this screenshot and recreate it as a React Native component tree JSON. The user says: ${cleanPrompt}\n\nRecreate this design faithfully using the supported component types. Match the layout, colors, typography, and spacing as closely as possible. Return ONLY valid JSON.`
     userContent = [
       {
         type: 'image',
@@ -200,7 +223,7 @@ Here is the current screen's component tree JSON for reference:
 ${JSON.stringify(currentScreen, null, 2)}
 ${screenName ? `\nScreen name: ${screenName}` : ''}
 
-${prompt}
+${cleanPrompt}
 
 Generate a completely fresh design for this same type of screen. Use different layout patterns, card styles, and visual hierarchy — but preserve the same screen purpose and content type. Return ONLY valid JSON.`
   } else if (currentScreen) {
@@ -209,11 +232,11 @@ Generate a completely fresh design for this same type of screen. Use different l
 Here is the current screen's component tree JSON:
 ${JSON.stringify(currentScreen, null, 2)}
 
-The user's edit request: ${prompt}
+The user's edit request: ${cleanPrompt}
 
 IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree above. Keep all text content, element positions, component structure, and styling that the user did NOT ask to change. If the user asks for a color/theme change, update ONLY colors — keep everything else identical. Return the complete modified JSON.`
   } else {
-    userContent = prompt
+    userContent = cleanPrompt
   }
 
   // Robust JSON repair: strips markdown fences, extracts JSON, closes truncated structures
@@ -315,7 +338,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     system: [
       {
         type: 'text',
-        text: SYSTEM_PROMPT,
+        text: systemPromptText,
         cache_control: { type: 'ephemeral' },
       },
     ],
@@ -413,7 +436,10 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       }
 
       try {
-        const tree = repairJSON(fullText)
+        let tree = repairJSON(fullText)
+
+        // Normalize the component tree
+        tree = normalizeComponentTree(tree)
 
         // Deduct credits after successful generation
         if (!user.isMCP) {
@@ -484,6 +510,9 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       console.error('JSON repair failed. Raw start:', text.slice(0, 500))
       return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
     }
+
+    // Normalize the component tree
+    tree = normalizeComponentTree(tree)
 
     // Deduct credits after successful generation
     if (!user.isMCP) {
