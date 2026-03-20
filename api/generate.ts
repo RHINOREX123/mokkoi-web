@@ -39,14 +39,33 @@ Component tree:
 const FEW_SHOT_EXAMPLES = [EXAMPLE_LOGIN, EXAMPLE_DASHBOARD, EXAMPLE_PROFILE, EXAMPLE_SETTINGS, EXAMPLE_PRODUCT].join('\n\n')
 
 // --- DESIGN.md parser ---
+// Extracts design tokens from markdown code blocks, inline DESIGN.md content,
+// or Stitch-style DESIGN.md format (# Colors, # Typography, # Spacing, etc.)
 function extractDesignMd(prompt: string): { cleanPrompt: string; designMd: string | null } {
-  const designMdPattern = /```(?:md|markdown|design)?\n([\s\S]*?(?:#\s*(?:Colors|Typography|Spacing|Components)[\s\S]*?))```/i
-  const match = prompt.match(designMdPattern)
+  // Pattern 1: Fenced code block with design tokens
+  const fencedPattern = /```(?:md|markdown|design|yaml|json)?\n([\s\S]*?(?:#\s*(?:Colors|Typography|Spacing|Components|Theme|Tokens|Brand)[\s\S]*?))```/i
+  const fencedMatch = prompt.match(fencedPattern)
+  if (fencedMatch) {
+    return { cleanPrompt: prompt.replace(fencedMatch[0], '').trim(), designMd: fencedMatch[1] }
+  }
 
-  if (match) {
-    const designMd = match[1]
-    const cleanPrompt = prompt.replace(match[0], '').trim()
-    return { cleanPrompt, designMd }
+  // Pattern 2: Inline DESIGN.md markers
+  const inlinePattern = /(?:---\s*DESIGN\.MD\s*---\s*\n)([\s\S]*?)(?:---\s*END\s*DESIGN\.MD\s*---)/i
+  const inlineMatch = prompt.match(inlinePattern)
+  if (inlineMatch) {
+    return { cleanPrompt: prompt.replace(inlineMatch[0], '').trim(), designMd: inlineMatch[1] }
+  }
+
+  // Pattern 3: Detect unfenced markdown with design headers (Colors, Typography, etc.)
+  // Only matches if there are at least 2 design-related headers
+  const headerPattern = /((?:^|\n)#+ (?:Colors|Typography|Spacing|Components|Theme|Tokens|Brand)\b[\s\S]*)/i
+  const headerMatch = prompt.match(headerPattern)
+  if (headerMatch) {
+    const content = headerMatch[1]
+    const headerCount = (content.match(/^#+\s+(?:Colors|Typography|Spacing|Components|Theme|Tokens|Brand)\b/gim) || []).length
+    if (headerCount >= 2) {
+      return { cleanPrompt: prompt.replace(content, '').trim(), designMd: content.trim() }
+    }
   }
 
   return { cleanPrompt: prompt, designMd: null }

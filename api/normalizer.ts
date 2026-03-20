@@ -5,6 +5,10 @@ const VALID_FONT_WEIGHTS = ['400', '500', '600', '700', 'normal', 'bold']
 const MIN_TOUCH_TARGET = 44
 // Safe area values that should not be snapped
 const SAFE_AREA_VALUES = new Set([54, 34, 49, 83, 44, 98])
+const SUPPORTED_TYPES = new Set([
+  'View', 'SafeAreaView', 'ScrollView', 'Text', 'TextInput',
+  'TouchableOpacity', 'Image', 'ActivityIndicator', 'Switch', 'FlatList'
+])
 
 function snapToScale(value: number, scale: number[]): number {
   if (typeof value !== 'number' || isNaN(value)) return scale[0]
@@ -25,10 +29,15 @@ function normalizeStyle(style: Record<string, any>): Record<string, any> {
     'gap', 'rowGap', 'columnGap'
   ]
   for (const prop of spacingProps) {
-    if (typeof normalized[prop] === 'number') {
-      // Don't snap safe area values
-      if (!SAFE_AREA_VALUES.has(normalized[prop])) {
-        normalized[prop] = snapToScale(normalized[prop], SPACING_SCALE)
+    if (normalized[prop] !== undefined) {
+      let v = normalized[prop]
+      // Handle string values like "16px" or "16"
+      if (typeof v === 'string') v = parseFloat(v)
+      if (typeof v === 'number' && !isNaN(v)) {
+        // Don't snap safe area values
+        normalized[prop] = SAFE_AREA_VALUES.has(v) ? v : snapToScale(v, SPACING_SCALE)
+      } else {
+        delete normalized[prop]
       }
     }
   }
@@ -41,9 +50,15 @@ function normalizeStyle(style: Record<string, any>): Record<string, any> {
     else normalized.fontSize = snapToScale(fs, FONT_SIZE_SCALE)
   }
 
-  // Snap border radius
-  if (typeof normalized.borderRadius === 'number') {
-    normalized.borderRadius = snapToScale(normalized.borderRadius, BORDER_RADIUS_SCALE)
+  // Snap border radius (including corner-specific props)
+  const radiusProps = [
+    'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
+    'borderBottomLeftRadius', 'borderBottomRightRadius'
+  ]
+  for (const prop of radiusProps) {
+    if (typeof normalized[prop] === 'number') {
+      normalized[prop] = snapToScale(normalized[prop], BORDER_RADIUS_SCALE)
+    }
   }
 
   // Validate font weight
@@ -71,6 +86,20 @@ function normalizeNode(node: any, depth: number = 0): any {
   if (!node || typeof node !== 'object') return node
 
   const normalized = { ...node }
+
+  // Fix unsupported component types
+  if (normalized.type && !SUPPORTED_TYPES.has(normalized.type)) {
+    // Map common unsupported types to supported equivalents
+    const typeMap: Record<string, string> = {
+      'Pressable': 'TouchableOpacity',
+      'KeyboardAvoidingView': 'View',
+      'Modal': 'View',
+      'StatusBar': 'View',
+      'LinearGradient': 'View',
+      'Animated.View': 'View',
+    }
+    normalized.type = typeMap[normalized.type] || 'View'
+  }
 
   // Normalize top-level style
   if (normalized.style) {

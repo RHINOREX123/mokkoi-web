@@ -221,6 +221,14 @@ HIERARCHY PRINCIPLES:
 - Color restraint — one primary accent, surfaces for depth, greys for text
 - Every element has a purpose — no decorative noise
 - The most important element should be largest and most vivid; secondary elements smaller and muted
+
+EDGE CASES:
+- Empty states: Show a centered emoji + title + subtitle + action button. Never leave a screen blank.
+- Loading states: Use ActivityIndicator centered in the content area with a "Loading..." label below it.
+- Error states: Show error icon + error message + retry button using the error color tokens.
+- Long text: Use numberOfLines on Text components isn't supported in web preview — instead design with realistic text lengths and let overflow be hidden.
+- No gradient support: Use solid colors from the surface/accent palette. Simulate depth with layered surfaces (surface-0 behind surface-1 cards).
+- No blur/glassmorphism: Use semi-transparent backgrounds (rgba) for overlay effects instead.
 `
 
 export const QUALITY_CHECKLIST = `
