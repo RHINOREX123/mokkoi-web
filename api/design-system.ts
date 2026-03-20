@@ -206,14 +206,14 @@ iOS CONVENTIONS AND LAYOUT RULES:
 LAYOUT RULES:
 - Root element: type "View" or "SafeAreaView" with flex: 1, backgroundColor: surface-0
 - Use ScrollView for any content that might overflow the phone screen
-- Maximum 4-5 different font sizes per screen — clear hierarchy
+- Aim for 4-8 different font sizes per screen — clear typographic hierarchy
 - Cards: 12-16px borderRadius, 16px padding, surface-1 background
 - Buttons: 48px height, 24px borderRadius (pill shape), bold text
 - Inputs: 48px height, 12px borderRadius, surface-3 background, 16px horizontal padding
 - Section spacing: 24-32px between sections, 8-16px within sections
 - Horizontal padding: 16-20px on all screen content
 - Icons: use emoji characters or colored View circles — never text descriptions like "[icon]"
-- Screen width is 320px — use percentage widths (width: "100%", width: "48%") for responsive elements
+- Design for standard mobile proportions (375pt width) — use percentage widths (width: "100%", width: "48%") for responsive elements
 
 HIERARCHY PRINCIPLES:
 - Hierarchy through size and weight, not just color

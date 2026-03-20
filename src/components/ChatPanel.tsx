@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { ScreenRenderer } from './ScreenRenderer'
+import { convertTreeToTSX } from '../utils/exportTsx'
 
 export interface ChatMessage {
   id: string
@@ -61,7 +62,8 @@ const QUICK_SUGGESTIONS = [
   'Add more sections',
   'Change accent color',
   'Add bottom tabs',
-  'Export code',
+  'Copy as TSX',
+  'Copy JSON',
 ]
 
 const GENERATING_STEPS = [
@@ -169,7 +171,19 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     reader.readAsDataURL(file)
   }
 
-  const handleSuggestionClick = (s: string) => {
+  const handleSuggestionClick = async (s: string) => {
+    if (s === 'Copy as TSX' && selectedScreenTree) {
+      const tsx = convertTreeToTSX(selectedScreenTree, selectedScreenName)
+      await navigator.clipboard.writeText(tsx)
+      // Dispatch a toast event
+      window.dispatchEvent(new CustomEvent('mokkoi-toast', { detail: { message: 'React Native code copied!' } }))
+      return
+    }
+    if (s === 'Copy JSON' && selectedScreenTree) {
+      await navigator.clipboard.writeText(JSON.stringify(selectedScreenTree, null, 2))
+      window.dispatchEvent(new CustomEvent('mokkoi-toast', { detail: { message: 'JSON copied to clipboard!' } }))
+      return
+    }
     if (s === 'Export code') {
       if (onExportCode) {
         onExportCode()

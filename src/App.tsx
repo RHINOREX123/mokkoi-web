@@ -527,7 +527,7 @@ function App() {
         @media (max-width: 768px) { .main-panels { flex-direction: column !important; } .chat-side { width: 100% !important; height: 50% !important; border-bottom: 1px solid rgba(255,255,255,0.06); } .canvas-side { width: 100% !important; height: 50% !important; } }
       `}</style>
 
-      {showCodeExport && screens.generatedTree && <CodeExportModal tree={screens.generatedTree} onClose={() => setShowCodeExport(false)} />}
+      {showCodeExport && screens.generatedTree && <CodeExportModal tree={screens.generatedTree} screenName={screens.activeGenerated?.name} onClose={() => setShowCodeExport(false)} />}
       <CommandPalette commands={commands} isOpen={showCommandPalette} onClose={() => setShowCommandPalette(false)} />
       <ShareModal projectId={projectId || ''} projectName={screens.projectName} isOpen={showShareModal} onClose={() => setShowShareModal(false)} />
       <VariationsPanel isOpen={showVariationsPanel} onClose={() => setShowVariationsPanel(false)} onGenerate={ai.handleGenerateVariations} isGenerating={ai.isGeneratingVariations} />

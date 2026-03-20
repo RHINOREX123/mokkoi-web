@@ -1,6 +1,12 @@
-const SPACING_SCALE = [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]
-const FONT_SIZE_SCALE = [11, 12, 13, 14, 16, 17, 20, 24, 28, 34, 40, 48]
-const BORDER_RADIUS_SCALE = [0, 4, 8, 12, 16, 24, 9999]
+const DEFAULT_SPACING_SCALE = [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]
+const DEFAULT_FONT_SIZE_SCALE = [11, 12, 13, 14, 16, 17, 20, 24, 28, 34, 40, 48]
+const DEFAULT_BORDER_RADIUS_SCALE = [0, 4, 8, 12, 16, 24, 9999]
+
+export interface NormalizerOptions {
+  customSpacing?: number[]
+  customFontSizes?: number[]
+  customBorderRadius?: number[]
+}
 const VALID_FONT_WEIGHTS = ['400', '500', '600', '700', 'normal', 'bold']
 const MIN_TOUCH_TARGET = 44
 // Safe area values that should not be snapped
@@ -18,7 +24,12 @@ function snapToScale(value: number, scale: number[]): number {
   )
 }
 
-function normalizeStyle(style: Record<string, any>): Record<string, any> {
+function normalizeStyle(
+  style: Record<string, any>,
+  spacingScale: number[],
+  fontSizeScale: number[],
+  borderRadiusScale: number[],
+): Record<string, any> {
   const normalized = { ...style }
 
   // Snap spacing properties to scale
@@ -35,7 +46,7 @@ function normalizeStyle(style: Record<string, any>): Record<string, any> {
       if (typeof v === 'string') v = parseFloat(v)
       if (typeof v === 'number' && !isNaN(v)) {
         // Don't snap safe area values
-        normalized[prop] = SAFE_AREA_VALUES.has(v) ? v : snapToScale(v, SPACING_SCALE)
+        normalized[prop] = SAFE_AREA_VALUES.has(v) ? v : snapToScale(v, spacingScale)
       } else {
         delete normalized[prop]
       }
@@ -47,7 +58,7 @@ function normalizeStyle(style: Record<string, any>): Record<string, any> {
     let fs = normalized.fontSize
     if (typeof fs === 'string') fs = parseFloat(fs)
     if (typeof fs !== 'number' || isNaN(fs) || fs <= 0) normalized.fontSize = 14
-    else normalized.fontSize = snapToScale(fs, FONT_SIZE_SCALE)
+    else normalized.fontSize = snapToScale(fs, fontSizeScale)
   }
 
   // Snap border radius (including corner-specific props)
@@ -57,7 +68,7 @@ function normalizeStyle(style: Record<string, any>): Record<string, any> {
   ]
   for (const prop of radiusProps) {
     if (typeof normalized[prop] === 'number') {
-      normalized[prop] = snapToScale(normalized[prop], BORDER_RADIUS_SCALE)
+      normalized[prop] = snapToScale(normalized[prop], borderRadiusScale)
     }
   }
 
@@ -82,7 +93,13 @@ function normalizeStyle(style: Record<string, any>): Record<string, any> {
   return normalized
 }
 
-function normalizeNode(node: any, depth: number = 0): any {
+function normalizeNode(
+  node: any,
+  depth: number,
+  spacingScale: number[],
+  fontSizeScale: number[],
+  borderRadiusScale: number[],
+): any {
   if (!node || typeof node !== 'object') return node
 
   const normalized = { ...node }
@@ -103,12 +120,12 @@ function normalizeNode(node: any, depth: number = 0): any {
 
   // Normalize top-level style
   if (normalized.style) {
-    normalized.style = normalizeStyle(normalized.style)
+    normalized.style = normalizeStyle(normalized.style, spacingScale, fontSizeScale, borderRadiusScale)
   }
 
   // Also normalize props.style if present (legacy format used by some Text nodes)
   if (normalized.props?.style && typeof normalized.props.style === 'object') {
-    normalized.props = { ...normalized.props, style: normalizeStyle(normalized.props.style) }
+    normalized.props = { ...normalized.props, style: normalizeStyle(normalized.props.style, spacingScale, fontSizeScale, borderRadiusScale) }
   }
 
   // Ensure root View has flex: 1
@@ -148,14 +165,26 @@ function normalizeNode(node: any, depth: number = 0): any {
       .filter((child: any) => child != null)
       .map((child: any) => {
         if (typeof child === 'string') return child
-        return normalizeNode(child, depth + 1)
+        return normalizeNode(child, depth + 1, spacingScale, fontSizeScale, borderRadiusScale)
       })
   }
 
   return normalized
 }
 
-export function normalizeComponentTree(tree: any): any {
+export function normalizeComponentTree(tree: any, options?: NormalizerOptions): any {
   if (!tree) return tree
-  return normalizeNode(tree, 0)
+
+  // Merge custom scales with defaults (dedup and sort)
+  const spacingScale = options?.customSpacing
+    ? [...new Set([...DEFAULT_SPACING_SCALE, ...options.customSpacing])].sort((a, b) => a - b)
+    : DEFAULT_SPACING_SCALE
+  const fontSizeScale = options?.customFontSizes
+    ? [...new Set([...DEFAULT_FONT_SIZE_SCALE, ...options.customFontSizes])].sort((a, b) => a - b)
+    : DEFAULT_FONT_SIZE_SCALE
+  const borderRadiusScale = options?.customBorderRadius
+    ? [...new Set([...DEFAULT_BORDER_RADIUS_SCALE, ...options.customBorderRadius])].sort((a, b) => a - b)
+    : DEFAULT_BORDER_RADIUS_SCALE
+
+  return normalizeNode(tree, 0, spacingScale, fontSizeScale, borderRadiusScale)
 }
