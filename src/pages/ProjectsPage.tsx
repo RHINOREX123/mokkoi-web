@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
-import { Plus, Search, MoreVertical, Trash2, Pencil, LogOut, Settings, User as UserIcon, FolderOpen, Users, Smartphone } from 'lucide-react'
+import { Plus, Search, MoreVertical, Trash2, Pencil, LogOut, Settings, User as UserIcon, FolderOpen, Users, Smartphone, Download } from 'lucide-react'
 
 interface Project {
   id: string
@@ -10,7 +10,10 @@ interface Project {
   created_at: string
   updated_at: string
   screen_count?: number
+  source?: string
 }
+
+type SidebarTab = 'projects' | 'imports'
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -36,6 +39,8 @@ export default function ProjectsPage() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<SidebarTab>('projects')
+  const [importProjects, setImportProjects] = useState<Project[]>([])
   const renameRef = useRef<HTMLInputElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
@@ -79,13 +84,16 @@ export default function ProjectsPage() {
   const loadProjects = async () => {
     if (!supabase) { setLoading(false); return }
     setLoading(true)
-    const { data: projectRows } = await supabase
+    const sb = supabase
+
+    // Load user's own projects (source is null or 'web')
+    const { data: projectRows } = await sb
       .from('projects')
       .select('*')
+      .or('source.is.null,source.eq.web')
       .order('updated_at', { ascending: false })
 
     if (projectRows) {
-      const sb = supabase
       const projectsWithCounts: Project[] = await Promise.all(
         projectRows.map(async (p) => {
           const { count } = await sb
@@ -97,6 +105,27 @@ export default function ProjectsPage() {
       )
       setProjects(projectsWithCounts)
     }
+
+    // Load MCP import projects
+    const { data: importRows } = await sb
+      .from('projects')
+      .select('*')
+      .eq('source', 'mcp')
+      .order('updated_at', { ascending: false })
+
+    if (importRows) {
+      const importsWithCounts: Project[] = await Promise.all(
+        importRows.map(async (p) => {
+          const { count } = await sb
+            .from('screens')
+            .select('*', { count: 'exact', head: true })
+            .eq('project_id', p.id)
+          return { ...p, screen_count: count ?? 0 }
+        })
+      )
+      setImportProjects(importsWithCounts)
+    }
+
     setLoading(false)
   }
 
@@ -116,6 +145,7 @@ export default function ProjectsPage() {
     if (!supabase) return
     await supabase.from('projects').delete().eq('id', id)
     setProjects(prev => prev.filter(p => p.id !== id))
+    setImportProjects(prev => prev.filter(p => p.id !== id))
     setMenuOpen(null)
   }
 
@@ -134,7 +164,8 @@ export default function ProjectsPage() {
 
   const showToast = (msg: string) => setToastMessage(msg)
 
-  const filtered = projects.filter(p =>
+  const activeList = activeTab === 'imports' ? importProjects : projects
+  const filtered = activeList.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -280,17 +311,48 @@ export default function ProjectsPage() {
           padding: '16px 12px',
         }}>
           <button
+            onClick={() => setActiveTab('projects')}
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '10px 12px', borderRadius: 10,
-              background: 'rgba(99,102,241,0.1)',
-              border: '1px solid rgba(99,102,241,0.2)',
-              color: '#818cf8', fontSize: 14, fontWeight: 600,
+              background: activeTab === 'projects' ? 'rgba(99,102,241,0.1)' : 'transparent',
+              border: activeTab === 'projects' ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
+              color: activeTab === 'projects' ? '#818cf8' : '#64748b',
+              fontSize: 14, fontWeight: activeTab === 'projects' ? 600 : 500,
               cursor: 'pointer', width: '100%', textAlign: 'left',
+              transition: 'all 0.15s',
             }}
+            onMouseEnter={e => { if (activeTab !== 'projects') e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+            onMouseLeave={e => { if (activeTab !== 'projects') e.currentTarget.style.background = 'transparent' }}
           >
             <FolderOpen size={18} />
             My Projects
+          </button>
+          <button
+            onClick={() => setActiveTab('imports')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 12px', borderRadius: 10,
+              background: activeTab === 'imports' ? 'rgba(52,211,153,0.1)' : 'transparent',
+              border: activeTab === 'imports' ? '1px solid rgba(52,211,153,0.2)' : '1px solid transparent',
+              color: activeTab === 'imports' ? '#34d399' : '#64748b',
+              fontSize: 14, fontWeight: activeTab === 'imports' ? 600 : 500,
+              cursor: 'pointer', width: '100%', textAlign: 'left',
+              marginTop: 4, transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (activeTab !== 'imports') e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+            onMouseLeave={e => { if (activeTab !== 'imports') e.currentTarget.style.background = 'transparent' }}
+          >
+            <Download size={18} />
+            Imports
+            {importProjects.length > 0 && (
+              <span style={{
+                marginLeft: 'auto', fontSize: 10, fontWeight: 600,
+                padding: '2px 8px', borderRadius: 10,
+                background: activeTab === 'imports' ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.06)',
+                color: activeTab === 'imports' ? '#34d399' : '#94a3b8',
+              }}>{importProjects.length}</span>
+            )}
           </button>
           <button
             onClick={() => showToast('Coming soon')}
@@ -298,7 +360,7 @@ export default function ProjectsPage() {
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '10px 12px', borderRadius: 10,
               background: 'transparent',
-              border: 'none',
+              border: '1px solid transparent',
               color: '#64748b', fontSize: 14, fontWeight: 500,
               cursor: 'pointer', width: '100%', textAlign: 'left',
               marginTop: 4, transition: 'background 0.15s',
@@ -376,11 +438,20 @@ export default function ProjectsPage() {
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               gap: 16, padding: '80px 20px', color: '#64748b',
             }}>
-              <div style={{ fontSize: 48, opacity: 0.3 }}>&#x1F4F1;</div>
+              <div style={{ fontSize: 48, opacity: 0.3 }}>{activeTab === 'imports' ? '\u{1F4E5}' : '\u{1F4F1}'}</div>
               <p style={{ fontSize: 16, fontWeight: 500, color: '#94a3b8', margin: 0 }}>
-                {search ? 'No projects match your search' : 'No projects yet. Create your first one!'}
+                {search
+                  ? 'No projects match your search'
+                  : activeTab === 'imports'
+                    ? 'No imports yet'
+                    : 'No projects yet. Create your first one!'}
               </p>
-              {!search && (
+              {!search && activeTab === 'imports' && (
+                <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0', textAlign: 'center', maxWidth: 320, lineHeight: 1.5 }}>
+                  Connect the Mokkoi MCP server in Claude Code to import designs directly from your IDE.
+                </p>
+              )}
+              {!search && activeTab === 'projects' && (
                 <button
                   onClick={createProject}
                   style={{
@@ -491,6 +562,17 @@ export default function ProjectsPage() {
                       <span style={{ fontSize: 11, color: '#475569' }}>
                         Modified {timeAgo(project.updated_at)}
                       </span>
+                      {project.source === 'mcp' && (
+                        <>
+                          <span style={{ fontSize: 10, color: '#475569' }}>·</span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 600,
+                            padding: '1px 6px', borderRadius: 6,
+                            background: 'rgba(52,211,153,0.1)',
+                            color: '#34d399',
+                          }}>Via MCP</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -555,7 +637,7 @@ export default function ProjectsPage() {
 
       {/* Delete confirmation modal */}
       {deleteConfirmId && (() => {
-        const project = projects.find(p => p.id === deleteConfirmId)
+        const project = projects.find(p => p.id === deleteConfirmId) || importProjects.find(p => p.id === deleteConfirmId)
         if (!project) return null
         return (
           <div

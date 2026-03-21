@@ -71,18 +71,23 @@ export async function handleGenerateFlow(args: {
 
     // Sync to canvas
     let canvasSynced = 0;
+    let projectId: string | undefined;
+    let viewUrl: string | undefined;
+
     if (isCanvasSyncEnabled()) {
-      const saved = await saveFlowToProject(
+      const flowResult = await saveFlowToProject(
         screens.map(s => ({
           name: s.name,
           componentTree: s.tree,
           originalPrompt: args.prompt,
         }))
       );
-      canvasSynced = saved.length;
+      canvasSynced = flowResult.saved.length;
+      projectId = flowResult.projectId;
+      viewUrl = flowResult.viewUrl;
     }
 
-    const result = {
+    const result: Record<string, unknown> = {
       success: true,
       screens: writtenFiles,
       navigation: 'Navigation.tsx',
@@ -91,6 +96,12 @@ export async function handleGenerateFlow(args: {
       model: response.modelUsed,
       canvasSynced,
     };
+
+    if (projectId) result.projectId = projectId;
+    if (viewUrl) {
+      result.viewUrl = viewUrl;
+      result.message = `Flow generated and saved to Mokkoi (${canvasSynced} screens). View it at ${viewUrl}`;
+    }
 
     return {
       content: [

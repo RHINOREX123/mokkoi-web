@@ -54,12 +54,14 @@ export async function handleEditScreen(args: {
     const screenName = basename(args.filePath, '.tsx').replace(/Screen$/, '');
     let currentTree: ComponentNode | undefined;
     let screenId: string | undefined;
+    let existingProjectId: string | undefined;
 
     if (isCanvasSyncEnabled()) {
       const found = await findScreenByName(screenName);
       if (found) {
         currentTree = found.component_tree;
         screenId = found.id;
+        existingProjectId = found.projectId;
       }
     }
 
@@ -79,11 +81,17 @@ export async function handleEditScreen(args: {
 
     // Update canvas if synced
     let canvasSync = false;
+    let projectId: string | undefined = existingProjectId;
+    let viewUrl: string | undefined;
+
     if (isCanvasSyncEnabled() && screenId) {
-      canvasSync = await updateScreen(screenId, newTree, args.instruction);
+      const updateResult = await updateScreen(screenId, newTree, args.instruction);
+      canvasSync = updateResult.success;
+      if (updateResult.projectId) projectId = updateResult.projectId;
+      if (updateResult.viewUrl) viewUrl = updateResult.viewUrl;
     }
 
-    const result = {
+    const result: Record<string, unknown> = {
       success: true,
       filePath: args.filePath,
       screenName,
@@ -91,6 +99,13 @@ export async function handleEditScreen(args: {
       model: response.modelUsed,
       canvasSynced: canvasSync,
     };
+
+    if (screenId) result.screenId = screenId;
+    if (projectId) result.projectId = projectId;
+    if (viewUrl) {
+      result.viewUrl = viewUrl;
+      result.message = `Screen updated in Mokkoi. View it at ${viewUrl}`;
+    }
 
     return {
       content: [

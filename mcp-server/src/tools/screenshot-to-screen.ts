@@ -90,16 +90,25 @@ export async function handleScreenshotToScreen(args: {
 
     // Sync to canvas
     let canvasSync = false;
+    let screenId: string | undefined;
+    let projectId: string | undefined;
+    let viewUrl: string | undefined;
+
     if (isCanvasSyncEnabled()) {
       const saved = await saveScreenToProject({
         name: screenName,
         componentTree: tree,
         originalPrompt: prompt,
       });
-      canvasSync = !!saved;
+      if (saved) {
+        canvasSync = true;
+        screenId = saved.id;
+        projectId = saved.projectId;
+        viewUrl = saved.viewUrl;
+      }
     }
 
-    const result = {
+    const result: Record<string, unknown> = {
       success: true,
       filePath,
       absolutePath: writtenPath,
@@ -107,6 +116,13 @@ export async function handleScreenshotToScreen(args: {
       model: response.modelUsed,
       canvasSynced: canvasSync,
     };
+
+    if (screenId) result.screenId = screenId;
+    if (projectId) result.projectId = projectId;
+    if (viewUrl) {
+      result.viewUrl = viewUrl;
+      result.message = `Screen generated and saved to Mokkoi. View it at ${viewUrl}`;
+    }
 
     return {
       content: [
