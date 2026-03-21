@@ -6,9 +6,6 @@
     "api/generate-flow.ts": {
       "maxDuration": 300
     },
-    "api/log-edit-diff.ts": {
-      "maxDuration": 10
-    },
     "api/create-checkout.ts": {
       "maxDuration": 30
     },
@@ -21,8 +18,8 @@
     "api/analyze-diffs.ts": {
       "maxDuration": 30
     },
-    "api/get-learned-defaults.ts": {
-      "maxDuration": 10
+    "api/mcp-sync.ts": {
+      "maxDuration": 15
     }
   },
   "rewrites": [
