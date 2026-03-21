@@ -42,10 +42,16 @@ export function authenticateMCPRequest(
   const rawApiKey = req.headers['x-api-key'] || ''
   const apiKeyFromHeader = Array.isArray(rawApiKey) ? rawApiKey[0] : rawApiKey
   const apiKey = apiKeyFromHeader || bearerToken
-  const serverKey = process.env.ANTHROPIC_API_KEY || ''
 
-  if (!apiKey || !serverKey) return null
-  if (!safeCompare(apiKey, serverKey)) return null
+  // Accept ANTHROPIC_API_KEY, MOKKOI_API_KEY, or SUPABASE_SERVICE_ROLE_KEY as valid server keys
+  const validKeys = [
+    process.env.ANTHROPIC_API_KEY,
+    process.env.MOKKOI_API_KEY,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  ].filter(Boolean) as string[]
+
+  if (!apiKey || validKeys.length === 0) return null
+  if (!validKeys.some((key) => safeCompare(apiKey, key))) return null
 
   return { id: 'mcp', email: undefined, isMCP: true }
 }
