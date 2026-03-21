@@ -69,7 +69,50 @@ Component tree:
 {"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A"},"children":[{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"height":200,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":48},"children":["\\uD83C\\uDF5C"]},{"type":"View","style":{"position":"absolute","top":54,"left":16},"children":[{"type":"TouchableOpacity","style":{"width":44,"height":44,"borderRadius":9999,"backgroundColor":"rgba(0,0,0,0.3)","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"color":"#FFFFFF"},"children":["\\u2190"]}]}]},{"type":"View","style":{"position":"absolute","bottom":12,"right":16,"backgroundColor":"rgba(0,0,0,0.6)","borderRadius":8,"paddingHorizontal":8,"paddingVertical":4},"children":[{"type":"Text","style":{"fontSize":12,"fontWeight":"600","color":"#FDCB6E"},"children":["\\u2605 4.7"]}]}]},{"type":"View","style":{"paddingHorizontal":20,"paddingTop":20},"children":[{"type":"Text","style":{"fontSize":24,"fontWeight":"700","color":"#FFFFFF"},"children":["Sakura Ramen House"]},{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8","marginTop":4},"children":["Japanese \\u00B7 Ramen \\u00B7 Noodles"]},{"type":"View","style":{"flexDirection":"row","gap":16,"marginTop":12},"children":[{"type":"Text","style":{"fontSize":13,"color":"#6B6B80"},"children":["25-35 min"]},{"type":"Text","style":{"fontSize":13,"color":"#6B6B80"},"children":["$2.99 delivery"]},{"type":"Text","style":{"fontSize":13,"color":"#00B894"},"children":["Min $15"]}]}]},{"type":"ScrollView","style":{"marginTop":20},"props":{"horizontal":true,"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"flexDirection":"row","gap":8,"paddingHorizontal":20},"children":[{"type":"TouchableOpacity","style":{"backgroundColor":"#6C5CE7","borderRadius":24,"paddingHorizontal":16,"height":44,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"600","color":"#FFFFFF"},"children":["All"]}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#12121F","borderRadius":24,"paddingHorizontal":16,"height":44,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#A0A0B8"},"children":["Ramen"]}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#12121F","borderRadius":24,"paddingHorizontal":16,"height":44,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#A0A0B8"},"children":["Appetizers"]}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#12121F","borderRadius":24,"paddingHorizontal":16,"height":44,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#A0A0B8"},"children":["Drinks"]}]}]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":24,"paddingBottom":98,"gap":16},"children":[{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"padding":16,"flexDirection":"row","gap":16},"children":[{"type":"View","style":{"width":80,"height":80,"borderRadius":12,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83C\\uDF5C"]}]},{"type":"View","style":{"flex":1},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"600","color":"#FFFFFF"},"children":["Tonkotsu Ramen"]},{"type":"Text","style":{"fontSize":13,"color":"#6B6B80","marginTop":4,"lineHeight":20},"children":["Rich pork bone broth, chashu, soft egg"]},{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center","marginTop":8},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"700","color":"#FFFFFF"},"children":["$16.00"]},{"type":"TouchableOpacity","style":{"width":44,"height":44,"borderRadius":9999,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"color":"#FFFFFF"},"children":["+"]}]}]}]}]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"padding":16,"flexDirection":"row","gap":16},"children":[{"type":"View","style":{"width":80,"height":80,"borderRadius":12,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83E\\uDD5F"]}]},{"type":"View","style":{"flex":1},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"600","color":"#FFFFFF"},"children":["Gyoza (6 pcs)"]},{"type":"Text","style":{"fontSize":13,"color":"#6B6B80","marginTop":4,"lineHeight":20},"children":["Pan-fried pork dumplings"]},{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center","marginTop":8},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"700","color":"#FFFFFF"},"children":["$9.00"]},{"type":"TouchableOpacity","style":{"width":44,"height":44,"borderRadius":9999,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":20,"color":"#FFFFFF"},"children":["+"]}]}]}]}]}]}]},{"type":"View","style":{"position":"absolute","bottom":0,"left":0,"right":0,"backgroundColor":"#12121F","paddingHorizontal":20,"paddingTop":16,"paddingBottom":34,"flexDirection":"row","alignItems":"center","justifyContent":"space-between","borderTopWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"View","children":[{"type":"Text","style":{"fontSize":12,"color":"#6B6B80"},"children":["2 items"]},{"type":"Text","style":{"fontSize":17,"fontWeight":"700","color":"#FFFFFF","marginTop":4},"children":["$25.00"]}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#6C5CE7","borderRadius":24,"paddingHorizontal":24,"height":48,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"700","color":"#FFFFFF"},"children":["View Cart"]}]}]}]}
 --- END EXAMPLE ---`
 
-const FEW_SHOT_EXAMPLES = [EXAMPLE_LOGIN, EXAMPLE_DASHBOARD, EXAMPLE_PROFILE, EXAMPLE_SETTINGS, EXAMPLE_PRODUCT, EXAMPLE_CHAT, EXAMPLE_MUSIC, EXAMPLE_CALENDAR, EXAMPLE_ONBOARDING, EXAMPLE_FOOD].join('\n\n')
+const ALL_FEW_SHOT_EXAMPLES = [EXAMPLE_LOGIN, EXAMPLE_DASHBOARD, EXAMPLE_PROFILE, EXAMPLE_SETTINGS, EXAMPLE_PRODUCT, EXAMPLE_CHAT, EXAMPLE_MUSIC, EXAMPLE_CALENDAR, EXAMPLE_ONBOARDING, EXAMPLE_FOOD].join('\n\n')
+
+// --- Screen type classification for dynamic few-shot selection ---
+type ScreenType = 'dashboard' | 'auth' | 'profile' | 'settings' | 'product' | 'chat' | 'music' | 'calendar' | 'onboarding' | 'food' | 'unknown'
+
+const SCREEN_TYPE_EXAMPLES: Record<ScreenType, string[]> = {
+  dashboard: [EXAMPLE_DASHBOARD, EXAMPLE_PROFILE, EXAMPLE_SETTINGS],
+  auth: [EXAMPLE_LOGIN, EXAMPLE_ONBOARDING],
+  profile: [EXAMPLE_PROFILE, EXAMPLE_DASHBOARD, EXAMPLE_SETTINGS],
+  settings: [EXAMPLE_SETTINGS, EXAMPLE_PROFILE],
+  product: [EXAMPLE_PRODUCT, EXAMPLE_FOOD],
+  chat: [EXAMPLE_CHAT, EXAMPLE_DASHBOARD],
+  music: [EXAMPLE_MUSIC, EXAMPLE_PRODUCT],
+  calendar: [EXAMPLE_CALENDAR, EXAMPLE_DASHBOARD],
+  onboarding: [EXAMPLE_ONBOARDING, EXAMPLE_LOGIN],
+  food: [EXAMPLE_FOOD, EXAMPLE_PRODUCT],
+  unknown: [EXAMPLE_DASHBOARD, EXAMPLE_PROFILE, EXAMPLE_SETTINGS],
+}
+
+// Keywords → screen type mapping for prompt-based classification
+const SCREEN_TYPE_KEYWORDS: Array<{ type: ScreenType; keywords: RegExp }> = [
+  { type: 'dashboard', keywords: /\b(dashboard|home\s*screen|stats|metrics|overview|activity|energy|performance|steps|calories|heart\s*rate|fitness|health|tracker|analytics|monitor)\b/i },
+  { type: 'auth', keywords: /\b(login|sign\s*in|sign\s*up|register|auth|password|forgot|reset\s*password|create\s*account|welcome\s*back)\b/i },
+  { type: 'profile', keywords: /\b(profile|my\s*account|user\s*page|followers|following|posts|bio|avatar)\b/i },
+  { type: 'settings', keywords: /\b(settings|preferences|config|notifications|privacy|account\s*settings|options)\b/i },
+  { type: 'product', keywords: /\b(product|shop|store|cart|price|buy|purchase|shoe|clothing|detail\s*page|item\s*detail)\b/i },
+  { type: 'chat', keywords: /\b(chat|message|messaging|conversation|inbox|dm|direct\s*message|send\s*message)\b/i },
+  { type: 'music', keywords: /\b(music|player|now\s*playing|song|album|playlist|audio|podcast|spotify)\b/i },
+  { type: 'calendar', keywords: /\b(calendar|schedule|events|appointment|agenda|planner|date\s*picker)\b/i },
+  { type: 'onboarding', keywords: /\b(onboarding|welcome|get\s*started|intro|tutorial|walkthrough|first\s*time)\b/i },
+  { type: 'food', keywords: /\b(food|restaurant|delivery|menu|order|cart|meal|recipe|cuisine|eat)\b/i },
+]
+
+function classifyScreenType(prompt: string): ScreenType {
+  for (const { type, keywords } of SCREEN_TYPE_KEYWORDS) {
+    if (keywords.test(prompt)) return type
+  }
+  return 'unknown'
+}
+
+function getRelevantExamples(screenType: ScreenType): string {
+  const examples = SCREEN_TYPE_EXAMPLES[screenType] || SCREEN_TYPE_EXAMPLES.unknown
+  return examples.join('\n\n')
+}
 
 // --- Edit mode instructions and examples (Task 4) ---
 const EDIT_MODE_INSTRUCTIONS = `
@@ -193,7 +236,7 @@ function parseDesignMdTokens(designMd: string | null): NormalizerOptions | undef
 }
 
 // --- Build system prompt ---
-function buildSystemPrompt(designMd: string | null, isEditMode: boolean = false, learnedPatterns: string = '', brandColor?: string): string {
+function buildSystemPrompt(designMd: string | null, isEditMode: boolean = false, learnedPatterns: string = '', brandColor?: string, screenType: ScreenType = 'unknown', hasImage: boolean = false): string {
   let prompt = `You are a world-class mobile UI designer and React Native expert. You create screens that look like they were designed by senior designers at Airbnb, Spotify, Stripe, or Nike. Your output is production-quality — not a prototype, not a wireframe, but a polished, beautiful screen ready to ship.
 
 Your designs follow these principles:
@@ -213,10 +256,33 @@ ${CONTENT_LIBRARY}
 
 ${PLATFORM_RULES}
 
+SCREENSHOT FIDELITY — DATA PRESERVATION RULES:
+When recreating a screen from a screenshot, these rules are MANDATORY:
+1. NEVER replace functional UI (dashboards, stat cards, data displays) with decorative hero text or splash pages.
+2. If the screenshot shows numeric data (scores, step counts, calories, percentages, prices), you MUST include matching data display components with realistic placeholder values.
+3. If the screenshot shows N cards/containers, your output MUST have at least N corresponding View containers.
+4. Stat cards with icon + number + label MUST be preserved as stat cards — never merge them into a single text block.
+5. User greetings (e.g., "Welcome back, Name") MUST be preserved as personalized text with a placeholder name.
+6. Navigation elements (bottom tabs, top nav bars, back buttons) visible in the screenshot MUST be included.
+7. Status indicators (badges, pills, progress bars, online/offline) MUST be preserved.
+8. Icons and emoji used as functional indicators (not decoration) MUST be included in the output.
+9. If a screenshot shows a complex dashboard, the output complexity should MATCH — do not simplify.
+10. Color accents and theme (dark/light) from the screenshot MUST be matched.
+
+SCREEN TYPE AWARENESS:
+When generating screens, recognize these common patterns and preserve their structure:
+- DASHBOARD: Header greeting + stat cards + content cards + optional bottom nav
+- PROFILE: Avatar + name + stats row + action buttons + content tabs
+- SETTINGS: Section headers + grouped list items with icons + toggles/chevrons
+- LIST: Search bar + filter tabs + scrollable item cards
+- DETAIL: Hero image/area + title + metadata + description + action button
+- ONBOARDING: Centered illustration + headline + description + pagination dots + CTA
+- AUTH: Logo + form inputs + primary button + social login + footer link
+
 DESIGN.MD SUPPORT:
 If the user's prompt contains a DESIGN.md block or references design tokens from an external source, extract and use those tokens instead of the defaults. Colors, typography, spacing, and component rules from DESIGN.md override Mokkoi defaults. If a DESIGN.md only partially defines tokens, use Mokkoi defaults for unspecified values. Look for markdown headers like "# Colors", "# Typography", "## Primary", "## Spacing" or code blocks containing token definitions.
 
-${FEW_SHOT_EXAMPLES}
+${hasImage && screenType !== 'unknown' ? getRelevantExamples(screenType) : ALL_FEW_SHOT_EXAMPLES}
 
 ${QUALITY_CHECKLIST}
 
@@ -341,7 +407,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { cleanPrompt, designMd } = extractDesignMd(prompt)
   const isEditMode = !!currentScreen && generationType === 'edit'
   const learnedPatterns = isNewScreen ? await getLearnedPatterns() : ''
-  const systemPromptText = buildSystemPrompt(designMd, isEditMode, learnedPatterns, brandColor)
+  const screenType = classifyScreenType(cleanPrompt)
+  const systemPromptText = buildSystemPrompt(designMd, isEditMode, learnedPatterns, brandColor, screenType, hasImage)
   const normalizerOpts = parseDesignMdTokens(designMd)
 
   // Build user message — include current screen if editing, or image if attached
@@ -350,7 +417,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Screenshot-to-screen: send image with text prompt
     const textPrompt = currentScreen
       ? `Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${cleanPrompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
-      : `Analyze this screenshot and recreate it as a React Native component tree JSON. The user says: ${cleanPrompt}\n\nRecreate this design faithfully using the supported component types. Match the layout, colors, typography, and spacing as closely as possible. Return ONLY valid JSON.`
+      : `SCREENSHOT RECREATION — STRUCTURAL ANALYSIS REQUIRED
+
+Before generating JSON, you MUST perform this structural analysis of the screenshot:
+
+STEP 1 — SCREEN CLASSIFICATION:
+Identify the screen type: dashboard, profile, settings, list, detail, onboarding, auth/login, chat, player, calendar, form, or other.
+
+STEP 2 — SECTION MAPPING:
+Identify ALL distinct visual sections from top to bottom:
+- Header area (navigation, title, avatar, status bar elements)
+- Content sections (cards, lists, grids, hero areas, forms)
+- Footer area (tab bar, bottom navigation, floating action buttons)
+
+STEP 3 — DATA ELEMENT INVENTORY:
+Count and list EVERY data element visible in the screenshot:
+- Numeric values (scores, counts, percentages, prices, stats)
+- Labels and descriptive text (titles, subtitles, categories)
+- Status indicators (badges, pills, online/offline, progress bars)
+- Icons and emoji used as visual indicators
+- User-specific content (names, avatars, greetings)
+
+STEP 4 — LAYOUT PATTERN DETECTION:
+Identify the layout patterns used:
+- Card grids (2-column, 3-column stat cards)
+- List items (vertical lists with icons/text/chevrons)
+- Hero sections (large centered content)
+- Paired metrics (side-by-side stat boxes)
+- Navigation patterns (bottom tabs, top nav, drawer indicators)
+
+CRITICAL RULES:
+- Every numeric value in the screenshot MUST appear in the output JSON
+- Every card/container in the screenshot MUST have a corresponding View in the output
+- Every icon/emoji visible MUST be preserved
+- Stat cards with numbers MUST use the paired metric pattern, not be replaced with hero text
+- If the screenshot shows a dashboard with data, output a dashboard with data — NEVER convert it to a splash/landing page
+- Preserve the EXACT number of sections, cards, and data elements
+
+The user says: ${cleanPrompt}
+
+Now generate the complete React Native component tree JSON that faithfully recreates this screenshot. Return ONLY valid JSON.`
     userContent = [
       {
         type: 'image',
@@ -384,6 +490,69 @@ The user's edit request: ${cleanPrompt}
 IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree above. Keep all text content, element positions, component structure, and styling that the user did NOT ask to change. If the user asks for a color/theme change, update ONLY colors — keep everything else identical. Return the complete modified JSON.`
   } else {
     userContent = cleanPrompt
+  }
+
+  // --- Structural validation: checks generated tree for screenshot fidelity issues ---
+  function validateStructuralFidelity(tree: any): { valid: boolean; issues: string[] } {
+    const issues: string[] = []
+    if (!tree || typeof tree !== 'object') return { valid: false, issues: ['No tree generated'] }
+
+    // Count total nodes, text nodes, and data-like text nodes
+    let totalNodes = 0
+    let textNodes = 0
+    let dataTextNodes = 0 // Text nodes with numbers (likely data/stats)
+    let viewNodes = 0
+    let touchableNodes = 0
+    let hasScrollView = false
+
+    function walk(node: any) {
+      if (!node || typeof node !== 'object') return
+      totalNodes++
+      if (node.type === 'Text' && Array.isArray(node.children)) {
+        textNodes++
+        const textContent = node.children.join('')
+        // Check if text contains numbers (likely data/metrics)
+        if (/\d/.test(textContent) && textContent.length < 20) {
+          dataTextNodes++
+        }
+      }
+      if (node.type === 'View') viewNodes++
+      if (node.type === 'TouchableOpacity') touchableNodes++
+      if (node.type === 'ScrollView') hasScrollView = true
+      if (Array.isArray(node.children)) {
+        for (const child of node.children) {
+          if (typeof child === 'object') walk(child)
+        }
+      }
+    }
+
+    walk(tree)
+
+    // Structural warnings for screenshot recreation
+    if (hasImage && totalNodes < 10) {
+      issues.push(`LOW_COMPLEXITY: Only ${totalNodes} nodes generated — screenshot likely has more elements`)
+    }
+    if (hasImage && textNodes < 3) {
+      issues.push(`LOW_TEXT_COUNT: Only ${textNodes} text nodes — screenshot likely has more labels/values`)
+    }
+    if (hasImage && viewNodes < 4) {
+      issues.push(`LOW_CONTAINER_COUNT: Only ${viewNodes} View containers — screenshot likely has more sections/cards`)
+    }
+    if (hasImage && touchableNodes === 0) {
+      issues.push(`NO_INTERACTIVITY: No TouchableOpacity found — screenshot likely has buttons/tappable areas`)
+    }
+
+    // Check if tree is suspiciously simple (hero/splash pattern detection)
+    const rootChildren = Array.isArray(tree.children) ? tree.children.filter((c: any) => typeof c === 'object') : []
+    if (hasImage && rootChildren.length <= 2 && totalNodes < 15) {
+      issues.push(`SPLASH_PATTERN_DETECTED: Tree structure too simple for a dashboard/functional screen — may have been simplified to a hero/splash layout`)
+    }
+
+    if (issues.length > 0) {
+      console.warn('[StructuralValidation]', issues.join('; '))
+    }
+
+    return { valid: issues.length === 0, issues }
   }
 
   // Robust JSON repair: strips markdown fences, extracts JSON, closes truncated structures
@@ -588,12 +757,15 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
         // Normalize the component tree
         tree = normalizeComponentTree(tree, normalizerOpts)
 
+        // Structural validation for screenshot recreation
+        const validation = validateStructuralFidelity(tree)
+
         // Deduct credits after successful generation
         if (!user.isMCP) {
           await deductCredits(user.id, creditType)
         }
 
-        res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel })}\n\n`)
+        res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel, ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}) })}\n\n`)
 
         // Usage logging
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: inputTokens, tokensOut: outputTokens, generationType, promptPreview: prompt, success: true })
@@ -661,6 +833,9 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     // Normalize the component tree
     tree = normalizeComponentTree(tree, normalizerOpts)
 
+    // Structural validation for screenshot recreation
+    const validation = validateStructuralFidelity(tree)
+
     // Deduct credits after successful generation
     if (!user.isMCP) {
       await deductCredits(user.id, creditType)
@@ -673,7 +848,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       logEditDiff({ userId: user.id, projectId: projectId || undefined, screenId: screenId || undefined, editType: editType as 'ai_edit' | 'variation' | 'regenerate', prompt, treeBefore: currentScreen, treeAfter: tree, modelUsed: model })
     }
 
-    return res.status(200).json({ tree, modelUsed: modelLabel })
+    return res.status(200).json({ tree, modelUsed: modelLabel, ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}) })
   } catch (err) {
     console.error('Generate error:', err)
     const message = err instanceof Error ? err.message : String(err)
