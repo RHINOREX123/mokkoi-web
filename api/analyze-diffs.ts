@@ -143,14 +143,111 @@ function aggregatePatterns(diffs: DiffResult[]): {
   }
 }
 
-// --- Handler ---
+// ============================================================
+// Action: log-edit-diff (POST with action=log)
+// Previously: api/log-edit-diff.ts
+// ============================================================
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+import { authenticateRequest } from './auth-helper.js'
+
+async function handleLogEditDiff(req: VercelRequest, res: VercelResponse) {
+  const user = await authenticateRequest(req, res)
+  if (!user) return
+
+  if (user.id === 'anonymous') {
+    return res.status(200).json({ ok: true })
   }
 
-  // Simple admin check — require service role key or a secret header
+  const { projectId, screenId, editType, prompt, treeBefore, treeAfter } = req.body ?? {}
+
+  if (!editType || !treeBefore || !treeAfter) {
+    return res.status(400).json({ error: 'Missing required fields: editType, treeBefore, treeAfter' })
+  }
+
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) {
+    return res.status(200).json({ ok: true })
+  }
+
+  const supabase = createClient(url, key)
+  const { error } = await supabase.from('edit_diffs').insert({
+    user_id: user.id,
+    project_id: projectId || null,
+    screen_id: screenId || null,
+    edit_type: editType,
+    prompt: prompt?.slice(0, 500) || null,
+    component_tree_before: treeBefore,
+    component_tree_after: treeAfter,
+  })
+
+  if (error) {
+    console.warn('Edit diff insert failed:', error.message)
+  }
+
+  return res.status(200).json({ ok: true })
+}
+
+// ============================================================
+// Action: get-learned-defaults (GET with action=defaults)
+// Previously: api/get-learned-defaults.ts
+// ============================================================
+
+async function handleGetLearnedDefaults(_req: VercelRequest, res: VercelResponse) {
+  const defaults: Record<string, any> = {
+    preferredColors: {
+      primary: '#6366F1', secondary: '#818CF8', background: '#0F172A',
+      surface: '#1E293B', text: '#F1F5F9', accent: '#34D399',
+    },
+    preferredSpacing: { cardPadding: 16, sectionGap: 24, screenPadding: 20, elementGap: 12 },
+    commonlyAdded: ['bottom_tab_bar', 'status_bar', 'back_button', 'search_bar'],
+    commonlyRemoved: ['placeholder_image', 'lorem_ipsum_text'],
+    source: 'hardcoded_defaults',
+  }
+
+  const { url } = getSupabaseConfig()
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (url && serviceKey) {
+    try {
+      const supabase = createClient(url, serviceKey)
+      const { data: patterns } = await supabase
+        .from('design_patterns')
+        .select('pattern_type, pattern_data, frequency')
+        .order('frequency', { ascending: false })
+        .limit(50)
+
+      if (patterns && patterns.length > 0) {
+        defaults.source = 'learned_from_diffs'
+        const colorPatterns = patterns.filter(p => p.pattern_type === 'color_change')
+        if (colorPatterns.length > 0 && colorPatterns[0].pattern_data?.to) {
+          defaults.preferredColors.primary = colorPatterns[0].pattern_data.to
+        }
+        const spacingPatterns = patterns.filter(p => p.pattern_type === 'spacing_change')
+        if (spacingPatterns.length > 0 && spacingPatterns[0].pattern_data?.property === 'padding') {
+          defaults.preferredSpacing.cardPadding = Number(spacingPatterns[0].pattern_data.to)
+        }
+        const addPatterns = patterns.filter(p => p.pattern_type === 'component_add')
+        if (addPatterns.length > 0) {
+          defaults.commonlyAdded = addPatterns.slice(0, 5).map(p => p.pattern_data?.type || 'unknown')
+        }
+        const removePatterns = patterns.filter(p => p.pattern_type === 'component_remove')
+        if (removePatterns.length > 0) {
+          defaults.commonlyRemoved = removePatterns.slice(0, 5).map(p => p.pattern_data?.type || 'unknown')
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load learned defaults from DB, using hardcoded:', e)
+    }
+  }
+
+  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+  return res.status(200).json(defaults)
+}
+
+// ============================================================
+// Action: analyze (POST with action=analyze — original handler)
+// ============================================================
+
+async function handleAnalyze(req: VercelRequest, res: VercelResponse) {
   const adminSecret = req.headers['x-admin-secret']
   const expectedSecret = process.env.ADMIN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!expectedSecret || adminSecret !== expectedSecret) {
@@ -165,7 +262,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const supabase = createClient(url, serviceKey)
 
-  // 1. Fetch last 100 edit diffs
   const { data: diffs, error: fetchError } = await supabase
     .from('edit_diffs')
     .select('id, edit_type, component_tree_before, component_tree_after, created_at')
@@ -180,51 +276,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ message: 'No diffs to analyze', patterns: [] })
   }
 
-  // 2. Analyze each diff
   const diffResults: DiffResult[] = []
   for (const diff of diffs) {
     try {
-      const result = analyzeComponentDiff(diff.component_tree_before, diff.component_tree_after)
-      diffResults.push(result)
+      diffResults.push(analyzeComponentDiff(diff.component_tree_before, diff.component_tree_after))
     } catch (e) {
-      // Skip malformed diffs
       console.warn('Failed to analyze diff', diff.id, e)
     }
   }
 
-  // 3. Aggregate patterns
   const patterns = aggregatePatterns(diffResults)
 
-  // 4. Store results in design_patterns table (upsert by pattern key)
   const toInsert: { pattern_type: string; pattern_data: any; frequency: number }[] = []
-
-  for (const p of patterns.colorPatterns.slice(0, 20)) {
-    toInsert.push({ pattern_type: 'color_change', pattern_data: p.data, frequency: p.count })
-  }
-  for (const p of patterns.spacingPatterns.slice(0, 20)) {
-    toInsert.push({ pattern_type: 'spacing_change', pattern_data: p.data, frequency: p.count })
-  }
-  for (const p of patterns.addedPatterns.slice(0, 20)) {
-    toInsert.push({ pattern_type: 'component_add', pattern_data: p.data, frequency: p.count })
-  }
-  for (const p of patterns.removedPatterns.slice(0, 20)) {
-    toInsert.push({ pattern_type: 'component_remove', pattern_data: p.data, frequency: p.count })
-  }
+  for (const p of patterns.colorPatterns.slice(0, 20)) toInsert.push({ pattern_type: 'color_change', pattern_data: p.data, frequency: p.count })
+  for (const p of patterns.spacingPatterns.slice(0, 20)) toInsert.push({ pattern_type: 'spacing_change', pattern_data: p.data, frequency: p.count })
+  for (const p of patterns.addedPatterns.slice(0, 20)) toInsert.push({ pattern_type: 'component_add', pattern_data: p.data, frequency: p.count })
+  for (const p of patterns.removedPatterns.slice(0, 20)) toInsert.push({ pattern_type: 'component_remove', pattern_data: p.data, frequency: p.count })
 
   if (toInsert.length > 0) {
-    // Clear old patterns and insert fresh
     await supabase.from('design_patterns').delete().neq('id', '00000000-0000-0000-0000-000000000000')
     const { error: insertError } = await supabase.from('design_patterns').insert(
-      toInsert.map(p => ({
-        pattern_type: p.pattern_type,
-        pattern_data: p.pattern_data,
-        frequency: p.frequency,
-        last_seen: new Date().toISOString(),
-      }))
+      toInsert.map(p => ({ pattern_type: p.pattern_type, pattern_data: p.pattern_data, frequency: p.frequency, last_seen: new Date().toISOString() }))
     )
-    if (insertError) {
-      console.warn('Failed to store patterns:', insertError.message)
-    }
+    if (insertError) console.warn('Failed to store patterns:', insertError.message)
   }
 
   return res.status(200).json({
@@ -237,4 +311,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     storedPatterns: toInsert.length,
   })
+}
+
+// ============================================================
+// Router — uses ?action= query param
+// ============================================================
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const action = (req.query?.action || req.body?.action) as string | undefined
+
+  // Route: ?action=log (POST) — log an edit diff
+  if (action === 'log') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+    return handleLogEditDiff(req, res)
+  }
+
+  // Route: ?action=defaults (GET) — get learned defaults
+  if (action === 'defaults') {
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+    return handleGetLearnedDefaults(req, res)
+  }
+
+  // Route: ?action=analyze or no action (POST) — analyze diffs (default)
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  return handleAnalyze(req, res)
 }
