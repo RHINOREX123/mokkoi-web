@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
+import { CANVAS_W, CANVAS_H } from './PhoneFrame'
 
-const PHONE_W = 261
-const PHONE_H = 560
+const PHONE_W = CANVAS_W
+const PHONE_H = CANVAS_H
 const LABEL_HEIGHT = 26 // approximate height of screen label above frame
 const GAP = 40
 const PAD_X = 60

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { PhoneFrame, DEVICE_W, DEVICE_H } from '../components/PhoneFrame'
 import { ScreenRenderer } from '../components/ScreenRenderer'
 import { Smartphone, Tablet, Monitor, LayoutGrid, Share2, ExternalLink } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
@@ -138,8 +139,12 @@ export default function PreviewPage() {
   const getScale = (d: DevicePreset) => {
     const maxH = window.innerHeight - 160 // navbar + label + padding
     const maxW = window.innerWidth - 80
-    const scaleH = maxH / d.height
-    const scaleW = maxW / d.width
+    const isPhone = d.icon === 'phone' || d.icon === 'phone-lg'
+    // For phones, scale relative to the PhoneFrame's actual DEVICE dimensions
+    const refW = isPhone ? DEVICE_W : d.width
+    const refH = isPhone ? DEVICE_H : d.height
+    const scaleH = maxH / refH
+    const scaleW = maxW / refW
     return Math.min(1, scaleH, scaleW)
   }
 
@@ -195,71 +200,51 @@ export default function PreviewPage() {
   const renderDeviceFrame = (d: DevicePreset, scale?: number) => {
     const s = scale ?? getScale(d)
     const isPhone = d.icon === 'phone' || d.icon === 'phone-lg'
+
     return (
       <div key={d.id} style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
         flexShrink: 0,
       }}>
-        <div style={{
-          width: d.width,
-          height: d.height,
-          borderRadius: d.borderRadius,
-          overflow: 'hidden',
-          background: '#000',
-          border: '2px solid rgba(255,255,255,0.12)',
-          boxShadow: '0 0 60px rgba(99,102,241,0.06), 0 20px 60px rgba(0,0,0,0.5)',
-          transform: `scale(${s})`,
-          transformOrigin: 'top center',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-        }}>
-          {/* Status bar for phones */}
-          {isPhone && (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 20px 6px',
-              flexShrink: 0, background: '#000',
-            }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.8)', fontFamily: 'monospace' }}>9:41</span>
-              <div style={{ width: 90, height: 28, borderRadius: 14, background: '#000' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <svg width="14" height="12" viewBox="0 0 12 10" fill="white" opacity="0.7">
-                  <rect x="0" y="6" width="2" height="4" rx="0.5" />
-                  <rect x="3" y="4" width="2" height="6" rx="0.5" />
-                  <rect x="6" y="2" width="2" height="8" rx="0.5" />
-                  <rect x="9" y="0" width="2" height="10" rx="0.5" />
-                </svg>
-              </div>
-            </div>
-          )}
-
-          {/* Screen content */}
-          <div
-            className="phone-screen"
-            style={{
-              flex: 1,
-              overflowX: 'hidden',
-              overflowY: 'auto',
-              backgroundColor: '#0F172A',
-              WebkitOverflowScrolling: 'touch',
-              scrollbarWidth: 'none',
-            }}
-          >
-            <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
-            {tree && <ScreenRenderer tree={tree} />}
+        {isPhone ? (
+          /* Phone presets: reuse PhoneFrame with preview mode + viewport-fit scaling */
+          <div style={{
+            transform: `scale(${s})`,
+            transformOrigin: 'top center',
+          }}>
+            <PhoneFrame mode="preview" generatedTree={tree ?? undefined} />
           </div>
-
-          {/* Home indicator for phones */}
-          {isPhone && (
-            <div style={{
-              display: 'flex', justifyContent: 'center',
-              padding: '6px 0 4px', flexShrink: 0, background: '#000',
-            }}>
-              <div style={{ width: 120, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
+        ) : (
+          /* Tablet/Desktop presets: simple container, no phone chrome */
+          <div style={{
+            width: d.width,
+            height: d.height,
+            borderRadius: d.borderRadius,
+            overflow: 'hidden',
+            background: '#000',
+            border: '2px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 0 60px rgba(99,102,241,0.06), 0 20px 60px rgba(0,0,0,0.5)',
+            transform: `scale(${s})`,
+            transformOrigin: 'top center',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <div
+              className="phone-screen"
+              style={{
+                flex: 1,
+                overflowX: 'hidden',
+                overflowY: 'auto',
+                backgroundColor: '#0F172A',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'none',
+              }}
+            >
+              <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
+              {tree && <ScreenRenderer tree={tree} />}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Device label */}
         <span style={{
@@ -408,7 +393,9 @@ export default function PreviewPage() {
           DEVICE_PRESETS.map(d => {
             // Scale all to fit: use a smaller scale for "all" view
             const maxH = window.innerHeight - 200
-            const s = Math.min(0.45, maxH / d.height)
+            const isPhone = d.icon === 'phone' || d.icon === 'phone-lg'
+            const refH = isPhone ? DEVICE_H : d.height
+            const s = Math.min(0.45, maxH / refH)
             return renderDeviceFrame(d, s)
           })
         ) : (

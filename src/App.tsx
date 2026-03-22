@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
-import { PhoneFrame } from './components/PhoneFrame'
+import { PhoneFrame, CANVAS_W, CANVAS_H } from './components/PhoneFrame'
 import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
@@ -164,7 +164,7 @@ function App() {
     if (!canvasEl || flow.indices.length === 0) return
     const rect = canvasEl.getBoundingClientRect()
 
-    const PHONE_W = 261, PHONE_H = 560, GAP = 40, PAD_X = 60, PAD_Y = 40, LABEL_H = 26
+    const PHONE_W = CANVAS_W, PHONE_H = CANVAS_H, GAP = 40, PAD_X = 60, PAD_Y = 40, LABEL_H = 26
     const firstIdx = flow.indices[0]
     const lastIdx = flow.indices[flow.indices.length - 1]
     const leftEdge = PAD_X + firstIdx * (PHONE_W + GAP)
@@ -431,7 +431,7 @@ function App() {
                         <div data-screen-id={screen.id}
                           ref={el => { if (el) phoneFrameRefs.current.set(screen.id, el); else phoneFrameRefs.current.delete(screen.id) }}
                           style={{
-                            borderRadius: 52, transition: 'box-shadow 0.25s', position: 'relative',
+                            borderRadius: 34, transition: 'box-shadow 0.25s', position: 'relative',
                             cursor: directEdit.directEditMode ? 'crosshair' : undefined,
                             boxShadow: directEdit.directEditMode && isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(59,130,246,0.5), 0 0 20px rgba(59,130,246,0.15)' : isActive && screen.source === 'mcp' ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(52,211,153,0.5), 0 0 20px rgba(52,211,153,0.15)' : isActive ? '0 8px 32px rgba(0,0,0,0.3), 0 0 0 3px rgba(99,102,241,0.5), 0 0 20px rgba(99,102,241,0.15)' : screen.source === 'mcp' ? '0 8px 32px rgba(0,0,0,0.2), 0 0 0 1px rgba(52,211,153,0.3)' : '0 8px 32px rgba(0,0,0,0.2)',
                           }}
