@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { trackEvent } from '../lib/analytics'
 import type { GeneratedScreen } from './useScreenManagement'
 import type { VariationSettings } from '../components/VariationsPanel'
+import { CANVAS_W } from '../components/PhoneFrame'
+import { GAP } from '../components/FlowConnectors'
 
 const FLOW_KEYWORDS = [
   'flow', 'onboarding', 'walkthrough', 'multi-screen', 'complete app',
@@ -115,6 +117,7 @@ interface AIGenerationDeps {
   saveMessage: (msg: ChatMessage) => Promise<void>
   setToastMessage: (msg: string) => void
   setShowVariationsPanel: (show: boolean) => void
+  getNextScreenPosition: () => { x: number; y: number }
 }
 
 /** Build conversation history from recent messages for Claude context */
@@ -144,6 +147,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     saveMessage,
     setToastMessage,
     setShowVariationsPanel,
+    getNextScreenPosition,
   } = deps
 
   const [isGenerating, setIsGenerating] = useState(false)
@@ -208,11 +212,13 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     if (flowRequest && !editingScreen) {
       const placeholderId = crypto.randomUUID()
       const placeholderName = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
+      const nextPos = getNextScreenPosition()
       const placeholderScreen: GeneratedScreen = {
         id: placeholderId,
         name: placeholderName,
         originalPrompt: prompt,
         tree: { type: 'View', style: {}, children: [] },
+        ...nextPos,
       }
       setGeneratedScreens(prev => [...prev, placeholderScreen])
       setActiveGeneratedId(placeholderId)
@@ -236,11 +242,13 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         const flowId = crypto.randomUUID()
         const screenNames = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { name: string }) => s.name)
 
-        const newFlowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }) => ({
+        const newFlowScreens: GeneratedScreen[] = (screens as Array<{ id: string; name: string; tree: ComponentNode }>).map((s: { id: string; name: string; tree: ComponentNode }, i: number) => ({
           id: crypto.randomUUID(),
           name: s.name,
           tree: s.tree,
           flowId,
+          x: nextPos.x + i * (CANVAS_W + GAP), // CANVAS_W + GAP for each subsequent screen
+          y: nextPos.y,
         }))
 
         setGeneratedScreens(prev => {
@@ -288,11 +296,13 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     } else {
       targetId = crypto.randomUUID()
       screenName = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
+      const singlePos = getNextScreenPosition()
       const newScreen: GeneratedScreen = {
         id: targetId,
         name: screenName,
         originalPrompt: prompt,
         tree: { type: 'View', style: {}, children: [] },
+        ...singlePos,
       }
       setGeneratedScreens(prev => [...prev, newScreen])
       setActiveGeneratedId(targetId)
@@ -457,12 +467,15 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     const originalTree = JSON.stringify(activeGenerated.tree)
 
     const placeholders: GeneratedScreen[] = []
+    const varPos = getNextScreenPosition()
     for (let i = 0; i < settings.count; i++) {
       const ph: GeneratedScreen = {
         id: crypto.randomUUID(),
         name: `${activeGenerated.name} v${i + 1}`,
         originalPrompt: activeGenerated.originalPrompt,
         tree: { type: 'View', style: {}, children: [] },
+        x: varPos.x + i * (CANVAS_W + GAP), // CANVAS_W + GAP
+        y: varPos.y,
       }
       placeholders.push(ph)
     }

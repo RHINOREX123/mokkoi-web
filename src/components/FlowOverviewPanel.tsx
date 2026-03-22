@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { ChevronDown, ChevronUp, Maximize2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Maximize2, X } from 'lucide-react'
 import type { FlowGroup } from './FlowConnectors'
 
 interface FlowOverviewPanelProps {
@@ -7,9 +7,13 @@ interface FlowOverviewPanelProps {
   activeScreenId: string | null
   onScreenClick: (screenId: string) => void
   onViewFlow: (flow: FlowGroup) => void
+  /** Whether flow view mode is active (arrows visible) */
+  flowViewMode?: boolean
+  /** Called to exit flow view mode */
+  onExitFlowView?: () => void
 }
 
-export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onViewFlow }: FlowOverviewPanelProps) {
+export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onViewFlow, flowViewMode, onExitFlowView }: FlowOverviewPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [activeFlowIdx, setActiveFlowIdx] = useState(0)
 
@@ -51,11 +55,12 @@ export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onView
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
             width: 8, height: 8, borderRadius: '50%',
-            background: '#818CF8',
-            boxShadow: '0 0 8px rgba(129,140,248,0.5)',
+            background: flowViewMode ? '#34d399' : '#818CF8',
+            boxShadow: flowViewMode ? '0 0 12px rgba(52,211,153,0.6)' : '0 0 8px rgba(129,140,248,0.5)',
+            transition: 'all 0.2s',
           }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
-            {flow.name} — {flow.screens.length} screens
+            {flowViewMode ? `${flow.name} — Flow View` : `${flow.name} — ${flow.screens.length} screens`}
           </span>
         </div>
         {collapsed ? <ChevronUp size={14} color="#94a3b8" /> : <ChevronDown size={14} color="#94a3b8" />}
@@ -159,32 +164,60 @@ export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onView
             })}
           </div>
 
-          {/* View Flow button */}
-          <button
-            onClick={() => onViewFlow(flow)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              width: '100%',
-              padding: '7px 0',
-              marginTop: 8,
-              borderRadius: 8,
-              background: 'rgba(99,102,241,0.12)',
-              border: '1px solid rgba(99,102,241,0.25)',
-              color: '#818CF8',
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.2)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.12)' }}
-          >
-            <Maximize2 size={12} />
-            View Flow
-          </button>
+          {/* View Flow / Exit Flow View button */}
+          {flowViewMode ? (
+            <button
+              onClick={() => onExitFlowView?.()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '7px 0',
+                marginTop: 8,
+                borderRadius: 8,
+                background: 'rgba(99,102,241,0.25)',
+                border: '1px solid rgba(99,102,241,0.5)',
+                color: '#A5B4FC',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.35)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.25)' }}
+            >
+              <X size={12} />
+              Exit Flow View
+            </button>
+          ) : (
+            <button
+              onClick={() => onViewFlow(flow)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                width: '100%',
+                padding: '7px 0',
+                marginTop: 8,
+                borderRadius: 8,
+                background: 'rgba(99,102,241,0.12)',
+                border: '1px solid rgba(99,102,241,0.25)',
+                color: '#818CF8',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.2)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.12)' }}
+            >
+              <Maximize2 size={12} />
+              View Flow
+            </button>
+          )}
         </div>
       )}
     </div>

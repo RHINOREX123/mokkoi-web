@@ -2,6 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
 import type { ChatMessage } from '../components/ChatPanel'
+import { CANVAS_W } from '../components/PhoneFrame'
+import { GAP, PAD_X, PAD_Y } from '../components/FlowConnectors'
 
 export interface GeneratedScreen {
   id: string
@@ -46,6 +48,8 @@ export interface ScreenManagement {
   saveProjectName: (name: string) => Promise<void>
   projectLoadedRef: React.MutableRefObject<boolean>
   hasTreeRef: React.MutableRefObject<boolean>
+  /** Returns the next available {x, y} position for a new screen (right of all existing screens) */
+  getNextScreenPosition: () => { x: number; y: number }
 }
 
 export function useScreenManagement(projectId: string | undefined): ScreenManagement {
@@ -145,6 +149,8 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
             tree: newScreen.component_tree as ComponentNode,
             originalPrompt: (newScreen.original_prompt ?? newScreen.prompt ?? undefined) as string | undefined,
             source: 'mcp',
+            x: (newScreen.x_pos as number) ?? undefined,
+            y: (newScreen.y_pos as number) ?? undefined,
           }
 
           setGeneratedScreens(prev => {
@@ -229,17 +235,31 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     })
   }, [projectId])
 
+  /** Calculate the next available position for a new screen (right of all existing screens) */
+  const getNextScreenPosition = useCallback((): { x: number; y: number } => {
+    if (generatedScreens.length === 0) return { x: PAD_X, y: PAD_Y }
+    let maxRight = 0
+    generatedScreens.forEach((s, i) => {
+      const sx = s.x ?? (PAD_X + i * (CANVAS_W + GAP))
+      const right = sx + CANVAS_W
+      if (right > maxRight) maxRight = right
+    })
+    return { x: maxRight + GAP, y: PAD_Y }
+  }, [generatedScreens])
+
   const handleDuplicateScreen = useCallback(() => {
     if (!activeGenerated) return
+    const dupPos = getNextScreenPosition()
     const newScreen: GeneratedScreen = {
       id: crypto.randomUUID(),
       name: `${activeGenerated.name} (copy)`,
       tree: JSON.parse(JSON.stringify(activeGenerated.tree)),
       flowId: activeGenerated.flowId,
+      ...dupPos,
     }
     setGeneratedScreens(prev => [...prev, newScreen])
     setActiveGeneratedId(newScreen.id)
-  }, [activeGenerated])
+  }, [activeGenerated, getNextScreenPosition])
 
   const handleRenameScreen = useCallback(() => {
     if (!activeGenerated) return
@@ -287,5 +307,6 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     saveProjectName,
     projectLoadedRef,
     hasTreeRef,
+    getNextScreenPosition,
   }
 }

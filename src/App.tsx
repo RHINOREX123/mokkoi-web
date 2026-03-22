@@ -68,6 +68,7 @@ function App() {
   const [showScreenshotModal, setShowScreenshotModal] = useState(false)
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
+  const [flowViewMode, setFlowViewMode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Resizable panel
@@ -88,6 +89,7 @@ function App() {
     saveMessage: screens.saveMessage,
     setToastMessage,
     setShowVariationsPanel,
+    getNextScreenPosition: screens.getNextScreenPosition,
   })
 
   // Direct Edit
@@ -109,6 +111,16 @@ function App() {
     setPanOffset: canvas.setPanOffset,
     hasTreeRef: screens.hasTreeRef,
   })
+
+  // Exit flow view mode on Escape
+  useEffect(() => {
+    if (!flowViewMode) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setFlowViewMode(false) }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [flowViewMode])
 
   // Screen drag handlers (global mousemove/mouseup)
   useEffect(() => {
@@ -251,6 +263,7 @@ function App() {
 
     canvas.setZoomLevel(clampedZoom)
     canvas.setPanOffset({ x: panX, y: panY })
+    setFlowViewMode(true)
   }, [canvas.canvasRef, canvas.setZoomLevel, canvas.setPanOffset, screens.generatedScreens, screenPositions])
 
   const handleFlowScreenClick = (screenName: string) => {
@@ -341,6 +354,7 @@ function App() {
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvasBg === 'true') {
+      if (flowViewMode) { setFlowViewMode(false); return }
       if (directEdit.directEditMode) { directEdit.exitDirectEdit(false); return }
       screens.setActiveGeneratedId(null)
     }
@@ -484,7 +498,7 @@ function App() {
                 transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current) ? 'none' : 'transform 0.15s ease-out',
                 cursor: canvas.panActive ? 'inherit' : 'default',
               }}>
-                {flows.length > 0 && (
+                {flowViewMode && flows.length > 0 && (
                   <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} screenPositions={screenPositions} />
                 )}
 
@@ -617,6 +631,8 @@ function App() {
                 phoneFrameRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
               }}
               onViewFlow={handleViewFlow}
+              flowViewMode={flowViewMode}
+              onExitFlowView={() => setFlowViewMode(false)}
             />
           </div>
         </ErrorBoundary>
