@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './auth-helper.js'
 import { normalizeComponentTree } from './normalizer.js'
-import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 
 const FLOW_SYSTEM_PROMPT = `You are a world-class mobile UI designer and React Native expert. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
@@ -17,6 +17,10 @@ ${DESIGN_TOKENS}
 ${COMPONENT_TYPES}
 
 ${CONTENT_LIBRARY}
+
+${VIEWPORT_BUDGET}
+
+${CONTENT_DENSITY}
 
 ${PLATFORM_RULES}
 

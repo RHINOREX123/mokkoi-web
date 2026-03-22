@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan, getSupabaseConfig } from './auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
 import { normalizeComponentTree, type NormalizerOptions } from './normalizer.js'
-import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 
 // --- Few-shot examples (compact JSON) ---
 // Each uses the correct format: style at top level, props for component-specific properties only.
@@ -15,8 +15,9 @@ Component tree:
 
 const EXAMPLE_DASHBOARD = `--- EXAMPLE ---
 User: "Create a fitness dashboard home screen"
+NOTE: This dashboard fits in ONE viewport (~600px content). No ScrollView. Compact spacing (12-16px between sections). Stat cards in a horizontal row.
 Component tree:
-{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54},"children":[{"type":"ScrollView","style":{"flex":1},"props":{"showsVerticalScrollIndicator":false},"children":[{"type":"View","style":{"paddingHorizontal":20,"paddingTop":16},"children":[{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center"},"children":[{"type":"View","children":[{"type":"Text","style":{"fontSize":14,"color":"#6B6B80"},"children":["Good morning"]},{"type":"Text","style":{"fontSize":24,"fontWeight":"600","color":"#FFFFFF","marginTop":4},"children":["Sarah"]}]},{"type":"View","style":{"width":40,"height":40,"borderRadius":9999,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["S"]}]}]},{"type":"Text","style":{"fontSize":13,"color":"#6B6B80","marginTop":4},"children":["Monday, March 20"]}]},{"type":"View","style":{"flexDirection":"row","gap":12,"paddingHorizontal":20,"marginTop":24},"children":[{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDC5F"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":8},"children":["8,450"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["steps"]}]},{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDD25"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":8},"children":["342"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["kcal burned"]}]},{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u2764\\uFE0F"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":8},"children":["72"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":4},"children":["bpm resting"]}]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":32},"children":[{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["Daily Goal"]},{"type":"Text","style":{"fontSize":14,"color":"#6C5CE7"},"children":["82%"]}]},{"type":"View","style":{"height":8,"backgroundColor":"#222236","borderRadius":12,"marginTop":12,"overflow":"hidden"},"children":[{"type":"View","style":{"width":"82%","height":8,"backgroundColor":"#6C5CE7","borderRadius":12}}]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80","marginTop":8},"children":["You're 82% to your daily goal!"]}]},{"type":"View","style":{"paddingHorizontal":20,"marginTop":32},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF","marginBottom":16},"children":["Today's Workout"]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"overflow":"hidden"},"children":[{"type":"View","style":{"height":160,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":48},"children":["\\uD83C\\uDFCB\\uFE0F"]}]},{"type":"View","style":{"padding":16},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["Morning HIIT"]},{"type":"Text","style":{"fontSize":14,"color":"#A0A0B8","marginTop":4},"children":["30 min · Intermediate"]},{"type":"TouchableOpacity","style":{"backgroundColor":"#6C5CE7","borderRadius":24,"height":48,"alignItems":"center","justifyContent":"center","marginTop":12},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"700","color":"#FFFFFF"},"children":["Start Workout"]}]}]}]}]},{"type":"View","style":{"flexDirection":"row","flexWrap":"wrap","gap":12,"paddingHorizontal":20,"marginTop":32,"paddingBottom":24},"children":[{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83C\\uDF4E"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Nutrition"]}]},{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83D\\uDCA7"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Hydration"]}]},{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83D\\uDE34"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Sleep"]}]},{"type":"View","style":{"width":"47%","backgroundColor":"#12121F","borderRadius":12,"padding":16,"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":28},"children":["\\uD83D\\uDCCA"]},{"type":"Text","style":{"fontSize":13,"fontWeight":"500","color":"#FFFFFF","marginTop":8},"children":["Insights"]}]}]}]},{"type":"View","style":{"flexDirection":"row","backgroundColor":"#12121F","paddingTop":8,"paddingBottom":34,"paddingHorizontal":20,"justifyContent":"space-around","alignItems":"center","borderTopWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDFE0"]},{"type":"Text","style":{"fontSize":11,"color":"#6C5CE7","marginTop":4},"children":["Home"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u26A1"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Activity"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDF4E"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Nutrition"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDC64"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Profile"]}]}]}]}
+{"type":"View","style":{"flex":1,"backgroundColor":"#0A0A1A","paddingTop":54},"children":[{"type":"View","style":{"flex":1,"paddingHorizontal":20},"children":[{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center","paddingTop":12},"children":[{"type":"View","children":[{"type":"Text","style":{"fontSize":14,"color":"#6B6B80"},"children":["Good morning"]},{"type":"Text","style":{"fontSize":24,"fontWeight":"600","color":"#FFFFFF","marginTop":2},"children":["Sarah"]}]},{"type":"View","style":{"width":40,"height":40,"borderRadius":9999,"backgroundColor":"#6C5CE7","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":17,"fontWeight":"600","color":"#FFFFFF"},"children":["S"]}]}]},{"type":"View","style":{"flexDirection":"row","gap":12,"marginTop":16},"children":[{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":12,"height":80,"justifyContent":"center","alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17},"children":["\\uD83D\\uDC5F"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":4},"children":["8,450"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":2},"children":["steps"]}]},{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":12,"height":80,"justifyContent":"center","alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17},"children":["\\uD83D\\uDD25"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":4},"children":["342"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":2},"children":["kcal"]}]},{"type":"View","style":{"flex":1,"backgroundColor":"#12121F","borderRadius":12,"padding":12,"height":80,"justifyContent":"center","alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":17},"children":["\\u2764\\uFE0F"]},{"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF","marginTop":4},"children":["72"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":2},"children":["bpm"]}]}]},{"type":"View","style":{"marginTop":16},"children":[{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"600","color":"#FFFFFF"},"children":["Daily Goal"]},{"type":"Text","style":{"fontSize":14,"fontWeight":"600","color":"#6C5CE7"},"children":["82%"]}]},{"type":"View","style":{"height":6,"backgroundColor":"#222236","borderRadius":12,"marginTop":8,"overflow":"hidden"},"children":[{"type":"View","style":{"width":"82%","height":6,"backgroundColor":"#6C5CE7","borderRadius":12}}]}]},{"type":"View","style":{"backgroundColor":"#12121F","borderRadius":12,"padding":16,"marginTop":16,"flexDirection":"row","alignItems":"center","gap":16},"children":[{"type":"View","style":{"width":48,"height":48,"borderRadius":12,"backgroundColor":"#1A1A2E","alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":24},"children":["\\uD83C\\uDFCB\\uFE0F"]}]},{"type":"View","style":{"flex":1},"children":[{"type":"Text","style":{"fontSize":16,"fontWeight":"600","color":"#FFFFFF"},"children":["Morning HIIT"]},{"type":"Text","style":{"fontSize":13,"color":"#A0A0B8","marginTop":2},"children":["30 min · Intermediate"]}]},{"type":"TouchableOpacity","style":{"backgroundColor":"#6C5CE7","borderRadius":24,"paddingHorizontal":16,"height":36,"alignItems":"center","justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"700","color":"#FFFFFF"},"children":["Start"]}]}]},{"type":"View","style":{"marginTop":16},"children":[{"type":"View","style":{"flexDirection":"row","justifyContent":"space-between","alignItems":"center","marginBottom":12},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"600","color":"#FFFFFF"},"children":["Recent Activity"]},{"type":"Text","style":{"fontSize":13,"color":"#6C5CE7"},"children":["See All"]}]},{"type":"View","style":{"gap":8},"children":[{"type":"View","style":{"flexDirection":"row","alignItems":"center","backgroundColor":"#12121F","borderRadius":12,"padding":12,"height":52},"children":[{"type":"Text","style":{"fontSize":20,"marginRight":12},"children":["\\uD83C\\uDFC3"]},{"type":"View","style":{"flex":1},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#FFFFFF"},"children":["Evening Run"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80"},"children":["5.2 km · 342 cal"]}]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80"},"children":["Yesterday"]}]},{"type":"View","style":{"flexDirection":"row","alignItems":"center","backgroundColor":"#12121F","borderRadius":12,"padding":12,"height":52},"children":[{"type":"Text","style":{"fontSize":20,"marginRight":12},"children":["\\uD83E\\uDDD8"]},{"type":"View","style":{"flex":1},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#FFFFFF"},"children":["Yoga Flow"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80"},"children":["45 min · 180 cal"]}]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80"},"children":["2d ago"]}]},{"type":"View","style":{"flexDirection":"row","alignItems":"center","backgroundColor":"#12121F","borderRadius":12,"padding":12,"height":52},"children":[{"type":"Text","style":{"fontSize":20,"marginRight":12},"children":["\\uD83D\\uDEB4"]},{"type":"View","style":{"flex":1},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"500","color":"#FFFFFF"},"children":["Cycling"]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80"},"children":["12 km · 410 cal"]}]},{"type":"Text","style":{"fontSize":12,"color":"#6B6B80"},"children":["3d ago"]}]}]}]}]},{"type":"View","style":{"flexDirection":"row","backgroundColor":"#12121F","paddingTop":8,"paddingBottom":34,"paddingHorizontal":20,"justifyContent":"space-around","alignItems":"center","borderTopWidth":1,"borderColor":"#2A2A3E"},"children":[{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDFE0"]},{"type":"Text","style":{"fontSize":11,"color":"#6C5CE7","marginTop":4},"children":["Home"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\u26A1"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Activity"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83C\\uDF4E"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Nutrition"]}]},{"type":"View","style":{"alignItems":"center"},"children":[{"type":"Text","style":{"fontSize":20},"children":["\\uD83D\\uDC64"]},{"type":"Text","style":{"fontSize":11,"color":"#6B6B80","marginTop":4},"children":["Profile"]}]}]}]}
 --- END EXAMPLE ---`
 
 const EXAMPLE_PROFILE = `--- EXAMPLE ---
@@ -107,6 +108,24 @@ function classifyScreenType(prompt: string): ScreenType {
     if (keywords.test(prompt)) return type
   }
   return 'unknown'
+}
+
+// --- Complexity detection for model routing ---
+const COMPLEX_PROMPT_INDICATORS = [
+  /dashboard/i,
+  /home\s*screen/i,
+  /banking|finance|fintech/i,
+  /profile.*(?:stats|followers|posts)/i,
+  /\$[\d,]+/,  // dollar amounts
+  /\d+[KkMm]\s*(?:followers|steps|calories)/i,  // metrics with K/M
+  /transaction|payment|history/i,
+  /multiple.*(?:cards|sections|tabs)/i,
+  /(?:checking|savings|account).*balance/i,
+]
+
+function isComplexPrompt(prompt: string): boolean {
+  const matchCount = COMPLEX_PROMPT_INDICATORS.filter(pattern => pattern.test(prompt)).length
+  return matchCount >= 2
 }
 
 function getRelevantExamples(screenType: ScreenType): string {
@@ -254,6 +273,10 @@ ${COMPONENT_TYPES}
 
 ${CONTENT_LIBRARY}
 
+${VIEWPORT_BUDGET}
+
+${CONTENT_DENSITY}
+
 ${PLATFORM_RULES}
 
 SCREENSHOT FIDELITY — DATA PRESERVATION RULES:
@@ -377,18 +400,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  // Plan-based model routing
+  // Plan-based model routing with complexity detection
   const userPlan = await getUserPlan(user.id)
+  const complex = isComplexPrompt(prompt)
+  // Track if free-tier user got upgraded to Sonnet for credit adjustment
+  let freeTierSonnetUpgrade = false
 
   let model: string
   let maxTokens: number
-  if (userPlan === 'free') {
-    // Free plan: always Haiku
-    model = 'claude-haiku-4-5-20251001'
-    maxTokens = hasImage ? 16000 : (isNewScreen || isVariation || isRegenerate) ? 12000 : 8000
-  } else if (hasImage) {
+  if (hasImage) {
+    // Images always use Sonnet (vision capability required)
     model = 'claude-sonnet-4-20250514'
     maxTokens = 16000
+  } else if (userPlan === 'free') {
+    if (complex && (isNewScreen || isVariation || isRegenerate)) {
+      // Complex prompts get Sonnet even on free tier (costs 2x credits)
+      model = 'claude-sonnet-4-20250514'
+      maxTokens = 12000
+      freeTierSonnetUpgrade = true
+    } else {
+      model = 'claude-haiku-4-5-20251001'
+      maxTokens = (isNewScreen || isVariation || isRegenerate) ? 12000 : 8000
+    }
   } else if (isNewScreen || isVariation || isRegenerate) {
     model = 'claude-sonnet-4-20250514'
     maxTokens = 12000
@@ -763,6 +796,10 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
         // Deduct credits after successful generation
         if (!user.isMCP) {
           await deductCredits(user.id, creditType)
+          // Deduct extra credits for free-tier Sonnet upgrade (2x total)
+          if (freeTierSonnetUpgrade) {
+            await deductCredits(user.id, creditType)
+          }
         }
 
         res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel, ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}) })}\n\n`)
@@ -839,6 +876,10 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     // Deduct credits after successful generation
     if (!user.isMCP) {
       await deductCredits(user.id, creditType)
+      // Deduct extra credits for free-tier Sonnet upgrade (2x total)
+      if (freeTierSonnetUpgrade) {
+        await deductCredits(user.id, creditType)
+      }
     }
 
     logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, generationType, promptPreview: prompt, success: true })

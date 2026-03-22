@@ -193,6 +193,56 @@ Correct:  {"type":"Text","style":{"fontSize":24,"fontWeight":"700","color":"#FFF
 Wrong:    {"type":"Text","props":{"style":{"fontSize":24}},"children":["Hello"]}
 `
 
+export const VIEWPORT_BUDGET = `
+VIEWPORT BUDGET (CRITICAL):
+The phone screen is 375×812pt (iPhone 14/15 standard). After status bar (54px) and home indicator (34px), usable content height is ~724px.
+
+RULES:
+- DASHBOARD and HOME screens MUST fit in ONE viewport without scrolling. Do NOT wrap in ScrollView.
+- Use compact spacing: 8-12px between items within a section, 12-16px between major sections.
+- Stat cards should be 70-90px tall, not 120+.
+- Use horizontal layouts (flexDirection: "row") for stat cards — 2-3 cards per row, NOT vertical stacking.
+- Bottom tab bar is ~60px — budget for it in the viewport.
+- Total content height budget: header (~50px) + main content (~550px) + bottom nav (~60px) = ~660px. Stay under this.
+
+SCROLLVIEW RULES:
+- NEVER use ScrollView for: dashboards, home screens, profiles (above the fold)
+- ONLY use ScrollView for: long lists (5+ items), detail pages with descriptions, settings pages, chat/message lists
+- If a screen has a bottom tab bar, the content above it must fit without scrolling.
+
+HEIGHT BUDGET BY SCREEN TYPE:
+- Dashboard: 4-5 sections max, each 80-120px. Total ~500-600px content + nav.
+- Profile: Avatar section (~150px) + stats row (~50px) + action buttons (~50px) + content tabs (~300px) = ~550px
+- Banking: Balance hero (~100px) + 2 account cards side-by-side (~90px) + 3 transactions (~180px) + bottom nav (~60px) = ~430px
+- Settings: Can use ScrollView — list naturally exceeds viewport
+- Detail/Product: Can use ScrollView — hero image + content naturally exceeds viewport
+`
+
+export const CONTENT_DENSITY = `
+CONTENT DENSITY:
+Show SUMMARY data, not exhaustive data. Users can tap "See All" for more.
+
+DASHBOARD/HOME DENSITY RULES:
+- Balance/hero number: ONE prominent number (total balance, daily calories, step count). Large font (28-34px), centered or left-aligned.
+- Account/stat cards: Show 2-3 cards in a HORIZONTAL ROW (flexDirection: "row", gap: 12). Each card: 48% width or 31% width. Height: 80-90px max.
+- Transaction/activity list: Show 2-3 items maximum with a "See All" link. Each item: 48-56px height (icon + text + amount in one row).
+- Quick actions: Show 3-4 icon buttons in a horizontal row. Each: 44-48px.
+- Bottom tab bar: 4-5 tabs max, 49px height + 34px safe area.
+
+WHAT NOT TO DO:
+- Do NOT stack cards vertically when they can go side-by-side
+- Do NOT show more than 3 transactions/activities on a dashboard
+- Do NOT add "Financial Health" or "Emergency Fund" or "Weekly Summary" sections to a banking dashboard — keep it to: balance + accounts + recent transactions + nav
+- Do NOT add extra motivational text, tips, or insights sections on dashboards
+- Do NOT use more than 5 visual sections on any single viewport screen
+
+COMPACT CARD PATTERN:
+A stat card should be:
+  { height: 80, borderRadius: 12, padding: 12, justifyContent: "center" }
+NOT:
+  { height: 160, borderRadius: 16, padding: 24 }
+`
+
 export const PLATFORM_RULES = `
 iOS CONVENTIONS AND LAYOUT RULES:
 - Status bar: paddingTop 54 on root container
@@ -210,7 +260,12 @@ LAYOUT RULES:
 - Cards: 12-16px borderRadius, 16px padding, surface-1 background
 - Buttons: 48px height, 24px borderRadius (pill shape), bold text
 - Inputs: 48px height, 12px borderRadius, surface-3 background, 16px horizontal padding
-- Section spacing: 24-32px between sections, 8-16px within sections
+- SPACING BY CONTEXT:
+  Dashboard/Home: 12-16px between sections, 4-8px within sections (COMPACT)
+  Detail/Article: 20-24px between sections, 8-12px within sections (STANDARD)
+  Settings/Forms: 24-32px between sections, 0-4px within groups (GROUPED)
+  Onboarding/Hero: 32-48px between elements (BREATHING)
+  Default to COMPACT spacing unless the screen type calls for more.
 - Horizontal padding: 16-20px on all screen content
 - Icons: use emoji characters or colored View circles — never text descriptions like "[icon]"
 - Design for standard mobile proportions (375pt width) — use percentage widths (width: "100%", width: "48%") for responsive elements
@@ -241,6 +296,6 @@ QUALITY CHECKLIST — Verify before generating output:
 6. All buttons and touchable elements are at least 44px tall
 7. Content is realistic and matches the app category
 8. Cards have consistent padding (16px) and border radius (12px)
-9. Sections are visually separated with 24-32px spacing
+9. Dashboard sections fit within one viewport (~724px). Non-dashboard screens use appropriate ScrollView when content exceeds viewport. Spacing matches screen type: compact (12-16px) for dashboards, standard (20-24px) for details, grouped (24-32px) for settings.
 10. The screen would look professional in a design portfolio
 `
