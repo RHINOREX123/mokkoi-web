@@ -16,7 +16,7 @@ interface DevicePreset {
 }
 
 const DEVICE_PRESETS: DevicePreset[] = [
-  { id: 'iphone14', width: 390, height: 844, name: 'iPhone 13 & 14', borderRadius: 47, icon: 'phone' },
+  { id: 'iphone14', width: 390, height: 884, name: 'iPhone 14 / 15', borderRadius: 47, icon: 'phone' },
   { id: 'iphone16pm', width: 430, height: 932, name: 'iPhone 16 Pro Max', borderRadius: 55, icon: 'phone-lg' },
   { id: 'android', width: 412, height: 917, name: 'Android Compact', borderRadius: 30, icon: 'phone' },
   { id: 'ipad', width: 768, height: 1024, name: 'iPad', borderRadius: 20, icon: 'tablet' },
@@ -35,9 +35,27 @@ export default function PreviewPage() {
   const [showAll, setShowAll] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
-  // Load screen data
+  // Load screen data — try sessionStorage first (in-memory preview from studio),
+  // then fall back to Supabase (shared/public link)
   useEffect(() => {
     if (!projectId || !screenId) return
+
+    // 1. Try sessionStorage (set by handlePreviewNewTab in App.tsx)
+    try {
+      const raw = sessionStorage.getItem('mokkoi-preview-data')
+      if (raw) {
+        sessionStorage.removeItem('mokkoi-preview-data') // one-shot
+        const payload = JSON.parse(raw)
+        if (payload.tree) {
+          setScreenName(payload.name || 'Untitled Screen')
+          setTree(payload.tree as ComponentNode)
+          setLoading(false)
+          return
+        }
+      }
+    } catch { /* ignore parse errors, fall through to Supabase */ }
+
+    // 2. Fall back to Supabase fetch for shared/public links
     const load = async () => {
       if (!supabase) { setError('Not configured'); setLoading(false); return }
       // Check project access: public OR owned by authenticated user

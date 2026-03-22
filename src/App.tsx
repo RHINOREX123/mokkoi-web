@@ -220,7 +220,14 @@ function App() {
   }, [])
   const handleMakeDarker = useCallback(() => { if (screens.activeGeneratedId) ai.handleSend('Make this screen darker with a dark theme') }, [screens.activeGeneratedId, ai.handleSend])
   const handleMakeLighter = useCallback(() => { if (screens.activeGeneratedId) ai.handleSend('Make this screen lighter with a light theme') }, [screens.activeGeneratedId, ai.handleSend])
-  const handlePreviewNewTab = useCallback(() => { if (screens.activeGeneratedId && projectId) window.open(`/preview/${projectId}/${screens.activeGeneratedId}`, '_blank') }, [screens.activeGeneratedId, projectId])
+  const handlePreviewNewTab = useCallback(() => {
+    if (!screens.activeGeneratedId || !projectId) return
+    // Store the current in-memory tree in sessionStorage so PreviewPage can render it
+    // without needing a Supabase round-trip (works for unsaved screens too)
+    const payload = { tree: screens.generatedTree, name: screens.activeGenerated?.name || 'Untitled Screen' }
+    try { sessionStorage.setItem('mokkoi-preview-data', JSON.stringify(payload)) } catch { /* quota exceeded, fall back to Supabase fetch */ }
+    window.open(`/preview/${projectId}/${screens.activeGeneratedId}`, '_blank')
+  }, [screens.activeGeneratedId, screens.generatedTree, screens.activeGenerated, projectId])
   const handleShowQrCode = useCallback(() => {
     if (!projectId) return
     setQrUrl(screens.activeGeneratedId ? `${window.location.origin}/preview/${projectId}/${screens.activeGeneratedId}` : `${window.location.origin}/view/${projectId}`)

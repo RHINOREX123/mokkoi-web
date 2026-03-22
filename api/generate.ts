@@ -114,6 +114,7 @@ function classifyScreenType(prompt: string): ScreenType {
 const COMPLEX_PROMPT_INDICATORS = [
   /dashboard/i,
   /home\s*screen/i,
+  /home.screen/i,
   /banking|finance|fintech/i,
   /profile.*(?:stats|followers|posts)/i,
   /\$[\d,]+/,  // dollar amounts
@@ -121,11 +122,16 @@ const COMPLEX_PROMPT_INDICATORS = [
   /transaction|payment|history/i,
   /multiple.*(?:cards|sections|tabs)/i,
   /(?:checking|savings|account).*balance/i,
+  /fitness/i,
+  /social.*media/i,
+  /e-?commerce/i,
+  /chat.*app/i,
+  /food.*delivery/i,
 ]
 
 function isComplexPrompt(prompt: string): boolean {
   const matchCount = COMPLEX_PROMPT_INDICATORS.filter(pattern => pattern.test(prompt)).length
-  return matchCount >= 2
+  return matchCount >= 1
 }
 
 function getRelevantExamples(screenType: ScreenType): string {
