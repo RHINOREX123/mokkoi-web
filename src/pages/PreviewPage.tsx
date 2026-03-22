@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame, DEVICE_W, DEVICE_H } from '../components/PhoneFrame'
 import { ScreenRenderer } from '../components/ScreenRenderer'
-import { Smartphone, Tablet, Monitor, LayoutGrid, Share2, ExternalLink } from 'lucide-react'
+import { Smartphone, Tablet, LayoutGrid, Share2, ExternalLink } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
 
@@ -13,15 +13,15 @@ interface DevicePreset {
   height: number
   name: string
   borderRadius: number
-  icon: 'phone' | 'phone-lg' | 'tablet' | 'desktop'
+  icon: 'phone' | 'phone-lg' | 'tablet'
 }
 
 const DEVICE_PRESETS: DevicePreset[] = [
-  { id: 'iphone14', width: 390, height: 884, name: 'iPhone 14 / 15', borderRadius: 47, icon: 'phone' },
-  { id: 'iphone16pm', width: 430, height: 932, name: 'iPhone 16 Pro Max', borderRadius: 55, icon: 'phone-lg' },
-  { id: 'android', width: 412, height: 917, name: 'Android Compact', borderRadius: 30, icon: 'phone' },
+  { id: 'iphone14-15pro', width: 393, height: 852, name: 'iPhone 14/15 Pro', borderRadius: 47, icon: 'phone' },
+  { id: 'iphone16pro', width: 393, height: 852, name: 'iPhone 16 Pro', borderRadius: 47, icon: 'phone' },
+  { id: 'iphone13-14', width: 390, height: 844, name: 'iPhone 13/14', borderRadius: 47, icon: 'phone' },
+  { id: 'iphoneSE', width: 375, height: 667, name: 'iPhone SE', borderRadius: 40, icon: 'phone' },
   { id: 'ipad', width: 768, height: 1024, name: 'iPad', borderRadius: 20, icon: 'tablet' },
-  { id: 'desktop', width: 1280, height: 800, name: 'Desktop', borderRadius: 8, icon: 'desktop' },
 ]
 
 export default function PreviewPage() {
@@ -32,7 +32,7 @@ export default function PreviewPage() {
   const [tree, setTree] = useState<ComponentNode | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeDevice, setActiveDevice] = useState('iphone14')
+  const [activeDevice, setActiveDevice] = useState('iphone14-15pro')
   const [showAll, setShowAll] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
@@ -131,7 +131,6 @@ export default function PreviewPage() {
       case 'phone': return <Smartphone size={16} />
       case 'phone-lg': return <Smartphone size={18} />
       case 'tablet': return <Tablet size={16} />
-      case 'desktop': return <Monitor size={16} />
     }
   }
 

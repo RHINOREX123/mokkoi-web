@@ -12,6 +12,10 @@ export interface GeneratedScreen {
   type?: 'generated' | 'image'
   imageUrl?: string
   source?: 'web' | 'mcp'
+  /** Canvas x position (persisted to Supabase) */
+  x?: number
+  /** Canvas y position (persisted to Supabase) */
+  y?: number
 }
 
 export interface ScreenManagement {
@@ -87,6 +91,8 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
           tree: s.component_tree as ComponentNode,
           originalPrompt: s.original_prompt ?? s.prompt ?? undefined,
           source: (s.source as 'web' | 'mcp') ?? 'web',
+          x: (s as Record<string, unknown>).x_pos as number | undefined,
+          y: (s as Record<string, unknown>).y_pos as number | undefined,
         }))
         setGeneratedScreens(loaded)
         setActiveGeneratedId(loaded[0].id)
@@ -198,6 +204,8 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
           order_index: i,
           updated_at: new Date().toISOString(),
           source: s.source ?? 'web',
+          x_pos: s.x ?? null,
+          y_pos: s.y ?? null,
         })
       }
       await sb.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)

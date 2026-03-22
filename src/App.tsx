@@ -5,7 +5,7 @@ import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
 import { MousePointer2, Hand, ZoomIn, ZoomOut, PenTool, Sparkles, Download, Share2, Plus, X, Upload, Pencil, LogOut, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
-import { FlowConnectors, getFlows } from './components/FlowConnectors'
+import { FlowConnectors, getFlows, GAP, PAD_X, PAD_Y } from './components/FlowConnectors'
 import { FlowOverviewPanel } from './components/FlowOverviewPanel'
 import { DirectEditToolbar } from './components/DirectEditToolbar'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
@@ -43,6 +43,15 @@ function App() {
   const canvas = useCanvasState()
   const screens = useScreenManagement(projectId)
   const phoneFrameRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // Screen drag state
+  const isDraggingScreen = useRef(false)
+  const dragScreenId = useRef<string | null>(null)
+  const dragStart = useRef({ x: 0, y: 0 })
+  const dragScreenStart = useRef({ x: 0, y: 0 })
+  const didDragScreen = useRef(false)
+  const zoomRef = useRef(canvas.zoomLevel)
+  zoomRef.current = canvas.zoomLevel
 
   // UI state
   const [showCodeExport, setShowCodeExport] = useState(false)
@@ -101,6 +110,43 @@ function App() {
     hasTreeRef: screens.hasTreeRef,
   })
 
+  // Screen drag handlers (global mousemove/mouseup)
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingScreen.current || !dragScreenId.current) return
+      const scale = zoomRef.current / 100
+      const dx = (e.clientX - dragStart.current.x) / scale
+      const dy = (e.clientY - dragStart.current.y) / scale
+      if (!didDragScreen.current && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+        didDragScreen.current = true
+      }
+      if (didDragScreen.current) {
+        const newX = Math.max(0, dragScreenStart.current.x + dx)
+        const newY = Math.max(0, dragScreenStart.current.y + dy)
+        const id = dragScreenId.current
+        screens.setGeneratedScreens(prev => prev.map(s =>
+          s.id === id ? { ...s, x: newX, y: newY } : s
+        ))
+      }
+    }
+    const handleMouseUp = () => {
+      if (isDraggingScreen.current) {
+        isDraggingScreen.current = false
+        dragScreenId.current = null
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        // didDragScreen stays true so the click handler ignores it
+        requestAnimationFrame(() => { didDragScreen.current = false })
+      }
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [screens.setGeneratedScreens])
+
   // Split panel dragging
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -158,19 +204,38 @@ function App() {
   // Flow detection
   const flows = useMemo(() => getFlows(screens.generatedScreens), [screens.generatedScreens])
 
-  const handleViewFlow = useCallback((flow: { indices: number[] }) => {
+  // Build screen positions map for flow connectors and view-flow zoom
+  const screenPositions = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>()
+    screens.generatedScreens.forEach((s, i) => {
+      map.set(s.id, {
+        x: s.x ?? (PAD_X + i * (CANVAS_W + GAP)),
+        y: s.y ?? PAD_Y,
+      })
+    })
+    return map
+  }, [screens.generatedScreens])
+
+  const handleViewFlow = useCallback((flow: { indices: number[]; screens?: { id: string }[] }) => {
     // Zoom and pan to fit all screens in the flow
     const canvasEl = canvas.canvasRef.current
     if (!canvasEl || flow.indices.length === 0) return
     const rect = canvasEl.getBoundingClientRect()
 
-    const PHONE_W = CANVAS_W, PHONE_H = CANVAS_H, GAP = 40, PAD_X = 60, PAD_Y = 40, LABEL_H = 26
-    const firstIdx = flow.indices[0]
-    const lastIdx = flow.indices[flow.indices.length - 1]
-    const leftEdge = PAD_X + firstIdx * (PHONE_W + GAP)
-    const rightEdge = PAD_X + lastIdx * (PHONE_W + GAP) + PHONE_W
-    const topEdge = PAD_Y
-    const bottomEdge = PAD_Y + LABEL_H + PHONE_H
+    const PHONE_W = CANVAS_W, PHONE_H = CANVAS_H, LABEL_H = 26
+    // Use actual screen positions for bounding box
+    let leftEdge = Infinity, rightEdge = -Infinity, topEdge = Infinity, bottomEdge = -Infinity
+    for (const idx of flow.indices) {
+      const s = screens.generatedScreens[idx]
+      if (!s) continue
+      const pos = screenPositions.get(s.id)
+      const sx = pos?.x ?? (PAD_X + idx * (PHONE_W + GAP))
+      const sy = pos?.y ?? PAD_Y
+      leftEdge = Math.min(leftEdge, sx)
+      rightEdge = Math.max(rightEdge, sx + PHONE_W)
+      topEdge = Math.min(topEdge, sy)
+      bottomEdge = Math.max(bottomEdge, sy + LABEL_H + PHONE_H)
+    }
 
     const contentW = rightEdge - leftEdge + 80
     const contentH = bottomEdge - topEdge + 80
@@ -186,7 +251,7 @@ function App() {
 
     canvas.setZoomLevel(clampedZoom)
     canvas.setPanOffset({ x: panX, y: panY })
-  }, [canvas.canvasRef, canvas.setZoomLevel, canvas.setPanOffset])
+  }, [canvas.canvasRef, canvas.setZoomLevel, canvas.setPanOffset, screens.generatedScreens, screenPositions])
 
   const handleFlowScreenClick = (screenName: string) => {
     const screen = screens.generatedScreens.find(s => s.name === screenName && s.flowId)
@@ -283,9 +348,24 @@ function App() {
 
   const handlePhoneClick = (e: React.MouseEvent, screenId: string) => {
     e.stopPropagation()
-    if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
+    if (didDragScreen.current || canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
     if (directEdit.directEditMode) { directEdit.handleDirectEditClick(e, screenId); return }
     screens.setActiveGeneratedId(screenId)
+  }
+
+  /** Start dragging a screen on the canvas */
+  const handleScreenMouseDown = (e: React.MouseEvent, screenId: string, sx: number, sy: number) => {
+    if (e.button !== 0) return // left click only
+    if (canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return // let canvas pan handle it
+    if (directEdit.directEditMode) return // don't drag in direct edit mode
+    e.stopPropagation() // prevent canvas panning
+    isDraggingScreen.current = true
+    dragScreenId.current = screenId
+    dragStart.current = { x: e.clientX, y: e.clientY }
+    dragScreenStart.current = { x: sx, y: sy }
+    didDragScreen.current = false
+    document.body.style.cursor = 'grabbing'
+    document.body.style.userSelect = 'none'
   }
 
   // Command palette
@@ -398,20 +478,33 @@ function App() {
               </div>
             ) : (
               <div data-canvas-bg="true" style={{
-                display: 'flex', alignItems: 'flex-start', gap: 40, padding: '40px 60px',
+                position: 'relative',
+                minWidth: 1, minHeight: 1,
                 transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px) scale(${canvas.zoomLevel / 100})`,
-                transformOrigin: 'center center', transition: canvas.isPanning.current ? 'none' : 'transform 0.15s ease-out',
+                transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current) ? 'none' : 'transform 0.15s ease-out',
                 cursor: canvas.panActive ? 'inherit' : 'default',
               }}>
                 {flows.length > 0 && (
-                  <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} />
+                  <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} screenPositions={screenPositions} />
                 )}
 
                 {screens.generatedScreens.map((screen, idx) => {
                   const isActive = screen.id === screens.activeGeneratedId
                   const isImage = screen.type === 'image'
+                  const sx = screen.x ?? (PAD_X + idx * (CANVAS_W + GAP))
+                  const sy = screen.y ?? PAD_Y
                   return (
-                    <div key={screen.id} onClick={(e) => handlePhoneClick(e, screen.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: canvas.panActive ? 'inherit' : 'pointer', flexShrink: 0 }}>
+                    <div key={screen.id}
+                      onMouseDown={(e) => handleScreenMouseDown(e, screen.id, sx, sy)}
+                      onClick={(e) => handlePhoneClick(e, screen.id)}
+                      style={{
+                        position: 'absolute',
+                        left: sx,
+                        top: sy,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                        cursor: canvas.panActive ? 'inherit' : isDraggingScreen.current && dragScreenId.current === screen.id ? 'grabbing' : 'grab',
+                        flexShrink: 0,
+                      }}>
                       {screens.editingScreenLabel === screen.id ? (
                         <input autoFocus value={screens.editingScreenLabelValue} onChange={e => screens.setEditingScreenLabelValue(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') screens.commitScreenRename(); if (e.key === 'Escape') screens.setEditingScreenLabel(null) }}

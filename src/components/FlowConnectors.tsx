@@ -5,9 +5,9 @@ import { CANVAS_W, CANVAS_H } from './PhoneFrame'
 const PHONE_W = CANVAS_W
 const PHONE_H = CANVAS_H
 const LABEL_HEIGHT = 26 // approximate height of screen label above frame
-const GAP = 40
-const PAD_X = 60
-const PAD_Y = 40
+export const GAP = 40
+export const PAD_X = 60
+export const PAD_Y = 40
 
 export interface FlowGroup {
   flowId: string
@@ -88,10 +88,11 @@ export function getFlows(screens: GeneratedScreen[]): FlowGroup[] {
   return flows
 }
 
-/** Get the center-right and center-left positions of a screen on the canvas */
-function getScreenRect(screenIndex: number) {
-  const x = PAD_X + screenIndex * (PHONE_W + GAP)
-  const y = PAD_Y + LABEL_HEIGHT
+/** Get the bounding rect of a screen on the canvas, using explicit position or fallback to index */
+function getScreenRect(screenId: string, screenIndex: number, screenPositions?: Map<string, { x: number; y: number }>) {
+  const pos = screenPositions?.get(screenId)
+  const x = pos ? pos.x : PAD_X + screenIndex * (PHONE_W + GAP)
+  const y = (pos ? pos.y : PAD_Y) + LABEL_HEIGHT
   return { x, y, w: PHONE_W, h: PHONE_H }
 }
 
@@ -105,9 +106,11 @@ function inferTransitionType(screenName: string): string {
 interface FlowConnectorsProps {
   flows: FlowGroup[]
   totalScreens: number
+  /** Map of screenId → { x, y } canvas positions for free-drag layout */
+  screenPositions?: Map<string, { x: number; y: number }>
 }
 
-export function FlowConnectors({ flows }: FlowConnectorsProps) {
+export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) {
   const connectors = useMemo(() => {
     const lines: Array<{
       key: string
@@ -120,8 +123,10 @@ export function FlowConnectors({ flows }: FlowConnectorsProps) {
       for (let i = 0; i < flow.indices.length - 1; i++) {
         const fromIdx = flow.indices[i]
         const toIdx = flow.indices[i + 1]
-        const fromRect = getScreenRect(fromIdx)
-        const toRect = getScreenRect(toIdx)
+        const fromId = flow.screens[i].id
+        const toId = flow.screens[i + 1].id
+        const fromRect = getScreenRect(fromId, fromIdx, screenPositions)
+        const toRect = getScreenRect(toId, toIdx, screenPositions)
 
         const x1 = fromRect.x + fromRect.w
         const y1 = fromRect.y + fromRect.h / 2
