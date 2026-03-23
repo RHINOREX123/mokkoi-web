@@ -5,7 +5,7 @@ import {
   Download, Copy, Type, Trash2, Star, ThumbsUp, ThumbsDown, ChevronDown, PenTool,
 } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
-import { DEVICE_PRESETS, getDevicePreset } from '../constants/devices'
+import { DEVICE_PRESETS } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
 
 interface ScreenContextToolbarProps {
@@ -71,8 +71,6 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
     onExportCode, onDownloadImage, onDuplicate, onRename, onDelete,
     onToast, onDirectEdit, deviceId, onDeviceChange,
   } = props
-
-  const selectedDevice = getDevicePreset(deviceId)
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -240,6 +238,33 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
           <div style={DROPDOWN_STYLE}>
             {menuItem(<ExternalLink size={16} color="#94a3b8" />, 'Preview in new tab', onPreviewNewTab)}
             {menuItem(<QrCode size={16} color="#94a3b8" />, 'Show QR Code', onShowQrCode)}
+            {divider}
+            <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 600, color: '#555', letterSpacing: '0.3px' }}>
+              Screen Device
+            </div>
+            {DEVICE_PRESETS.map(preset => {
+              const isSelected = deviceId === preset.id
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => { onDeviceChange(preset.id as DeviceId); setOpenDropdown(null) }}
+                  style={{
+                    ...MENU_ITEM_STYLE,
+                    justifyContent: 'space-between',
+                    color: isSelected ? '#818CF8' : '#e2e8f0',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 14, width: 20, textAlign: 'center' }}>{preset.icon}</span>
+                    {preset.name}
+                    <span style={{ fontSize: 11, color: '#555', fontWeight: 400 }}>{preset.width}×{preset.height}</span>
+                  </span>
+                  {isSelected && <span style={{ color: '#818CF8', fontSize: 14 }}>✓</span>}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -264,47 +289,6 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
             {menuItem(<Type size={16} color="#94a3b8" />, 'Rename screen', onRename)}
             {divider}
             {menuItem(<Trash2 size={16} color="#f87171" />, 'Delete screen', onDelete, { danger: true })}
-          </div>
-        )}
-      </div>
-
-      {/* Device Selector */}
-      <div style={{ position: 'relative' }}>
-        <button
-          style={toolbarBtnStyle(openDropdown === 'device')}
-          onClick={() => toggleDropdown('device')}
-          onMouseEnter={e => { if (openDropdown !== 'device') e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-          onMouseLeave={e => { if (openDropdown !== 'device') e.currentTarget.style.background = 'transparent' }}
-        >
-          <span style={{ fontSize: 13 }}>{selectedDevice.icon}</span>
-          {selectedDevice.name}
-          <ChevronDown size={12} style={{ opacity: 0.5 }} />
-        </button>
-        {openDropdown === 'device' && (
-          <div style={DROPDOWN_STYLE}>
-            {DEVICE_PRESETS.map(preset => (
-              <button
-                key={preset.id}
-                onClick={() => { onDeviceChange(preset.id as DeviceId); setOpenDropdown(null) }}
-                style={{
-                  ...MENU_ITEM_STYLE,
-                  color: deviceId === preset.id ? '#818CF8' : '#e2e8f0',
-                  background: deviceId === preset.id ? 'rgba(99,102,241,0.12)' : 'transparent',
-                }}
-                onMouseEnter={e => {
-                  if (deviceId !== preset.id) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = deviceId === preset.id ? 'rgba(99,102,241,0.12)' : 'transparent'
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 15, width: 22, textAlign: 'center' }}>{preset.icon}</span>
-                  {preset.name}
-                </span>
-                <span style={{ fontSize: 11, color: '#555' }}>{preset.width}×{preset.height}</span>
-              </button>
-            ))}
           </div>
         )}
       </div>
