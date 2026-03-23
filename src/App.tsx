@@ -138,8 +138,8 @@ function App() {
         didDragScreen.current = true
       }
       if (didDragScreen.current) {
-        const newX = Math.max(0, dragScreenStart.current.x + dx)
-        const newY = Math.max(0, dragScreenStart.current.y + dy)
+        const newX = dragScreenStart.current.x + dx
+        const newY = dragScreenStart.current.y + dy
         const id = dragScreenId.current
         screens.setGeneratedScreens(prev => prev.map(s =>
           s.id === id ? { ...s, x: newX, y: newY } : s
@@ -463,26 +463,21 @@ function App() {
                         position: 'absolute',
                         left: sx,
                         top: sy,
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                         cursor: canvas.panActive ? 'inherit' : isDraggingScreen.current && dragScreenId.current === screen.id ? 'grabbing' : 'grab',
                         flexShrink: 0,
                       }}>
-                      <div style={{ transform: `scale(${100 / canvas.zoomLevel})`, transformOrigin: 'center bottom', pointerEvents: 'auto' }}>
-                        {screens.editingScreenLabel === screen.id ? (
-                          <input autoFocus value={screens.editingScreenLabelValue} onChange={e => screens.setEditingScreenLabelValue(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') screens.commitScreenRename(); if (e.key === 'Escape') screens.setEditingScreenLabel(null) }}
-                            onBlur={screens.commitScreenRename} onClick={e => e.stopPropagation()}
-                            style={{ fontSize: 13, fontWeight: 600, color: '#fff', textAlign: 'center', maxWidth: 240, width: 180, padding: '4px 12px', borderRadius: 8, background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.5)', outline: 'none' }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? '#fff' : 'rgba(255,255,255,0.75)', textAlign: 'center', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'all 0.2s', padding: '4px 12px', borderRadius: 8, background: isActive ? 'rgba(99,102,241,0.35)' : 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', display: 'inline-flex', alignItems: 'center', gap: 6, border: isActive ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.08)' }}>
-                            {screen.name.length > 25 ? screen.name.slice(0, 25) + '...' : screen.name}
-                            {screen.source === 'mcp' && (
-                              <span style={{ fontSize: 9, fontWeight: 700, color: '#34d399', background: 'rgba(52,211,153,0.2)', padding: '2px 5px', borderRadius: 4, letterSpacing: '0.5px', flexShrink: 0 }} title="Created via MCP (Claude Code / Cursor)">MCP</span>
-                            )}
-                          </span>
-                        )}
-                      </div>
+                      {screens.editingScreenLabel === screen.id ? (
+                        <input autoFocus value={screens.editingScreenLabelValue} onChange={e => screens.setEditingScreenLabelValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') screens.commitScreenRename(); if (e.key === 'Escape') screens.setEditingScreenLabel(null) }}
+                          onBlur={screens.commitScreenRename} onClick={e => e.stopPropagation()}
+                          style={{ fontSize: 11, fontWeight: 500, color: '#fff', textAlign: 'center', maxWidth: 260, width: 180, padding: '2px 6px', borderRadius: 4, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', outline: 'none' }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 500, color: isActive ? '#fff' : 'rgba(255,255,255,0.6)', textAlign: 'center', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', marginBottom: -2 }}>
+                          {screen.name}
+                        </span>
+                      )}
 
                       <ErrorBoundary fallbackMessage="Screen render error">
                         <div data-screen-id={screen.id}
