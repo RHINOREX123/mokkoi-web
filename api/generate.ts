@@ -296,7 +296,27 @@ Your designs follow these principles:
 - Every element has a purpose — no decorative noise
 - Content is realistic and contextual — never generic placeholder text
 
-Generate a React Native component tree as JSON. Return a single JSON object. Return ONLY valid JSON, no markdown, no explanation.
+Generate a React Native component tree as JSON.
+${!isEditMode ? `
+DESIGN PROCESS — MANDATORY TWO PHASES:
+
+PHASE 1: Before generating ANY JSON, write a design brief inside <design_brief> tags:
+<design_brief>
+App Name: [Creative brand name inspired by the prompt, e.g. "VITALITY" for fitness, "NEXUS" for crypto, "VAULT" for banking]
+Design Mood: [2-3 word mood, e.g. "kinetic energy", "premium minimal", "warm comfort", "playful discovery"]
+Layout Strategy: [Specific layout choices, e.g. "Hero stat with SVG progress ring, horizontal 3-stat row, activity list with 3 items, bottom tab bar"]
+Typography: [e.g. "Bold 28px hero numbers with letterSpacing -0.5, uppercase 11px section labels with letterSpacing 1, regular 14px body text"]
+Visual Accents: [e.g. "Circular SVG progress ring at 75%, LinearGradient CTA button, Unsplash hero image, DiceBear avatar"]
+Icon Style: [e.g. "material-symbols for nav tabs, lucide outlined for inline actions"]
+Image Strategy: [e.g. "searchQuery 'gym workout' for hero, avatar 'Sarah' for profile pic, searchQuery 'running trail' for activity card"]
+</design_brief>
+
+PHASE 2: Generate the JSON component tree following your design brief EXACTLY. The app name, layout strategy, typography, visual accents, and image strategy in your brief MUST appear in your JSON output.
+
+For user avatars and profile pictures, use Image with avatar prop: {"type":"Image","style":{"width":40,"height":40,"borderRadius":9999},"props":{"avatar":"Sarah"}}
+
+After the design brief, return a single JSON object. No markdown fences, no explanation — just the brief then the JSON.
+` : 'Return ONLY valid JSON, no markdown, no explanation.'}
 ${deviceInfo ? `
 TARGET DEVICE: You are designing for a ${deviceInfo.name} screen at ${deviceInfo.width}x${deviceInfo.height} pixels. Design content to fit within this viewport. ${deviceInfo.category === 'Android' ? 'This is an Android device — use Material Design conventions where appropriate.' : 'This is an iOS device — use iOS/HIG conventions where appropriate.'}
 ` : ''}
@@ -664,6 +684,15 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     return { valid: issues.length === 0, issues }
   }
 
+  // Extract design brief from two-phase generation response
+  function extractDesignBrief(raw: string): { brief: string | null; jsonText: string } {
+    const briefMatch = raw.match(/<design_brief>([\s\S]*?)<\/design_brief>/)
+    const brief = briefMatch ? briefMatch[1].trim() : null
+    // Remove the design brief to isolate the JSON
+    const jsonText = raw.replace(/<design_brief>[\s\S]*?<\/design_brief>/, '').trim()
+    return { brief, jsonText }
+  }
+
   // Robust JSON repair: strips markdown fences, extracts JSON, closes truncated structures
   function repairJSON(raw: string): any {
     let s = raw.trim()
@@ -861,7 +890,9 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       }
 
       try {
-        let tree = repairJSON(fullText)
+        // Extract design brief from two-phase response
+        const { brief: designBrief, jsonText } = extractDesignBrief(fullText)
+        let tree = repairJSON(jsonText || fullText)
 
         // Normalize the component tree
         tree = normalizeComponentTree(tree, normalizerOpts)
@@ -878,7 +909,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
           }
         }
 
-        res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel, ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}) })}\n\n`)
+        res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel, ...(designBrief ? { designBrief } : {}), ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}) })}\n\n`)
 
         // Usage logging
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: inputTokens, tokensOut: outputTokens, generationType, promptPreview: prompt, success: true })
@@ -935,9 +966,12 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       return res.status(502).json({ error: 'Empty response from AI service' })
     }
 
+    // Extract design brief from two-phase response
+    const { brief: designBrief, jsonText } = extractDesignBrief(text)
+
     let tree: any
     try {
-      tree = repairJSON(text)
+      tree = repairJSON(jsonText || text)
     } catch (jsonErr) {
       console.error('JSON repair failed. Raw start:', text.slice(0, 500))
       return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
@@ -968,6 +1002,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     return res.status(200).json({
       tree,
       modelUsed: modelLabel,
+      ...(designBrief ? { designBrief } : {}),
       ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}),
       ...(themeResult ? { theme: { category: themeResult.category, palette: themeResult.palette.name, isDarkMode: themeResult.isDarkMode } } : {}),
     })
