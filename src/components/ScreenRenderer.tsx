@@ -157,6 +157,75 @@ const MATERIAL_SYMBOL_MAP: Record<string, string> = {
   'paperclip': 'attach_file',
 }
 
+// Reverse map: Material Symbols name → Lucide name (auto-generated from above)
+const LUCIDE_NAME_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(MATERIAL_SYMBOL_MAP).map(([lucide, material]) => [material, lucide])
+)
+// Add extra Material Symbols → Lucide mappings that don't have a 1:1 reverse
+Object.assign(LUCIDE_NAME_MAP, {
+  'local_fire_department': 'flame',
+  'directions_run': 'activity',
+  'directions_walk': 'activity',
+  'directions_bike': 'bike',
+  'directions_car': 'car',
+  'monitoring': 'activity',
+  'fitness_center': 'dumbbell',
+  'water_drop': 'droplets',
+  'bolt': 'zap',
+  'notifications': 'bell',
+  'person': 'user',
+  'favorite': 'heart',
+  'play_arrow': 'play',
+  'skip_next': 'skip-forward',
+  'skip_previous': 'skip-back',
+  'volume_up': 'volume-2',
+  'shopping_cart': 'shopping-cart',
+  'trending_up': 'trending-up',
+  'trending_down': 'trending-down',
+  'arrow_back': 'arrow-left',
+  'arrow_forward': 'arrow-right',
+  'arrow_upward': 'arrow-up',
+  'arrow_downward': 'arrow-down',
+  'chevron_right': 'chevron-right',
+  'chevron_left': 'chevron-left',
+  'expand_more': 'chevron-down',
+  'expand_less': 'chevron-up',
+  'schedule': 'clock',
+  'calendar_today': 'calendar',
+  'photo_camera': 'camera',
+  'location_on': 'map-pin',
+  'visibility': 'eye',
+  'lock_open': 'unlock',
+  'content_copy': 'copy',
+  'delete': 'trash-2',
+  'filter_list': 'filter',
+  'language': 'globe',
+  'more_horiz': 'more-horizontal',
+  'more_vert': 'more-vertical',
+  'open_in_new': 'external-link',
+  'credit_card': 'credit-card',
+  'attach_file': 'paperclip',
+  'music_note': 'music',
+  'light_mode': 'sun',
+  'dark_mode': 'moon',
+  'local_shipping': 'truck',
+  'bar_chart': 'bar-chart-2',
+  'pie_chart': 'pie-chart',
+  'emoji_events': 'trophy',
+  'menu_book': 'book',
+  'medical_services': 'pill',
+  'sports_esports': 'gamepad',
+  'spa': 'flower-2',
+  'apartment': 'building-2',
+  'qr_code': 'qr-code',
+  'qr_code_scanner': 'scan',
+  'power_settings_new': 'power',
+  'message': 'message-circle',
+  'thumb_up': 'thumbs-up',
+  'thumb_down': 'thumbs-down',
+  'person_add': 'user-plus',
+})
+
 // Map React Native style properties to CSS equivalents
 function rnStyleToCSS(style?: Record<string, unknown>): React.CSSProperties {
   if (!style) return {}
@@ -451,36 +520,57 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const iconSize = (node.props?.size as number) ?? 24
       const iconColor = (node.props?.color as string) ?? '#FFFFFF'
       const iconSet = (node.props?.set as string) ?? 'lucide'
-      const filled = (node.props?.filled as boolean) ?? false
-      // For material-symbols, append filled suffix
-      const resolvedSet = iconSet === 'material-symbols' && filled ? 'material-symbols' : iconSet
-      const resolvedName = iconSet === 'material-symbols' && filled ? `${iconName}-filled` : iconName
-      // Iconify CDN: supports lucide, material-symbols, feather, phosphor, heroicons, fa6-solid, etc.
+
+      // Resolve icon name for the target set:
+      // If AI outputs Material Symbols name (e.g. "favorite") but set is "lucide",
+      // map it to the Lucide equivalent (e.g. "heart")
+      let resolvedName = iconName
+      if (iconSet === 'lucide' && LUCIDE_NAME_MAP[iconName]) {
+        resolvedName = LUCIDE_NAME_MAP[iconName]
+      } else if (iconSet !== 'lucide' && iconSet !== 'material-symbols' && LUCIDE_NAME_MAP[iconName]) {
+        // For other sets (phosphor, feather, heroicons), try Lucide name mapping
+        resolvedName = LUCIDE_NAME_MAP[iconName] || iconName
+      }
+      // Also handle underscores → hyphens (material_symbols style → lucide style)
+      if (iconSet === 'lucide' && resolvedName.includes('_')) {
+        resolvedName = LUCIDE_NAME_MAP[resolvedName] || resolvedName.replace(/_/g, '-')
+      }
+
       const encodedColor = encodeURIComponent(iconColor)
-      const iconUrl = `https://api.iconify.design/${resolvedSet}/${resolvedName}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
-      // Fallback to Material Symbols font if Iconify fails
+      // Primary: try Iconify CDN with resolved name
+      const primaryUrl = `https://api.iconify.design/${iconSet}/${resolvedName}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
+      // Fallback URL: try material-symbols set with original name (handles AI outputting Material names)
       const materialName = MATERIAL_SYMBOL_MAP[iconName] ?? iconName
+      const fallbackUrl = `https://api.iconify.design/material-symbols/${materialName.replace(/-/g, '_')}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
+
       return (
         <img
           key={key}
-          src={iconUrl}
+          src={primaryUrl}
           alt={iconName}
           width={iconSize}
           height={iconSize}
           loading="lazy"
           style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
           onError={(e) => {
-            // Fallback: replace with Material Symbols font span
-            const span = document.createElement('span')
-            span.className = 'material-symbols-outlined'
-            span.textContent = materialName
-            span.style.fontSize = `${iconSize}px`
-            span.style.color = iconColor
-            span.style.lineHeight = '1'
-            span.style.display = 'inline-flex'
-            span.style.alignItems = 'center'
-            span.style.justifyContent = 'center';
-            (e.target as HTMLElement).replaceWith(span)
+            const img = e.target as HTMLImageElement
+            if (!img.dataset.fallback) {
+              // First failure: try Material Symbols set via Iconify
+              img.dataset.fallback = '1'
+              img.src = fallbackUrl
+            } else {
+              // Both failed: show a small colored circle (not a broken letter)
+              const circle = document.createElement('span')
+              circle.style.display = 'inline-flex'
+              circle.style.alignItems = 'center'
+              circle.style.justifyContent = 'center'
+              circle.style.width = `${iconSize}px`
+              circle.style.height = `${iconSize}px`
+              circle.style.borderRadius = '50%'
+              circle.style.backgroundColor = iconColor + '22'
+              circle.style.flexShrink = '0'
+              img.replaceWith(circle)
+            }
           }}
         />
       )
