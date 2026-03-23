@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Sparkles, RefreshCw, LayoutGrid, Pencil, MessageSquare, Palette, Moon, Sun,
-  Play, ExternalLink, QrCode, Smartphone, Tablet, MoreHorizontal, Code,
+  Play, ExternalLink, QrCode, Smartphone, MoreHorizontal, Code,
   Download, Copy, Type, Trash2, Star, ThumbsUp, ThumbsDown, ChevronDown, PenTool,
 } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
@@ -21,8 +21,6 @@ interface ScreenContextToolbarProps {
   onMakeLighter: () => void
   onPreviewNewTab: () => void
   onShowQrCode: () => void
-  onResizeMobile: () => void
-  onResizeTablet: () => void
   onExportCode: () => void
   onDownloadImage: () => void
   onDuplicate: () => void
@@ -69,7 +67,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
   const {
     visible, onRegenerate, onOpenVariations, onEditViaChat,
     onChangeColorScheme, onMakeDarker, onMakeLighter,
-    onPreviewNewTab, onShowQrCode, onResizeMobile, onResizeTablet,
+    onPreviewNewTab, onShowQrCode,
     onExportCode, onDownloadImage, onDuplicate, onRename, onDelete,
     onToast, onDirectEdit, deviceId, onDeviceChange,
   } = props
@@ -242,9 +240,6 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
           <div style={DROPDOWN_STYLE}>
             {menuItem(<ExternalLink size={16} color="#94a3b8" />, 'Preview in new tab', onPreviewNewTab)}
             {menuItem(<QrCode size={16} color="#94a3b8" />, 'Show QR Code', onShowQrCode)}
-            {divider}
-            {menuItem(<Smartphone size={16} color="#94a3b8" />, 'Mobile size (390×844)', onResizeMobile)}
-            {menuItem(<Tablet size={16} color="#94a3b8" />, 'Tablet size (768×1024)', onResizeTablet)}
           </div>
         )}
       </div>

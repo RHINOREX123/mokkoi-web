@@ -593,8 +593,6 @@ function App() {
               onEditViaChat={handleEditViaChat} onChangeColorScheme={handleChangeColorScheme}
               onMakeDarker={handleMakeDarker} onMakeLighter={handleMakeLighter}
               onPreviewNewTab={handlePreviewNewTab} onShowQrCode={handleShowQrCode}
-              onResizeMobile={() => setToastMessage('Resized to iPhone 14 (390×844)')}
-              onResizeTablet={() => setToastMessage('Resized to iPad (768×1024)')}
               onExportCode={() => { if (screens.generatedTree) setShowCodeExport(true) }}
               onDownloadImage={handleDownloadImage}
               onDuplicate={() => { screens.handleDuplicateScreen(); setToastMessage('Screen duplicated!') }}
