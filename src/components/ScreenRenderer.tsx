@@ -519,29 +519,25 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const iconName = (node.props?.name as string) ?? 'circle'
       const iconSize = (node.props?.size as number) ?? 24
       const iconColor = (node.props?.color as string) ?? '#FFFFFF'
-      const iconSet = (node.props?.set as string) ?? 'lucide'
+      const iconSet = (node.props?.set as string) ?? 'material-symbols'
 
-      // Resolve icon name for the target set:
-      // If AI outputs Material Symbols name (e.g. "favorite") but set is "lucide",
-      // map it to the Lucide equivalent (e.g. "heart")
+      // For material-symbols: ensure underscores (AI may output hyphens)
+      // For lucide: ensure hyphens (AI may output underscores)
       let resolvedName = iconName
-      if (iconSet === 'lucide' && LUCIDE_NAME_MAP[iconName]) {
-        resolvedName = LUCIDE_NAME_MAP[iconName]
-      } else if (iconSet !== 'lucide' && iconSet !== 'material-symbols' && LUCIDE_NAME_MAP[iconName]) {
-        // For other sets (phosphor, feather, heroicons), try Lucide name mapping
-        resolvedName = LUCIDE_NAME_MAP[iconName] || iconName
-      }
-      // Also handle underscores → hyphens (material_symbols style → lucide style)
-      if (iconSet === 'lucide' && resolvedName.includes('_')) {
-        resolvedName = LUCIDE_NAME_MAP[resolvedName] || resolvedName.replace(/_/g, '-')
+      if (iconSet === 'material-symbols') {
+        // Material Symbols uses underscores: favorite, arrow_back, local_fire_department
+        resolvedName = MATERIAL_SYMBOL_MAP[iconName] ?? iconName.replace(/-/g, '_')
+      } else if (iconSet === 'lucide') {
+        // Lucide uses hyphens: heart, arrow-left, map-pin
+        resolvedName = LUCIDE_NAME_MAP[iconName] ?? iconName.replace(/_/g, '-')
       }
 
       const encodedColor = encodeURIComponent(iconColor)
-      // Primary: try Iconify CDN with resolved name
+      // Primary: material-symbols (widest coverage, matches AI training)
       const primaryUrl = `https://api.iconify.design/${iconSet}/${resolvedName}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
-      // Fallback URL: try material-symbols set with original name (handles AI outputting Material names)
-      const materialName = MATERIAL_SYMBOL_MAP[iconName] ?? iconName
-      const fallbackUrl = `https://api.iconify.design/material-symbols/${materialName.replace(/-/g, '_')}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
+      // Fallback: try lucide set with mapped name
+      const lucideName = LUCIDE_NAME_MAP[iconName] ?? iconName.replace(/_/g, '-')
+      const fallbackUrl = `https://api.iconify.design/lucide/${lucideName}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
 
       return (
         <img
