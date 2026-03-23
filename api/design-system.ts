@@ -238,28 +238,39 @@ Wrong:    {"type":"Text","props":{"style":{"fontSize":24}},"children":["Hello"]}
 `
 
 export const VIEWPORT_BUDGET = `
-VIEWPORT BUDGET (CRITICAL):
-The phone screen is 375×812pt (iPhone 14/15 standard). After status bar (54px) and home indicator (34px), usable content height is ~724px.
+VIEWPORT BUDGET — ABSOLUTE RULE (MOST CRITICAL):
+The phone screen is 375×812pt. Usable content height is ~724px. The TOTAL height of ALL content MUST fit within 724px (one viewport).
 
-RULES:
-- DASHBOARD and HOME screens MUST fit in ONE viewport without scrolling. Do NOT wrap in ScrollView.
-- Use compact spacing: 8-12px between items within a section, 12-16px between major sections.
-- Stat cards should be 70-90px tall, not 120+.
-- Use horizontal layouts (flexDirection: "row") for stat cards — 2-3 cards per row, NOT vertical stacking.
-- Bottom tab bar is ~60px — budget for it in the viewport.
-- Total content height budget: header (~50px) + main content (~550px) + bottom nav (~60px) = ~660px. Stay under this.
+STRICT HEIGHT ENFORCEMENT:
+- NEVER generate content that requires scrolling on dashboards, home screens, or product pages.
+- Total content height: header (~50px) + main content (~530px) + bottom nav (~80px) = ~660px MAX.
+- If content exceeds this budget, REMOVE sections — do NOT add ScrollView.
+- Count your sections: 4-5 max per screen. Each section 80-120px. No exceptions.
+
+TEXT LENGTH LIMITS (ABSOLUTE):
+- Product descriptions: MAX 80 characters (2 lines). Truncate with "..." if needed.
+- Bio/about text: MAX 60 characters (1-2 lines).
+- Any text block: MAX 3 lines. NEVER write paragraphs.
+- Card descriptions: MAX 40 characters (1 line).
+- List item subtitles: MAX 50 characters (1 line).
+- NEVER include long marketing copy, feature descriptions, or multi-paragraph text. Mobile screens show SUMMARY data only.
+
+COMPACT SPACING:
+- 8-12px between items within a section, 12-16px between major sections.
+- Stat cards: 70-90px tall, NEVER 120+.
+- Use horizontal layouts (flexDirection: "row") for stat cards — 2-3 per row.
+- Bottom tab bar: ~80px (49px content + 34px safe area).
 
 SCROLLVIEW RULES:
-- NEVER use ScrollView for: dashboards, home screens, profiles (above the fold)
-- ONLY use ScrollView for: long lists (5+ items), detail pages with descriptions, settings pages, chat/message lists
-- If a screen has a bottom tab bar, the content above it must fit without scrolling.
+- NEVER use ScrollView for: dashboards, home screens, product pages, profiles
+- ONLY use ScrollView for: settings pages (long list), chat/message lists
+- If a screen has a bottom tab bar, content above MUST fit without scrolling.
 
 HEIGHT BUDGET BY SCREEN TYPE:
-- Dashboard: 4-5 sections max, each 80-120px. Total ~500-600px content + nav.
-- Profile: Avatar section (~150px) + stats row (~50px) + action buttons (~50px) + content tabs (~300px) = ~550px
-- Banking: Balance hero (~100px) + 2 account cards side-by-side (~90px) + 3 transactions (~180px) + bottom nav (~60px) = ~430px
-- Settings: Can use ScrollView — list naturally exceeds viewport
-- Detail/Product: Can use ScrollView — hero image + content naturally exceeds viewport
+- Dashboard: 4-5 sections max, ~500-600px content + nav.
+- Product: Hero image (~200px) + title/price (~80px) + options (~100px) + CTA (~60px) + nav (~80px) = ~520px. NO long descriptions.
+- Profile: Avatar (~120px) + stats (~50px) + actions (~50px) + content (~250px) + nav (~80px) = ~550px
+- Banking: Balance (~100px) + accounts (~90px) + transactions (~180px) + nav (~80px) = ~450px
 `
 
 export const CONTENT_DENSITY = `
