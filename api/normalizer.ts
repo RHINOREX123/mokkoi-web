@@ -13,8 +13,15 @@ const MIN_TOUCH_TARGET = 44
 const SAFE_AREA_VALUES = new Set([54, 34, 49, 83, 44, 98])
 const SUPPORTED_TYPES = new Set([
   'View', 'SafeAreaView', 'ScrollView', 'Text', 'TextInput',
-  'TouchableOpacity', 'Image', 'ActivityIndicator', 'Switch', 'FlatList'
+  'TouchableOpacity', 'Image', 'ActivityIndicator', 'Switch', 'FlatList',
+  // SVG data visualization components
+  'Svg', 'Circle', 'Path', 'Rect', 'Line', 'Defs', 'SvgLinearGradient', 'Stop',
+  // Enhanced components
+  'Icon', 'LinearGradient'
 ])
+
+// SVG types that should skip spacing/font normalization
+const SVG_TYPES = new Set(['Svg', 'Circle', 'Path', 'Rect', 'Line', 'Defs', 'SvgLinearGradient', 'Stop'])
 
 function snapToScale(value: number, scale: number[]): number {
   if (typeof value !== 'number' || isNaN(value)) return scale[0]
@@ -112,10 +119,22 @@ function normalizeNode(
       'KeyboardAvoidingView': 'View',
       'Modal': 'View',
       'StatusBar': 'View',
-      'LinearGradient': 'View',
       'Animated.View': 'View',
     }
     normalized.type = typeMap[normalized.type] || 'View'
+  }
+
+  // Skip spacing/font normalization for SVG elements — only recurse children
+  if (SVG_TYPES.has(normalized.type)) {
+    if (Array.isArray(normalized.children)) {
+      normalized.children = normalized.children
+        .filter((child: any) => child != null)
+        .map((child: any) => {
+          if (typeof child === 'string') return child
+          return normalizeNode(child, depth + 1, spacingScale, fontSizeScale, borderRadiusScale)
+        })
+    }
+    return normalized
   }
 
   // Normalize top-level style

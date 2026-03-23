@@ -102,7 +102,7 @@ const SCREEN_TYPE_EXAMPLES: Record<ScreenType, string[]> = {
 
 // Keywords → screen type mapping for prompt-based classification
 const SCREEN_TYPE_KEYWORDS: Array<{ type: ScreenType; keywords: RegExp }> = [
-  { type: 'dashboard', keywords: /\b(dashboard|home\s*screen|stats|metrics|overview|activity|energy|performance|steps|calories|heart\s*rate|fitness|health|tracker|analytics|monitor|banking|finance|wallet|payment|fintech)\b/i },
+  { type: 'dashboard', keywords: /\b(dashboard|home\s*screen|stats|metrics|overview|activity|energy|performance|steps|calories|heart\s*rate|fitness|health|tracker|analytics|monitor|banking|finance|wallet|payment|fintech|real\s*estate|zillow|trulia|property|listing|weather|forecast|crypto|portfolio)\b/i },
   { type: 'auth', keywords: /\b(login|sign\s*in|sign\s*up|register|auth|password|forgot|reset\s*password|create\s*account|welcome\s*back)\b/i },
   { type: 'profile', keywords: /\b(profile|my\s*account|user\s*page|followers|following|posts|bio|avatar)\b/i },
   { type: 'settings', keywords: /\b(settings|preferences|config|notifications\s*toggle|privacy|account\s*settings|options)\b/i },
@@ -337,6 +337,9 @@ When generating screens, recognize these common patterns and preserve their stru
 - ONBOARDING: Centered illustration + headline + description + pagination dots + CTA
 - AUTH: Logo + form inputs + primary button + social login + footer link
 
+VAGUE PROMPT HANDLING:
+If the user's prompt is just an app name (e.g., "Zillow", "Spotify") or very short without specifying a screen type, generate a HOME DASHBOARD screen for that app. Include app-appropriate header, 2-3 key metric/stat cards, 1-2 content sections with realistic data, and bottom navigation. Never fail on a vague prompt — always generate a complete, polished screen.
+
 DESIGN.MD SUPPORT:
 If the user's prompt contains a DESIGN.md block or references design tokens from an external source, extract and use those tokens instead of the defaults. Colors, typography, spacing, and component rules from DESIGN.md override Mokkoi defaults. If a DESIGN.md only partially defines tokens, use Mokkoi defaults for unspecified values. Look for markdown headers like "# Colors", "# Typography", "## Primary", "## Spacing" or code blocks containing token definitions.
 
@@ -473,9 +476,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   else if (currentScreen) generationType = 'edit'
 
   // Extract DESIGN.md if present in prompt
-  const { cleanPrompt, designMd } = extractDesignMd(prompt)
+  const { cleanPrompt: rawCleanPrompt, designMd } = extractDesignMd(prompt)
   const isEditMode = !!currentScreen && generationType === 'edit'
   const learnedPatterns = isNewScreen ? await getLearnedPatterns() : ''
+
+  // Enrich vague prompts (just an app name like "Zillow" or "Spotify")
+  function enrichVaguePrompt(p: string): string {
+    const wordCount = p.trim().split(/\s+/).length
+    if (wordCount <= 3 && classifyScreenType(p) === 'unknown') {
+      return `Create a home dashboard screen for a ${p.trim()} app. Include a header with app name, key statistics or metrics, main content cards, and a bottom navigation bar.`
+    }
+    return p
+  }
+  const cleanPrompt = isEditMode ? rawCleanPrompt : enrichVaguePrompt(rawCleanPrompt)
   const screenType = classifyScreenType(cleanPrompt)
   // Resolve device info for prompt context
   const DEVICE_MAP: Record<string, { name: string; width: number; height: number; category: string }> = {

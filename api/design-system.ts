@@ -163,9 +163,13 @@ These are the ONLY types you may use. Using any other type will show an error.
 6. TouchableOpacity — Tappable button/link. Minimum 44px touch target.
    Style: same as View (renders as clickable container)
 
-7. Image — Image display.
-   Props: source ({ uri: string })
-   Style: width, height, borderRadius, resizeMode (not supported in web renderer — use as placeholder areas with backgroundColor instead)
+7. Image — Image display with automatic stock photo integration.
+   Props: searchQuery (string — describe the image in 2-4 keywords, e.g. "fitness gym workout", "pizza restaurant interior", "nike sneakers side view", "tropical beach resort")
+   The renderer automatically fetches a matching real photo from Unsplash using searchQuery.
+   IMPORTANT: Always include searchQuery with 2-4 descriptive keywords. Always set explicit width and height in style.
+   Example: { "type": "Image", "style": { "width": "100%", "height": 200, "borderRadius": 12 }, "props": { "searchQuery": "modern gym interior dark" } }
+   For avatars/profile photos use: searchQuery "portrait person" or use a colored View with Text initial instead.
+   Fallback: If you need a specific URL, use source: { uri: "https://..." } instead of searchQuery.
 
 8. ActivityIndicator — Loading spinner.
    Props: color (string), size ("large" | "small")
@@ -176,6 +180,42 @@ These are the ONLY types you may use. Using any other type will show an error.
 10. FlatList — List container (renders same as ScrollView in web).
     Props: contentContainerStyle ({})
     Style: same as View
+
+SVG DATA VISUALIZATION COMPONENTS (for progress rings, sparklines, charts):
+Use these INSIDE an Svg wrapper for data-rich screens (dashboards, fitness, finance).
+
+11. Svg — SVG container. Must wrap all SVG child elements.
+    Props: viewBox (string, e.g. "0 0 100 100")
+    Style: width, height
+
+12. Circle — SVG circle for progress rings.
+    Props: cx, cy, r, fill, stroke, strokeWidth, strokeDasharray, strokeDashoffset, strokeLinecap
+
+13. Path — SVG path for sparklines and custom shapes.
+    Props: d (path data string), fill, stroke, strokeWidth, strokeLinecap, strokeLinejoin
+
+14. Rect — SVG rectangle for bar charts.
+    Props: x, y, width, height, rx, ry, fill, stroke, strokeWidth
+
+15. Line — SVG line.
+    Props: x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap
+
+PROGRESS RING PATTERN (copy this for circular progress):
+{"type":"Svg","style":{"width":64,"height":64},"props":{"viewBox":"0 0 64 64"},"children":[{"type":"Circle","props":{"cx":32,"cy":32,"r":28,"stroke":"#222236","strokeWidth":4,"fill":"none"}},{"type":"Circle","props":{"cx":32,"cy":32,"r":28,"stroke":"#22C55E","strokeWidth":4,"fill":"none","strokeDasharray":"176","strokeDashoffset":"44","strokeLinecap":"round"}}]}
+(strokeDasharray = 2*pi*r ≈ 176 for r=28. strokeDashoffset = dasharray * (1 - progress). E.g., 75% = 176 * 0.25 = 44)
+
+ENHANCED COMPONENTS:
+
+16. Icon — Vector icon from built-in icon set (Lucide-style).
+    Props: name (string), size (number, default 24), color (string)
+    Names: heart, home, search, settings, bell, user, mail, star, check, x, plus, minus, chevron-right, chevron-left, chevron-down, chevron-up, arrow-left, arrow-right, menu, clock, calendar, camera, phone, map-pin, eye, lock, share, download, upload, trash, edit, copy, play, pause, skip-forward, skip-back, volume-2, wifi, battery, send, image, shopping-cart, filter, bookmark, globe, trending-up, zap, activity
+    Example: {"type":"Icon","props":{"name":"heart","size":20,"color":"#FF6B6B"}}
+    Use Icon instead of emoji for a cleaner, more professional look.
+
+17. LinearGradient — Container with gradient background. Children render on top.
+    Props: colors (array of hex strings), start ({x,y}), end ({x,y}) — normalized 0-1 coordinates
+    Style: same as View (padding, borderRadius, etc.)
+    Example: {"type":"LinearGradient","style":{"padding":20,"borderRadius":16},"props":{"colors":["#6366F1","#8B5CF6"],"start":{"x":0,"y":0},"end":{"x":1,"y":1}},"children":[...]}
 
 COMPONENT TREE FORMAT:
 {
@@ -282,7 +322,7 @@ EDGE CASES:
 - Loading states: Use ActivityIndicator centered in the content area with a "Loading..." label below it.
 - Error states: Show error icon + error message + retry button using the error color tokens.
 - Long text: Use numberOfLines on Text components isn't supported in web preview — instead design with realistic text lengths and let overflow be hidden.
-- No gradient support: Use solid colors from the surface/accent palette. Simulate depth with layered surfaces (surface-0 behind surface-1 cards).
+- For gradients: Use the LinearGradient component with colors array. Great for hero cards and CTAs.
 - No blur/glassmorphism: Use semi-transparent backgrounds (rgba) for overlay effects instead.
 `
 
