@@ -455,6 +455,7 @@ function App() {
                   const isImage = screen.type === 'image'
                   const sx = screen.x ?? (screenPositions.get(screen.id)?.x ?? PAD_X)
                   const sy = screen.y ?? PAD_Y
+                  const { CANVAS_W: frameW } = getCanvasDimensions(screen.deviceId || screens.projectDeviceId)
                   return (
                     <div key={screen.id}
                       onMouseDown={(e) => handleScreenMouseDown(e, screen.id, sx, sy)}
@@ -463,7 +464,7 @@ function App() {
                         position: 'absolute',
                         left: sx,
                         top: sy,
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                         cursor: canvas.panActive ? 'inherit' : isDraggingScreen.current && dragScreenId.current === screen.id ? 'grabbing' : 'grab',
                         flexShrink: 0,
                       }}>
@@ -471,10 +472,10 @@ function App() {
                         <input autoFocus value={screens.editingScreenLabelValue} onChange={e => screens.setEditingScreenLabelValue(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') screens.commitScreenRename(); if (e.key === 'Escape') screens.setEditingScreenLabel(null) }}
                           onBlur={screens.commitScreenRename} onClick={e => e.stopPropagation()}
-                          style={{ fontSize: 11, fontWeight: 500, color: '#fff', textAlign: 'center', maxWidth: 260, width: 180, padding: '2px 6px', borderRadius: 4, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', outline: 'none' }}
+                          style={{ fontSize: 11, fontWeight: 500, color: '#fff', textAlign: 'center', maxWidth: frameW, width: frameW * 0.7, padding: '3px 8px', borderRadius: 6, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(99,102,241,0.4)', outline: 'none', boxSizing: 'border-box' as const }}
                         />
                       ) : (
-                        <span style={{ fontSize: 11, fontWeight: 500, color: isActive ? '#fff' : 'rgba(255,255,255,0.6)', textAlign: 'center', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', marginBottom: -2 }}>
+                        <span style={{ fontSize: 11, fontWeight: 500, color: isActive ? '#fff' : 'rgba(255,255,255,0.7)', textAlign: 'center', maxWidth: frameW, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', padding: '3px 8px', borderRadius: 6, background: 'rgba(0,0,0,0.5)', boxSizing: 'border-box' as const }}>
                           {screen.name}
                         </span>
                       )}
