@@ -206,11 +206,13 @@ PROGRESS RING PATTERN (copy this for circular progress):
 
 ENHANCED COMPONENTS:
 
-16. Icon — Vector icon from built-in icon set (Lucide-style).
-    Props: name (string), size (number, default 24), color (string)
-    Names: heart, home, search, settings, bell, user, mail, star, check, x, plus, minus, chevron-right, chevron-left, chevron-down, chevron-up, arrow-left, arrow-right, menu, clock, calendar, camera, phone, map-pin, eye, lock, share, download, upload, trash, edit, copy, play, pause, skip-forward, skip-back, volume-2, wifi, battery, send, image, shopping-cart, filter, bookmark, globe, trending-up, zap, activity
+16. Icon — Vector icon via Iconify CDN (200,000+ icons from all major icon sets).
+    Props: name (string — icon name), set (string — icon set, default "lucide"), size (number, default 24), color (string)
+    Sets: "lucide" (default, clean modern), "material-symbols" (Google), "phosphor" (playful), "heroicons" (bold), "feather" (minimal)
+    Common lucide names: heart, home, search, settings, bell, user, mail, star, check, x, plus, minus, chevron-right, chevron-left, arrow-left, arrow-right, menu, clock, calendar, camera, phone, map-pin, eye, lock, share, download, upload, trash-2, edit, copy, play, pause, skip-forward, skip-back, volume-2, wifi, send, shopping-cart, bookmark, globe, trending-up, zap, activity, music, wallet, credit-card, flame, dumbbell, utensils, coffee, plane, building-2, message-circle, thumbs-up, more-horizontal, log-out, bar-chart-2, timer, qr-code, fingerprint, sun, moon, cloud
     Example: {"type":"Icon","props":{"name":"heart","size":20,"color":"#FF6B6B"}}
-    Use Icon instead of emoji for a cleaner, more professional look.
+    With set: {"type":"Icon","props":{"name":"favorite","set":"material-symbols","size":20,"color":"#FF6B6B"}}
+    NEVER use emoji for icons. Always use this Icon component.
 
 17. LinearGradient — Container with gradient background. Children render on top.
     Props: colors (array of hex strings), start ({x,y}), end ({x,y}) — normalized 0-1 coordinates

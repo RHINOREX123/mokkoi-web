@@ -301,10 +301,20 @@ ${deviceInfo ? `
 TARGET DEVICE: You are designing for a ${deviceInfo.name} screen at ${deviceInfo.width}x${deviceInfo.height} pixels. Design content to fit within this viewport. ${deviceInfo.category === 'Android' ? 'This is an Android device — use Material Design conventions where appropriate.' : 'This is an iOS device — use iOS/HIG conventions where appropriate.'}
 ` : ''}
 ICON RULES (CRITICAL):
-NEVER use emoji characters (like \uD83D\uDD25 \u2764\uFE0F \uD83C\uDFE0 \u26A1 etc.) for icons. ALWAYS use the Icon component:
+NEVER use emoji characters for icons. ALWAYS use the Icon component:
 {"type":"Icon","props":{"name":"heart","size":20,"color":"#FF6B6B"}}
-Available icons: heart, home, search, settings, bell, user, mail, star, check, x, plus, minus, chevron-right, chevron-left, chevron-down, chevron-up, arrow-left, arrow-right, menu, clock, calendar, camera, phone, map-pin, eye, lock, share, download, upload, trash, edit, copy, play, pause, skip-forward, skip-back, volume-2, wifi, battery, send, image, shopping-cart, filter, bookmark, globe, trending-up, zap, activity
-Emoji are only acceptable for decorative content text (like a message body), never for UI icons.
+Optionally specify icon set: {"type":"Icon","props":{"name":"heart","set":"lucide","size":20,"color":"#FF6B6B"}}
+
+Available icon sets (default is "lucide"):
+- "lucide" (default, 1400+ icons) — clean, modern, minimal stroke icons. Best for: fitness, social, chat, wellness, productivity apps.
+- "material-symbols" (2500+ icons) — Google Material Design icons. Best for: banking, e-commerce, navigation, healthcare, enterprise apps.
+- "phosphor" (1200+ icons) — flexible, playful icons. Best for: education, kids, dating, food apps.
+- "heroicons" (300+ icons) — Tailwind-style, bold. Best for: dashboards, SaaS, analytics apps.
+- "feather" (280+ icons) — ultra-minimal, thin stroke. Best for: wellness, meditation, minimal apps.
+
+Common lucide icon names: heart, home, search, settings, bell, user, mail, star, check, x, plus, minus, chevron-right, chevron-left, chevron-down, chevron-up, arrow-left, arrow-right, menu, clock, calendar, camera, phone, map-pin, eye, lock, share, download, upload, trash-2, edit, copy, play, pause, skip-forward, skip-back, volume-2, wifi, battery, send, image, shopping-cart, filter, bookmark, globe, trending-up, zap, activity, music, wallet, credit-card, truck, plane, building-2, utensils, coffee, flame, dumbbell, pill, graduation-cap, briefcase, message-circle, thumbs-up, more-horizontal, log-out, layout-dashboard, bar-chart-2, timer, qr-code, fingerprint, piggy-bank, scan, sun, moon, cloud, droplets, wind, thermometer
+
+Emoji are ONLY acceptable for decorative text content, NEVER for UI icons or navigation.
 
 ${DESIGN_TOKENS}
 ${themeResult && !isEditMode ? `
