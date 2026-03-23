@@ -7,7 +7,6 @@ import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
 import { MousePointer2, Hand, ZoomIn, ZoomOut, PenTool, Sparkles, Download, Share2, Plus, X, Upload, Pencil, LogOut, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
 import { GAP, PAD_X, PAD_Y } from './components/FlowConnectors'
-import { FlowOverviewPanel } from './components/FlowOverviewPanel'
 import { DirectEditToolbar } from './components/DirectEditToolbar'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
 import { ScreenContextToolbar } from './components/ScreenContextToolbar'
@@ -468,20 +467,22 @@ function App() {
                         cursor: canvas.panActive ? 'inherit' : isDraggingScreen.current && dragScreenId.current === screen.id ? 'grabbing' : 'grab',
                         flexShrink: 0,
                       }}>
-                      {screens.editingScreenLabel === screen.id ? (
-                        <input autoFocus value={screens.editingScreenLabelValue} onChange={e => screens.setEditingScreenLabelValue(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') screens.commitScreenRename(); if (e.key === 'Escape') screens.setEditingScreenLabel(null) }}
-                          onBlur={screens.commitScreenRename} onClick={e => e.stopPropagation()}
-                          style={{ fontSize: 11, fontWeight: 600, color: '#6366f1', textAlign: 'center', maxWidth: 200, width: 160, padding: '2px 8px', borderRadius: 6, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.4)', outline: 'none' }}
-                        />
-                      ) : (
-                        <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#6366f1' : '#888', textAlign: 'center', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'color 0.2s', padding: '2px 8px', borderRadius: 6, background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          {screen.name}
-                          {screen.source === 'mcp' && (
-                            <span style={{ fontSize: 8, fontWeight: 700, color: '#34d399', background: 'rgba(52,211,153,0.15)', padding: '1px 4px', borderRadius: 3, letterSpacing: '0.5px', flexShrink: 0 }} title="Created via MCP (Claude Code / Cursor)">MCP</span>
-                          )}
-                        </span>
-                      )}
+                      <div style={{ transform: `scale(${100 / canvas.zoomLevel})`, transformOrigin: 'center bottom', pointerEvents: 'auto' }}>
+                        {screens.editingScreenLabel === screen.id ? (
+                          <input autoFocus value={screens.editingScreenLabelValue} onChange={e => screens.setEditingScreenLabelValue(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') screens.commitScreenRename(); if (e.key === 'Escape') screens.setEditingScreenLabel(null) }}
+                            onBlur={screens.commitScreenRename} onClick={e => e.stopPropagation()}
+                            style={{ fontSize: 13, fontWeight: 600, color: '#fff', textAlign: 'center', maxWidth: 240, width: 180, padding: '4px 12px', borderRadius: 8, background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.5)', outline: 'none' }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? '#fff' : 'rgba(255,255,255,0.75)', textAlign: 'center', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'all 0.2s', padding: '4px 12px', borderRadius: 8, background: isActive ? 'rgba(99,102,241,0.35)' : 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', display: 'inline-flex', alignItems: 'center', gap: 6, border: isActive ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.08)' }}>
+                            {screen.name.length > 25 ? screen.name.slice(0, 25) + '...' : screen.name}
+                            {screen.source === 'mcp' && (
+                              <span style={{ fontSize: 9, fontWeight: 700, color: '#34d399', background: 'rgba(52,211,153,0.2)', padding: '2px 5px', borderRadius: 4, letterSpacing: '0.5px', flexShrink: 0 }} title="Created via MCP (Claude Code / Cursor)">MCP</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
 
                       <ErrorBoundary fallbackMessage="Screen render error">
                         <div data-screen-id={screen.id}
@@ -579,14 +580,6 @@ function App() {
               enterDirectEdit={directEdit.enterDirectEdit} exitDirectEdit={directEdit.exitDirectEdit}
               onScreenshotModal={() => setShowScreenshotModal(true)} onUploadRef={() => fileInputRef.current?.click()} />
 
-            <FlowOverviewPanel
-              screens={screens.generatedScreens}
-              activeScreenId={screens.activeGeneratedId}
-              onScreenClick={(id) => {
-                screens.setActiveGeneratedId(id)
-                phoneFrameRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-              }}
-            />
           </div>
         </ErrorBoundary>
       </div>
