@@ -81,7 +81,7 @@ export function CanvasToolbar({
         onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
         onMouseLeave={e => { e.currentTarget.style.color = '#999'; e.currentTarget.style.background = 'transparent' }}
       >
-        {zoomLevel}%
+        {Math.round(zoomLevel)}%
       </button>
       <ToolbarButton icon={<ZoomIn size={18} />} tooltip="Zoom in" onClick={zoomIn} />
 

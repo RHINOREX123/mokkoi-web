@@ -3,7 +3,6 @@ import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
 import type { ChatMessage } from '../components/ChatPanel'
 import { GAP, PAD_X, PAD_Y } from '../components/FlowConnectors'
-import type { FlowConnection } from '../components/FlowConnectors'
 import { DEFAULT_DEVICE, getCanvasDimensions } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
 
@@ -65,11 +64,6 @@ export interface ScreenManagement {
   /** Get the active screen's deviceId (or project default) */
   activeDeviceId: DeviceId
 
-  // Flow connections
-  connections: FlowConnection[]
-  setConnections: React.Dispatch<React.SetStateAction<FlowConnection[]>>
-  addConnection: (from: string, to: string) => void
-  removeConnection: (idx: number) => void
 }
 
 export function useScreenManagement(projectId: string | undefined): ScreenManagement {
@@ -80,10 +74,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   const [projectMessages, setProjectMessages] = useState<ChatMessage[]>([])
   const [projectName, setProjectName] = useState('Untitled Project')
   const [projectDeviceId, setProjectDeviceIdState] = useState<DeviceId>(DEFAULT_DEVICE)
-  const [connections, setConnections] = useState<FlowConnection[]>([])
-
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const connectionsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectLoadedRef = useRef(false)
   const hasTreeRef = useRef(false)
 
@@ -108,9 +99,6 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       if (project) {
         setProjectName(project.name || 'Untitled Project')
         setProjectDeviceIdState((project.device_id as DeviceId) || DEFAULT_DEVICE)
-        if (project.connections && Array.isArray(project.connections)) {
-          setConnections(project.connections as FlowConnection[])
-        }
       }
 
       const { data: screens } = await supabase
@@ -252,34 +240,6 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [generatedScreens, projectId])
 
-  // Auto-save connections to Supabase (debounced)
-  useEffect(() => {
-    if (!projectId || !projectLoadedRef.current || !supabase) return
-    if (connectionsSaveTimerRef.current) clearTimeout(connectionsSaveTimerRef.current)
-    const sb = supabase
-    connectionsSaveTimerRef.current = setTimeout(async () => {
-      await sb.from('projects').update({
-        connections,
-        updated_at: new Date().toISOString(),
-      }).eq('id', projectId)
-    }, 1000)
-    return () => { if (connectionsSaveTimerRef.current) clearTimeout(connectionsSaveTimerRef.current) }
-  }, [connections, projectId])
-
-  const addConnection = useCallback((fromScreenId: string, toScreenId: string) => {
-    setConnections(prev => {
-      // Prevent duplicates
-      if (prev.some(c => c.fromScreenId === fromScreenId && c.toScreenId === toScreenId)) return prev
-      // Prevent self-connections
-      if (fromScreenId === toScreenId) return prev
-      return [...prev, { fromScreenId, toScreenId }]
-    })
-  }, [])
-
-  const removeConnection = useCallback((idx: number) => {
-    setConnections(prev => prev.filter((_, i) => i !== idx))
-  }, [])
-
   const saveProjectName = useCallback(async (name: string) => {
     if (!projectId || !supabase) return
     await supabase.from('projects').update({ name, updated_at: new Date().toISOString() }).eq('id', projectId)
@@ -359,8 +319,6 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     if (!activeGeneratedId || !projectId || !supabase) return
     await supabase.from('screens').delete().eq('id', activeGeneratedId)
     setGeneratedScreens(prev => prev.filter(s => s.id !== activeGeneratedId))
-    // Remove any connections involving this screen
-    setConnections(prev => prev.filter(c => c.fromScreenId !== activeGeneratedId && c.toScreenId !== activeGeneratedId))
     setActiveGeneratedId(null)
   }, [activeGeneratedId, projectId])
 
@@ -393,9 +351,5 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     setProjectDeviceId,
     setScreenDeviceId,
     activeDeviceId,
-    connections,
-    setConnections,
-    addConnection,
-    removeConnection,
   }
 }

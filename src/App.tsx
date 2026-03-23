@@ -6,7 +6,7 @@ import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
 import { MousePointer2, Hand, ZoomIn, ZoomOut, PenTool, Sparkles, Download, Share2, Plus, X, Upload, Pencil, LogOut, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
-import { FlowConnectors, GAP, PAD_X, PAD_Y } from './components/FlowConnectors'
+import { GAP, PAD_X, PAD_Y } from './components/FlowConnectors'
 import { FlowOverviewPanel } from './components/FlowOverviewPanel'
 import { DirectEditToolbar } from './components/DirectEditToolbar'
 import { CommandPalette, type Command as CmdType } from './components/CommandPalette'
@@ -69,16 +69,6 @@ function App() {
   const [showScreenshotModal, setShowScreenshotModal] = useState(false)
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
-  const [flowViewMode, setFlowViewMode] = useState(false)
-  const [selectedConnectionIdx, setSelectedConnectionIdx] = useState<number | null>(null)
-  const [draggingConnection, setDraggingConnection] = useState<{
-    fromScreenId: string
-    fromX: number
-    fromY: number
-    mouseX: number
-    mouseY: number
-  } | null>(null)
-  const [nearHandle, setNearHandle] = useState<string | null>(null) // screenId of handle being hovered
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Resizable panel
@@ -123,7 +113,7 @@ function App() {
     hasTreeRef: screens.hasTreeRef,
   })
 
-  // Build screen positions map for flow connectors and view-flow zoom
+  // Build screen positions map for layout
   const screenPositions = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>()
     let xOffset = PAD_X
@@ -137,70 +127,6 @@ function App() {
     })
     return map
   }, [screens.generatedScreens, screens.projectDeviceId])
-
-  // Exit flow view mode on Escape
-  useEffect(() => {
-    if (!flowViewMode) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (selectedConnectionIdx !== null) { setSelectedConnectionIdx(null); return }
-        setFlowViewMode(false)
-      }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedConnectionIdx !== null) {
-          screens.removeConnection(selectedConnectionIdx)
-          setSelectedConnectionIdx(null)
-        }
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [flowViewMode, selectedConnectionIdx, screens.removeConnection])
-
-  // Connection drag: global mousemove/mouseup
-  useEffect(() => {
-    if (!draggingConnection) return
-    const handleMouseMove = (e: MouseEvent) => {
-      const canvasEl = canvas.canvasRef.current
-      if (!canvasEl) return
-      const rect = canvasEl.getBoundingClientRect()
-      const scale = zoomRef.current / 100
-      const mx = (e.clientX - rect.left - canvas.panOffset.x) / scale
-      const my = (e.clientY - rect.top - canvas.panOffset.y) / scale
-
-      setDraggingConnection(prev => prev ? { ...prev, mouseX: mx, mouseY: my } : null)
-
-      // Check proximity to input handles
-      let closest: string | null = null
-      let closestDist = 30 // proximity threshold in canvas px
-      for (const s of screens.generatedScreens) {
-        if (s.id === draggingConnection.fromScreenId) continue
-        const pos = screenPositions.get(s.id)
-        if (!pos) continue
-        const { CANVAS_H } = getCanvasDimensions(s.deviceId || screens.projectDeviceId)
-        const handleX = pos.x
-        const handleY = pos.y + 26 + CANVAS_H / 2
-        const dist = Math.sqrt((mx - handleX) ** 2 + (my - handleY) ** 2)
-        if (dist < closestDist) { closest = s.id; closestDist = dist }
-      }
-      setNearHandle(closest)
-    }
-
-    const handleMouseUp = () => {
-      if (nearHandle && draggingConnection) {
-        screens.addConnection(draggingConnection.fromScreenId, nearHandle)
-      }
-      setDraggingConnection(null)
-      setNearHandle(null)
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [draggingConnection, nearHandle, screens.generatedScreens, screenPositions, screens.projectDeviceId, canvas.canvasRef, canvas.panOffset])
 
   // Screen drag handlers (global mousemove/mouseup)
   useEffect(() => {
@@ -294,48 +220,6 @@ function App() {
   }
 
 
-  const handleViewFlow = useCallback(() => {
-    // Zoom and pan to fit all screens
-    const canvasEl = canvas.canvasRef.current
-    if (!canvasEl || screens.generatedScreens.length === 0) return
-    const rect = canvasEl.getBoundingClientRect()
-
-    const LABEL_H = 26
-    let leftEdge = Infinity, rightEdge = -Infinity, topEdge = Infinity, bottomEdge = -Infinity
-    for (const s of screens.generatedScreens) {
-      const { CANVAS_W, CANVAS_H } = getCanvasDimensions(s.deviceId || screens.projectDeviceId)
-      const pos = screenPositions.get(s.id)
-      const sx = pos?.x ?? PAD_X
-      const sy = pos?.y ?? PAD_Y
-      leftEdge = Math.min(leftEdge, sx)
-      rightEdge = Math.max(rightEdge, sx + CANVAS_W)
-      topEdge = Math.min(topEdge, sy)
-      bottomEdge = Math.max(bottomEdge, sy + LABEL_H + CANVAS_H)
-    }
-
-    const contentW = rightEdge - leftEdge + 80
-    const contentH = bottomEdge - topEdge + 80
-    const scaleX = rect.width / contentW
-    const scaleY = rect.height / contentH
-    const newZoom = Math.min(scaleX, scaleY) * 100
-    const clampedZoom = Math.max(25, Math.min(200, newZoom))
-
-    const centerX = (leftEdge + rightEdge) / 2
-    const centerY = (topEdge + bottomEdge) / 2
-    const panX = -(centerX * clampedZoom / 100 - rect.width / 2)
-    const panY = -(centerY * clampedZoom / 100 - rect.height / 2)
-
-    canvas.setZoomLevel(clampedZoom)
-    canvas.setPanOffset({ x: panX, y: panY })
-    setFlowViewMode(true)
-    setSelectedConnectionIdx(null)
-  }, [canvas.canvasRef, canvas.setZoomLevel, canvas.setPanOffset, screens.generatedScreens, screenPositions])
-
-  const handleFlowScreenClick = (screenName: string) => {
-    const screen = screens.generatedScreens.find(s => s.name === screenName)
-    if (screen) screens.setActiveGeneratedId(screen.id)
-  }
-
   const handleCanvasDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.types.includes('Files')) setCanvasDragOver(true) }, [])
 
   const handleCanvasDragLeave = useCallback((e: React.DragEvent) => {
@@ -419,46 +303,15 @@ function App() {
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvasBg === 'true') {
-      if (selectedConnectionIdx !== null) { setSelectedConnectionIdx(null); return }
-      if (flowViewMode) { setFlowViewMode(false); return }
       if (directEdit.directEditMode) { directEdit.exitDirectEdit(false); return }
       screens.setActiveGeneratedId(null)
     }
   }
 
-  const handleConnectionClick = useCallback((idx: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (selectedConnectionIdx === idx) {
-      // Already selected — delete it
-      screens.removeConnection(idx)
-      setSelectedConnectionIdx(null)
-    } else {
-      setSelectedConnectionIdx(idx)
-    }
-  }, [selectedConnectionIdx, screens.removeConnection])
-
-  /** Start dragging a connection from a screen's output handle */
-  const handleOutputHandleMouseDown = useCallback((e: React.MouseEvent, screenId: string) => {
-    e.stopPropagation()
-    e.preventDefault()
-    const pos = screenPositions.get(screenId)
-    if (!pos) return
-    const screen = screens.generatedScreens.find(s => s.id === screenId)
-    if (!screen) return
-    const { CANVAS_W, CANVAS_H } = getCanvasDimensions(screen.deviceId || screens.projectDeviceId)
-    const fromX = pos.x + CANVAS_W
-    const fromY = pos.y + 26 + CANVAS_H / 2
-
-    // Get initial mouse position in canvas coordinates
-    const canvasEl = canvas.canvasRef.current
-    if (!canvasEl) return
-    const rect = canvasEl.getBoundingClientRect()
-    const scale = zoomRef.current / 100
-    const mouseX = (e.clientX - rect.left - canvas.panOffset.x) / scale
-    const mouseY = (e.clientY - rect.top - canvas.panOffset.y) / scale
-
-    setDraggingConnection({ fromScreenId: screenId, fromX, fromY, mouseX, mouseY })
-  }, [screenPositions, screens.generatedScreens, screens.projectDeviceId, canvas.canvasRef, canvas.panOffset])
+  const handleFlowScreenClick = (screenName: string) => {
+    const screen = screens.generatedScreens.find(s => s.name === screenName)
+    if (screen) screens.setActiveGeneratedId(screen.id)
+  }
 
   const handlePhoneClick = (e: React.MouseEvent, screenId: string) => {
     e.stopPropagation()
@@ -598,23 +451,7 @@ function App() {
                 transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current) ? 'none' : 'transform 0.15s ease-out',
                 cursor: canvas.panActive ? 'inherit' : 'default',
               }}>
-                {flowViewMode && (
-                  <FlowConnectors
-                    connections={screens.connections}
-                    screens={screens.generatedScreens}
-                    screenPositions={screenPositions}
-                    selectedConnectionIdx={selectedConnectionIdx}
-                    onConnectionClick={handleConnectionClick}
-                    draggingLine={draggingConnection ? {
-                      fromX: draggingConnection.fromX,
-                      fromY: draggingConnection.fromY,
-                      toX: draggingConnection.mouseX,
-                      toY: draggingConnection.mouseY,
-                    } : null}
-                  />
-                )}
-
-                {screens.generatedScreens.map((screen, idx) => {
+                {screens.generatedScreens.map((screen) => {
                   const isActive = screen.id === screens.activeGeneratedId
                   const isImage = screen.type === 'image'
                   const sx = screen.x ?? (screenPositions.get(screen.id)?.x ?? PAD_X)
@@ -639,7 +476,7 @@ function App() {
                         />
                       ) : (
                         <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#6366f1' : '#888', textAlign: 'center', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'color 0.2s', padding: '2px 8px', borderRadius: 6, background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          {idx + 1}. {screen.name}
+                          {screen.name}
                           {screen.source === 'mcp' && (
                             <span style={{ fontSize: 8, fontWeight: 700, color: '#34d399', background: 'rgba(52,211,153,0.15)', padding: '1px 4px', borderRadius: 3, letterSpacing: '0.5px', flexShrink: 0 }} title="Created via MCP (Claude Code / Cursor)">MCP</span>
                           )}
@@ -664,60 +501,6 @@ function App() {
                             </div>
                           )}
 
-                          {/* Connection handles — only in flow view mode */}
-                          {flowViewMode && !isImage && (() => {
-                            const isOutputDragging = draggingConnection?.fromScreenId === screen.id
-                            const isInputTarget = nearHandle === screen.id
-                            return (
-                              <>
-                                {/* Input handle — left center */}
-                                <div
-                                  data-connection-handle="input"
-                                  style={{
-                                    position: 'absolute',
-                                    left: -6,
-                                    top: '50%',
-                                    width: 12,
-                                    height: 12,
-                                    borderRadius: '50%',
-                                    background: isInputTarget ? '#34d399' : '#818CF8',
-                                    border: `2px solid ${isInputTarget ? '#34d399' : 'rgba(129,140,248,0.8)'}`,
-                                    boxShadow: isInputTarget
-                                      ? '0 0 12px rgba(52,211,153,0.8), 0 0 4px rgba(52,211,153,0.4)'
-                                      : '0 0 8px rgba(129,140,248,0.5)',
-                                    cursor: 'default',
-                                    zIndex: 10,
-                                    transition: 'all 0.15s',
-                                    transform: isInputTarget ? 'translateY(-50%) scale(1.4)' : 'translateY(-50%)',
-                                  }}
-                                />
-                                {/* Output handle — right center */}
-                                <div
-                                  data-connection-handle="output"
-                                  onMouseDown={(e) => handleOutputHandleMouseDown(e, screen.id)}
-                                  style={{
-                                    position: 'absolute',
-                                    right: -6,
-                                    top: '50%',
-                                    transform: isOutputDragging ? 'translateY(-50%) scale(1.3)' : 'translateY(-50%)',
-                                    width: 12,
-                                    height: 12,
-                                    borderRadius: '50%',
-                                    background: isOutputDragging ? '#A5B4FC' : '#818CF8',
-                                    border: `2px solid ${isOutputDragging ? '#A5B4FC' : 'rgba(129,140,248,0.8)'}`,
-                                    boxShadow: isOutputDragging
-                                      ? '0 0 12px rgba(129,140,248,0.8)'
-                                      : '0 0 8px rgba(129,140,248,0.5)',
-                                    cursor: 'crosshair',
-                                    zIndex: 10,
-                                    transition: 'all 0.15s',
-                                  }}
-                                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-50%) scale(1.3)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(129,140,248,0.8)' }}
-                                  onMouseLeave={e => { if (!isOutputDragging) { e.currentTarget.style.transform = 'translateY(-50%) scale(1)'; e.currentTarget.style.boxShadow = '0 0 8px rgba(129,140,248,0.5)' } }}
-                                />
-                              </>
-                            )
-                          })()}
                         </div>
                       </ErrorBoundary>
 
@@ -798,15 +581,11 @@ function App() {
 
             <FlowOverviewPanel
               screens={screens.generatedScreens}
-              connections={screens.connections}
               activeScreenId={screens.activeGeneratedId}
               onScreenClick={(id) => {
                 screens.setActiveGeneratedId(id)
                 phoneFrameRefs.current.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
               }}
-              onViewFlow={handleViewFlow}
-              flowViewMode={flowViewMode}
-              onExitFlowView={() => setFlowViewMode(false)}
             />
           </div>
         </ErrorBoundary>
