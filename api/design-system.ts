@@ -209,13 +209,12 @@ PROGRESS RING PATTERN (copy this for circular progress):
 
 ENHANCED COMPONENTS:
 
-16. Icon — Vector icon via Iconify CDN (200,000+ icons from all major icon sets).
-    Props: name (string — icon name), set (string — icon set, default "lucide"), size (number, default 24), color (string)
-    Sets: "lucide" (default, clean modern), "material-symbols" (Google), "phosphor" (playful), "heroicons" (bold), "feather" (minimal)
-    Common lucide names: heart, home, search, settings, bell, user, mail, star, check, x, plus, minus, chevron-right, chevron-left, arrow-left, arrow-right, menu, clock, calendar, camera, phone, map-pin, eye, lock, share, download, upload, trash-2, edit, copy, play, pause, skip-forward, skip-back, volume-2, wifi, send, shopping-cart, bookmark, globe, trending-up, zap, activity, music, wallet, credit-card, flame, dumbbell, utensils, coffee, plane, building-2, message-circle, thumbs-up, more-horizontal, log-out, bar-chart-2, timer, qr-code, fingerprint, sun, moon, cloud
-    Example: {"type":"Icon","props":{"name":"heart","size":20,"color":"#FF6B6B"}}
-    With set: {"type":"Icon","props":{"name":"favorite","set":"material-symbols","size":20,"color":"#FF6B6B"}}
-    NEVER use emoji for icons. Always use this Icon component.
+16. Icon — Google Material Symbols icon (2500+ icons). Rendered via Material Symbols font.
+    Props: name (string — Material Symbols name, lowercase with underscores), size (number, default 24), color (string), filled (bool, default false)
+    Common names: favorite, home, search, settings, notifications, person, star, check, close, add, remove, send, delete, edit, bookmark, share, play_arrow, pause, skip_next, skip_previous, volume_up, music_note, shopping_cart, credit_card, wallet, trending_up, bar_chart, analytics, monitoring, bolt, location_on, restaurant, directions_run, fitness_center, water_drop, local_fire_department, schedule, calendar_today, visibility, lock, arrow_back, chevron_right, expand_more, menu, more_horiz, logout
+    Example: {"type":"Icon","props":{"name":"favorite","size":20,"color":"#FF6B6B"}}
+    Filled: {"type":"Icon","props":{"name":"favorite","size":20,"color":"#FF6B6B","filled":true}}
+    NEVER use emoji or Lucide names. Use Material Symbols names with underscores.
 
 17. LinearGradient — Container with gradient background. Children render on top.
     Props: colors (array of hex strings), start ({x,y}), end ({x,y}) — normalized 0-1 coordinates

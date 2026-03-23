@@ -155,6 +155,91 @@ const MATERIAL_SYMBOL_MAP: Record<string, string> = {
   'percent': 'percent',
   'attach': 'attach_file',
   'paperclip': 'attach_file',
+  // Extra Lucide names the AI commonly generates
+  'utensils': 'restaurant',
+  'droplets': 'water_drop',
+  'flame': 'local_fire_department',
+  'dumbbell': 'fitness_center',
+  'footprints': 'directions_walk',
+  'glass-water': 'local_drink',
+  'cloud-rain': 'rainy',
+  'cloud-sun': 'partly_cloudy_day',
+  'snowflake': 'ac_unit',
+  'mountain': 'terrain',
+  'leaf': 'eco',
+  'sprout': 'yard',
+  'circle-check': 'check_circle',
+  'circle-x': 'cancel',
+  'circle-alert': 'error',
+  'circle-help': 'help',
+  'circle-user': 'account_circle',
+  'circle-plus': 'add_circle',
+  'log-out': 'logout',
+  'log-in': 'login',
+  'layout-dashboard': 'dashboard',
+  'bar-chart-2': 'bar_chart',
+  'trash-2': 'delete',
+  'user-plus': 'person_add',
+  'users': 'group',
+  'message-circle': 'chat_bubble',
+  'message-square': 'chat',
+  'thumbs-up': 'thumb_up',
+  'thumbs-down': 'thumb_down',
+  'more-horizontal': 'more_horiz',
+  'building-2': 'apartment',
+  'plane': 'flight',
+  'graduation-cap': 'school',
+  'piggy-bank': 'savings',
+  'banknote': 'payments',
+  'coins': 'toll',
+  'package': 'inventory_2',
+  'box': 'inventory_2',
+  'map': 'map',
+  'navigation-2': 'navigation',
+  'locate': 'my_location',
+  'crosshair': 'gps_fixed',
+  'baby': 'child_care',
+  'smile': 'sentiment_satisfied',
+  'frown': 'sentiment_dissatisfied',
+  'repeat': 'repeat',
+  'shuffle': 'shuffle',
+  'volume': 'volume_up',
+  'volume-1': 'volume_down',
+  'volume-x': 'volume_off',
+  'maximize': 'fullscreen',
+  'minimize': 'fullscreen_exit',
+  'external': 'open_in_new',
+  'flower-2': 'spa',
+  'heart-pulse': 'monitor_heart',
+  'stethoscope': 'stethoscope',
+  'syringe': 'vaccines',
+  'apple': 'nutrition',
+  'salad': 'restaurant',
+  'pizza': 'local_pizza',
+  'soup': 'soup_kitchen',
+  'beer': 'sports_bar',
+  'wine': 'wine_bar',
+  'candy': 'cake',
+  'cookie': 'cookie',
+  'shirt': 'checkroom',
+  'watch': 'watch',
+  'glasses': 'visibility',
+  'lamp': 'light',
+  'bed': 'bed',
+  'bath': 'bathtub',
+  'shower': 'shower',
+  'wifi-off': 'wifi_off',
+  'bluetooth': 'bluetooth',
+  'battery-charging': 'battery_charging_full',
+  'battery-low': 'battery_alert',
+  'signal': 'signal_cellular_alt',
+  'rocket': 'rocket_launch',
+  'sparkles': 'auto_awesome',
+  'wand': 'auto_fix_high',
+  'brain': 'psychology',
+  'lightbulb': 'lightbulb',
+  'gem': 'diamond',
+  'crown': 'workspace_premium',
 }
 
 // Reverse map: Material Symbols name → Lucide name (auto-generated from above)
@@ -526,13 +611,14 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
 
     // --- Icon Component (Google Material Symbols font — instant, no network per icon) ---
     case 'Icon': {
-      const iconName = (node.props?.name as string) ?? 'circle'
+      const rawName = (node.props?.name as string) ?? 'circle'
       const iconSize = (node.props?.size as number) ?? 24
       const iconColor = (node.props?.color as string) ?? '#FFFFFF'
       const filled = (node.props?.filled as boolean) ?? false
 
-      // Resolve to Material Symbols name: handle Lucide names, hyphens, etc.
-      const materialName = MATERIAL_SYMBOL_MAP[iconName] ?? iconName.replace(/-/g, '_')
+      // Normalize: lowercase, check Lucide→Material map, then convert hyphens to underscores
+      const normalized = rawName.toLowerCase().trim()
+      const materialName = MATERIAL_SYMBOL_MAP[normalized] ?? normalized.replace(/-/g, '_')
 
       return (
         <span
