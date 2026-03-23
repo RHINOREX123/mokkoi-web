@@ -123,6 +123,21 @@ function App() {
     hasTreeRef: screens.hasTreeRef,
   })
 
+  // Build screen positions map for flow connectors and view-flow zoom
+  const screenPositions = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>()
+    let xOffset = PAD_X
+    screens.generatedScreens.forEach((s) => {
+      const { CANVAS_W } = getCanvasDimensions(s.deviceId || screens.projectDeviceId)
+      map.set(s.id, {
+        x: s.x ?? xOffset,
+        y: s.y ?? PAD_Y,
+      })
+      xOffset += CANVAS_W + GAP
+    })
+    return map
+  }, [screens.generatedScreens, screens.projectDeviceId])
+
   // Exit flow view mode on Escape
   useEffect(() => {
     if (!flowViewMode) return
@@ -278,20 +293,6 @@ function App() {
     reader.readAsDataURL(file)
   }
 
-  // Build screen positions map for flow connectors and view-flow zoom
-  const screenPositions = useMemo(() => {
-    const map = new Map<string, { x: number; y: number }>()
-    let xOffset = PAD_X
-    screens.generatedScreens.forEach((s) => {
-      const { CANVAS_W } = getCanvasDimensions(s.deviceId || screens.projectDeviceId)
-      map.set(s.id, {
-        x: s.x ?? xOffset,
-        y: s.y ?? PAD_Y,
-      })
-      xOffset += CANVAS_W + GAP
-    })
-    return map
-  }, [screens.generatedScreens, screens.projectDeviceId])
 
   const handleViewFlow = useCallback(() => {
     // Zoom and pan to fit all screens
