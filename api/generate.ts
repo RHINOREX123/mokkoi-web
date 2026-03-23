@@ -3,6 +3,7 @@ import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits
 import { createClient } from '@supabase/supabase-js'
 import { normalizeComponentTree, type NormalizerOptions } from './normalizer.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
+import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './color-themes.js'
 
 // --- Few-shot examples (compact minified JSON) ---
 // Each example is tagged with metadata for retrieval. JSON is minified to save tokens.
@@ -285,7 +286,7 @@ function parseDesignMdTokens(designMd: string | null): NormalizerOptions | undef
 }
 
 // --- Build system prompt ---
-function buildSystemPrompt(designMd: string | null, isEditMode: boolean = false, learnedPatterns: string = '', brandColor?: string, screenType: ScreenType = 'unknown', hasImage: boolean = false, deviceInfo?: { name: string; width: number; height: number; category: string }): string {
+function buildSystemPrompt(designMd: string | null, isEditMode: boolean = false, learnedPatterns: string = '', brandColor?: string, screenType: ScreenType = 'unknown', hasImage: boolean = false, deviceInfo?: { name: string; width: number; height: number; category: string }, themeResult?: ThemeResult): string {
   let prompt = `You are a world-class mobile UI designer and React Native expert. You create screens that look like they were designed by senior designers at Airbnb, Spotify, Stripe, or Nike. Your output is production-quality — not a prototype, not a wireframe, but a polished, beautiful screen ready to ship.
 
 Your designs follow these principles:
@@ -300,7 +301,9 @@ ${deviceInfo ? `
 TARGET DEVICE: You are designing for a ${deviceInfo.name} screen at ${deviceInfo.width}x${deviceInfo.height} pixels. Design content to fit within this viewport. ${deviceInfo.category === 'Android' ? 'This is an Android device — use Material Design conventions where appropriate.' : 'This is an iOS device — use iOS/HIG conventions where appropriate.'}
 ` : ''}
 ${DESIGN_TOKENS}
-
+${themeResult && !isEditMode ? `
+${formatPaletteForPrompt(themeResult)}
+` : ''}
 ${COMPONENT_TYPES}
 
 ${CONTENT_LIBRARY}
@@ -337,6 +340,7 @@ When generating screens, recognize these common patterns and preserve their stru
 DESIGN.MD SUPPORT:
 If the user's prompt contains a DESIGN.md block or references design tokens from an external source, extract and use those tokens instead of the defaults. Colors, typography, spacing, and component rules from DESIGN.md override Mokkoi defaults. If a DESIGN.md only partially defines tokens, use Mokkoi defaults for unspecified values. Look for markdown headers like "# Colors", "# Typography", "## Primary", "## Spacing" or code blocks containing token definitions.
 
+${themeResult && !isEditMode ? 'IMPORTANT: The examples below use sample colors for structure reference only. Replace ALL colors in your output with the DESIGN PALETTE colors above. The palette was specifically chosen for this screen category.\n' : ''}
 ${screenType !== 'unknown' ? getRelevantExamples(screenType) : getDefaultExamples()}
 
 ${QUALITY_CHECKLIST}
@@ -482,7 +486,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     'android-large': { name: 'Android Large', width: 412, height: 917, category: 'Android' },
   }
   const deviceInfo = deviceId ? DEVICE_MAP[deviceId as string] : undefined
-  const systemPromptText = buildSystemPrompt(designMd, isEditMode, learnedPatterns, brandColor, screenType, hasImage, deviceInfo)
+  // Resolve dynamic color theme — only for new screens, not edits
+  const themeResult = !isEditMode ? resolveTheme(cleanPrompt) : undefined
+  const systemPromptText = buildSystemPrompt(designMd, isEditMode, learnedPatterns, brandColor, screenType, hasImage, deviceInfo, themeResult)
   const normalizerOpts = parseDesignMdTokens(designMd)
 
   // Build user message — include current screen if editing, or image if attached
@@ -930,7 +936,12 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       logEditDiff({ userId: user.id, projectId: projectId || undefined, screenId: screenId || undefined, editType: editType as 'ai_edit' | 'variation' | 'regenerate', prompt, treeBefore: currentScreen, treeAfter: tree, modelUsed: model })
     }
 
-    return res.status(200).json({ tree, modelUsed: modelLabel, ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}) })
+    return res.status(200).json({
+      tree,
+      modelUsed: modelLabel,
+      ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}),
+      ...(themeResult ? { theme: { category: themeResult.category, palette: themeResult.palette.name, isDarkMode: themeResult.isDarkMode } } : {}),
+    })
   } catch (err) {
     console.error('Generate error:', err)
     const message = err instanceof Error ? err.message : String(err)
