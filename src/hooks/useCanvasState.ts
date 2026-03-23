@@ -7,6 +7,7 @@ export interface CanvasState {
   isSpacePanning: boolean
   canvasRef: React.RefObject<HTMLDivElement | null>
   isPanning: React.MutableRefObject<boolean>
+  isZooming: React.MutableRefObject<boolean>
   didPan: React.MutableRefObject<boolean>
   isSpaceHeld: React.MutableRefObject<boolean>
 
@@ -30,10 +31,17 @@ export function useCanvasState(): CanvasState {
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const isPanning = useRef(false)
+  const isZooming = useRef(false)
+  const zoomTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didPan = useRef(false)
   const panStart = useRef({ x: 0, y: 0 })
   const panOffsetStart = useRef({ x: 0, y: 0 })
   const isSpaceHeld = useRef(false)
+  // Refs for latest state values — avoids stale closures in wheel handler
+  const zoomRef = useRef(zoomLevel)
+  const panRef = useRef(panOffset)
+  zoomRef.current = zoomLevel
+  panRef.current = panOffset
 
   // Canvas wheel handler — attached natively with { passive: false } so preventDefault works
   useEffect(() => {
@@ -50,20 +58,33 @@ export function useCanvasState(): CanvasState {
       e.stopPropagation()
 
       if (e.ctrlKey || e.metaKey) {
+        // Cursor-anchored zoom (Figma-style): the point under the cursor stays fixed
         const rect = el.getBoundingClientRect()
-        const mx = e.clientX - rect.left - rect.width / 2
-        const my = e.clientY - rect.top - rect.height / 2
+        // Cursor position relative to canvas center (matches transformOrigin: center center)
+        const cursorX = e.clientX - rect.left - rect.width / 2
+        const cursorY = e.clientY - rect.top - rect.height / 2
 
-        setZoomLevel(prevZoom => {
-          const delta = e.deltaY > 0 ? -5 : 5
-          const newZoom = Math.min(300, Math.max(25, prevZoom + delta))
-          const scaleFactor = newZoom / prevZoom
-          setPanOffset(prev => ({
-            x: mx - scaleFactor * (mx - prev.x),
-            y: my - scaleFactor * (my - prev.y),
-          }))
-          return newZoom
+        // Smooth zoom: scale delta by deltaY magnitude for trackpad pinch support
+        const rawDelta = -e.deltaY * 0.5
+        const delta = Math.max(-15, Math.min(15, rawDelta))
+        const prevZoom = zoomRef.current
+        const newZoom = Math.min(300, Math.max(25, prevZoom + delta))
+        if (newZoom === prevZoom) return
+
+        // Mark zooming for transition suppression
+        isZooming.current = true
+        if (zoomTimer.current) clearTimeout(zoomTimer.current)
+        zoomTimer.current = setTimeout(() => { isZooming.current = false }, 150)
+
+        // Zoom-to-point formula: keeps cursorX/cursorY fixed on screen
+        // newPan = cursor - (cursor - oldPan) * (newZoom / oldZoom)
+        const scaleFactor = newZoom / prevZoom
+        const oldPan = panRef.current
+        setPanOffset({
+          x: cursorX - scaleFactor * (cursorX - oldPan.x),
+          y: cursorY - scaleFactor * (cursorY - oldPan.y),
         })
+        setZoomLevel(newZoom)
       } else if (e.shiftKey) {
         setPanOffset(prev => ({ ...prev, x: prev.x - e.deltaY }))
       } else {
@@ -92,7 +113,7 @@ export function useCanvasState(): CanvasState {
         })
       }
     }
-    const handleMouseUp = () => {
+    const cleanupPan = () => {
       if (isPanning.current) {
         isPanning.current = false
         requestAnimationFrame(() => { didPan.current = false })
@@ -100,11 +121,17 @@ export function useCanvasState(): CanvasState {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
+    // Also clean up if mouse leaves the window entirely (prevents stuck state)
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.relatedTarget === null) cleanupPan()
+    }
     window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('mouseup', cleanupPan)
+    document.addEventListener('mouseleave', handleMouseLeave)
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('mouseup', cleanupPan)
+      document.removeEventListener('mouseleave', handleMouseLeave)
     }
   }, [])
 
@@ -165,6 +192,7 @@ export function useCanvasState(): CanvasState {
     isSpacePanning,
     canvasRef,
     isPanning,
+    isZooming,
     didPan,
     isSpaceHeld,
     setActiveTool,

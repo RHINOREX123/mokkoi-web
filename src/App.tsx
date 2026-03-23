@@ -146,7 +146,7 @@ function App() {
         ))
       }
     }
-    const handleMouseUp = () => {
+    const cleanupScreenDrag = () => {
       if (isDraggingScreen.current) {
         isDraggingScreen.current = false
         dragScreenId.current = null
@@ -156,11 +156,17 @@ function App() {
         requestAnimationFrame(() => { didDragScreen.current = false })
       }
     }
+    // Also clean up if mouse leaves the window entirely (prevents stuck state)
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.relatedTarget === null) cleanupScreenDrag()
+    }
     window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('mouseup', cleanupScreenDrag)
+    document.addEventListener('mouseleave', handleMouseLeave)
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('mouseup', cleanupScreenDrag)
+      document.removeEventListener('mouseleave', handleMouseLeave)
     }
   }, [screens.setGeneratedScreens])
 
@@ -314,7 +320,9 @@ function App() {
 
   const handlePhoneClick = (e: React.MouseEvent, screenId: string) => {
     e.stopPropagation()
-    if (didDragScreen.current || canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
+    // Only skip selection if a real drag happened (3px+ movement), not just a mouseDown/mouseUp cycle
+    if (canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
+    if (didDragScreen.current || canvas.didPan.current) return
     if (directEdit.directEditMode) { directEdit.handleDirectEditClick(e, screenId); return }
     screens.setActiveGeneratedId(screenId)
   }
@@ -447,7 +455,7 @@ function App() {
                 position: 'relative',
                 minWidth: 1, minHeight: 1,
                 transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px) scale(${canvas.zoomLevel / 100})`,
-                transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current) ? 'none' : 'transform 0.15s ease-out',
+                transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current || canvas.isZooming.current) ? 'none' : 'transform 0.15s ease-out',
                 cursor: canvas.panActive ? 'inherit' : 'default',
               }}>
                 {screens.generatedScreens.map((screen) => {
