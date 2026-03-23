@@ -165,7 +165,7 @@ These are the ONLY types you may use. Using any other type will show an error.
 
 7. Image — Image display with automatic stock photo integration.
    Props: searchQuery (string — describe the image in 2-4 keywords, e.g. "fitness gym workout", "pizza restaurant interior", "nike sneakers side view", "tropical beach resort")
-   The renderer automatically fetches a matching real photo from Unsplash using searchQuery.
+   The renderer automatically fetches a matching real photo using searchQuery.
    IMPORTANT: Always include searchQuery with 2-4 descriptive keywords. Always set explicit width and height in style.
    Example: { "type": "Image", "style": { "width": "100%", "height": 200, "borderRadius": 12 }, "props": { "searchQuery": "modern gym interior dark" } }
    For avatars/profile photos use the avatar prop: {"type":"Image","style":{"width":48,"height":48,"borderRadius":9999},"props":{"avatar":"Sarah"}}

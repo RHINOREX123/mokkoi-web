@@ -391,7 +391,9 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         const avatarStyle = (node.props?.avatarStyle as string) ?? 'avataaars-neutral'
         src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w, h)}`
       } else if (searchQuery) {
-        src = `https://source.unsplash.com/${w}x${h}/?${encodeURIComponent(searchQuery)}`
+        // loremflickr: free, no API key, keyword-based image search
+        const keywords = searchQuery.replace(/\s+/g, ',')
+        src = `https://loremflickr.com/${w}/${h}/${encodeURIComponent(keywords)}?lock=${searchQuery.length}`
       } else {
         src = source?.uri ?? ''
       }
@@ -522,61 +524,37 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       return <stop key={key} offset={offset} stopColor={stopColor} stopOpacity={stopOpacity} />
     }
 
-    // --- Icon Component (Lucide-style SVG icons) ---
+    // --- Icon Component (Google Material Symbols font — instant, no network per icon) ---
     case 'Icon': {
       const iconName = (node.props?.name as string) ?? 'circle'
       const iconSize = (node.props?.size as number) ?? 24
       const iconColor = (node.props?.color as string) ?? '#FFFFFF'
-      const iconSet = (node.props?.set as string) ?? 'material-symbols'
+      const filled = (node.props?.filled as boolean) ?? false
 
-      // For material-symbols: ensure underscores (AI may output hyphens)
-      // For lucide: ensure hyphens (AI may output underscores)
-      let resolvedName = iconName
-      if (iconSet === 'material-symbols') {
-        // Material Symbols uses underscores: favorite, arrow_back, local_fire_department
-        resolvedName = MATERIAL_SYMBOL_MAP[iconName] ?? iconName.replace(/-/g, '_')
-      } else if (iconSet === 'lucide') {
-        // Lucide uses hyphens: heart, arrow-left, map-pin
-        resolvedName = LUCIDE_NAME_MAP[iconName] ?? iconName.replace(/_/g, '-')
-      }
-
-      const encodedColor = encodeURIComponent(iconColor)
-      // Primary: material-symbols (widest coverage, matches AI training)
-      const primaryUrl = `https://api.iconify.design/${iconSet}/${resolvedName}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
-      // Fallback: try lucide set with mapped name
-      const lucideName = LUCIDE_NAME_MAP[iconName] ?? iconName.replace(/_/g, '-')
-      const fallbackUrl = `https://api.iconify.design/lucide/${lucideName}.svg?color=${encodedColor}&width=${iconSize}&height=${iconSize}`
+      // Resolve to Material Symbols name: handle Lucide names, hyphens, etc.
+      const materialName = MATERIAL_SYMBOL_MAP[iconName] ?? iconName.replace(/-/g, '_')
 
       return (
-        <img
+        <span
           key={key}
-          src={primaryUrl}
-          alt={iconName}
-          width={iconSize}
-          height={iconSize}
-          loading="lazy"
-          style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
-          onError={(e) => {
-            const img = e.target as HTMLImageElement
-            if (!img.dataset.fallback) {
-              // First failure: try Material Symbols set via Iconify
-              img.dataset.fallback = '1'
-              img.src = fallbackUrl
-            } else {
-              // Both failed: show a small colored circle (not a broken letter)
-              const circle = document.createElement('span')
-              circle.style.display = 'inline-flex'
-              circle.style.alignItems = 'center'
-              circle.style.justifyContent = 'center'
-              circle.style.width = `${iconSize}px`
-              circle.style.height = `${iconSize}px`
-              circle.style.borderRadius = '50%'
-              circle.style.backgroundColor = iconColor + '22'
-              circle.style.flexShrink = '0'
-              img.replaceWith(circle)
-            }
+          className="material-symbols-outlined"
+          style={{
+            fontSize: iconSize,
+            color: iconColor,
+            fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' ${iconSize}`,
+            lineHeight: 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: iconSize,
+            height: iconSize,
+            userSelect: 'none' as const,
+            flexShrink: 0,
+            ...style,
           }}
-        />
+        >
+          {materialName}
+        </span>
       )
     }
 
