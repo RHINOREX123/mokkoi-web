@@ -392,8 +392,14 @@ Formula: strokeDasharray = 2 * pi * r (151 for r=24). strokeDashoffset = dasharr
 
 IMAGE RULES (CRITICAL):
 EVERY Image component MUST have either a searchQuery or avatar prop. NEVER leave Image empty.
-- For photos: {"type":"Image","style":{"width":"100%","height":200,"borderRadius":12},"props":{"searchQuery":"fitness gym dark"}}
-- For avatars: {"type":"Image","style":{"width":40,"height":40,"borderRadius":9999},"props":{"avatar":"Sarah"}}
+Images are AI-generated from searchQuery — write it like a Midjourney prompt (5-10 descriptive words):
+- GOOD: {"props":{"searchQuery":"Nike Air Max 270 sneaker product photography dark background studio lighting"}}
+- GOOD: {"props":{"searchQuery":"Thai pad thai noodles close up food photography warm lighting"}}
+- GOOD: {"props":{"searchQuery":"luxury beachfront resort pool aerial view tropical paradise"}}
+- GOOD: {"props":{"searchQuery":"modern minimalist gym interior dark moody fitness equipment"}}
+- BAD: {"props":{"searchQuery":"sneakers"}} — too vague, generates generic image
+- BAD: {"props":{"searchQuery":"food"}} — too vague
+For avatars use the avatar prop: {"props":{"avatar":"Sarah"}} — generates illustrated profile picture.
 Use searchQuery for: hero images, product photos, restaurant images, hotel photos, movie posters, venue photos.
 Use avatar for: profile pictures, chat avatars, user list items, team members.
 

@@ -469,13 +469,16 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const h = typeof style.height === 'number' ? Math.min(style.height, 800) : 300
       let src: string
       if (avatar) {
-        // DiceBear avatar: generates consistent illustrated avatars from a seed string
+        // DiceBear avatar: consistent illustrated avatars from a seed name
         const avatarStyle = (node.props?.avatarStyle as string) ?? 'avataaars-neutral'
         src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w, h)}`
       } else if (searchQuery) {
-        // loremflickr: free, no API key, keyword-based image search
-        const keywords = searchQuery.replace(/\s+/g, ',')
-        src = `https://loremflickr.com/${w}/${h}/${encodeURIComponent(keywords)}?lock=${searchQuery.length}`
+        // LoremFlickr: free, keyword-based real stock photos
+        // Extract top 3 keywords for better matching
+        const keywords = searchQuery.split(/\s+/).slice(0, 4).join(',')
+        // Use searchQuery length as hash for consistent images per query
+        const hash = Math.abs(searchQuery.split('').reduce((a, c) => a + c.charCodeAt(0), 0))
+        src = `https://loremflickr.com/${w}/${h}/${encodeURIComponent(keywords)}?lock=${hash}`
       } else {
         src = source?.uri ?? ''
       }
