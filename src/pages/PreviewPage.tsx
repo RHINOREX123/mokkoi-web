@@ -1,26 +1,33 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { PhoneFrame, DEVICE_W, DEVICE_H } from '../components/PhoneFrame'
+import { PhoneFrame } from '../components/PhoneFrame'
 import { ScreenRenderer } from '../components/ScreenRenderer'
 import { Smartphone, Tablet, LayoutGrid, Share2, ExternalLink } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
+import { DEVICE_PRESETS } from '../constants/devices'
 
-// ----- Device Presets -----
-interface DevicePreset {
+// ----- Preview Device Presets (includes iPad for preview-only) -----
+interface PreviewDevicePreset {
   id: string
   width: number
   height: number
   name: string
   borderRadius: number
   icon: 'phone' | 'phone-lg' | 'tablet'
+  deviceId?: string // maps back to DEVICE_PRESETS id if applicable
 }
 
-const DEVICE_PRESETS: DevicePreset[] = [
-  { id: 'iphone14-15pro', width: 393, height: 852, name: 'iPhone 14/15 Pro', borderRadius: 47, icon: 'phone' },
-  { id: 'iphone16pro', width: 393, height: 852, name: 'iPhone 16 Pro', borderRadius: 47, icon: 'phone' },
-  { id: 'iphone13-14', width: 390, height: 844, name: 'iPhone 13/14', borderRadius: 47, icon: 'phone' },
-  { id: 'iphoneSE', width: 375, height: 667, name: 'iPhone SE', borderRadius: 40, icon: 'phone' },
+const PREVIEW_DEVICE_PRESETS: PreviewDevicePreset[] = [
+  ...DEVICE_PRESETS.map(d => ({
+    id: d.id,
+    width: d.width,
+    height: d.height,
+    name: d.name,
+    borderRadius: d.category === 'Android' ? 36 : 47,
+    icon: 'phone' as const,
+    deviceId: d.id,
+  })),
   { id: 'ipad', width: 768, height: 1024, name: 'iPad', borderRadius: 20, icon: 'tablet' },
 ]
 
@@ -32,7 +39,7 @@ export default function PreviewPage() {
   const [tree, setTree] = useState<ComponentNode | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeDevice, setActiveDevice] = useState('iphone14-15pro')
+  const [activeDevice, setActiveDevice] = useState('iphone-standard')
   const [showAll, setShowAll] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
@@ -50,6 +57,7 @@ export default function PreviewPage() {
         if (payload.tree) {
           setScreenName(payload.name || 'Untitled Screen')
           setTree(payload.tree as ComponentNode)
+          if (payload.deviceId) setActiveDevice(payload.deviceId)
           setLoading(false)
           return
         }
@@ -62,7 +70,7 @@ export default function PreviewPage() {
       // Check project access: public OR owned by authenticated user
       const { data: project } = await supabase
         .from('projects')
-        .select('name, is_public, user_id')
+        .select('name, is_public, user_id, device_id')
         .eq('id', projectId)
         .single()
 
@@ -84,6 +92,11 @@ export default function PreviewPage() {
         setError('This screen is private')
         setLoading(false)
         return
+      }
+
+      // Set the project's device as default
+      if (project.device_id) {
+        setActiveDevice(project.device_id)
       }
 
       // Fetch the specific screen
@@ -124,9 +137,9 @@ export default function PreviewPage() {
     }
   }
 
-  const device = DEVICE_PRESETS.find(d => d.id === activeDevice) || DEVICE_PRESETS[0]
+  const device = PREVIEW_DEVICE_PRESETS.find(d => d.id === activeDevice) || PREVIEW_DEVICE_PRESETS[0]
 
-  const deviceIcon = (preset: DevicePreset) => {
+  const deviceIcon = (preset: PreviewDevicePreset) => {
     switch (preset.icon) {
       case 'phone': return <Smartphone size={16} />
       case 'phone-lg': return <Smartphone size={18} />
@@ -135,13 +148,11 @@ export default function PreviewPage() {
   }
 
   // Scale factor to fit device in viewport
-  const getScale = (d: DevicePreset) => {
+  const getScale = (d: PreviewDevicePreset) => {
     const maxH = window.innerHeight - 160 // navbar + label + padding
     const maxW = window.innerWidth - 80
-    const isPhone = d.icon === 'phone' || d.icon === 'phone-lg'
-    // For phones, scale relative to the PhoneFrame's actual DEVICE dimensions
-    const refW = isPhone ? DEVICE_W : d.width
-    const refH = isPhone ? DEVICE_H : d.height
+    const refW = d.width
+    const refH = d.height
     const scaleH = maxH / refH
     const scaleW = maxW / refW
     return Math.min(1, scaleH, scaleW)
@@ -196,7 +207,7 @@ export default function PreviewPage() {
   }
 
   // ----- Render a single device frame -----
-  const renderDeviceFrame = (d: DevicePreset, scale?: number) => {
+  const renderDeviceFrame = (d: PreviewDevicePreset, scale?: number) => {
     const s = scale ?? getScale(d)
     const isPhone = d.icon === 'phone' || d.icon === 'phone-lg'
 
@@ -211,7 +222,7 @@ export default function PreviewPage() {
             transform: `scale(${s})`,
             transformOrigin: 'top center',
           }}>
-            <PhoneFrame mode="preview" generatedTree={tree ?? undefined} />
+            <PhoneFrame mode="preview" generatedTree={tree ?? undefined} deviceId={d.deviceId} />
           </div>
         ) : (
           /* Tablet/Desktop presets: simple container, no phone chrome */
@@ -298,7 +309,7 @@ export default function PreviewPage() {
           borderRadius: 10,
           border: '1px solid rgba(255,255,255,0.06)',
         }}>
-          {DEVICE_PRESETS.map(preset => (
+          {PREVIEW_DEVICE_PRESETS.map(preset => (
             <button
               key={preset.id}
               title={`${preset.name} (${preset.width}×${preset.height})`}
@@ -389,11 +400,10 @@ export default function PreviewPage() {
       }}>
         {showAll ? (
           // Show all devices side by side
-          DEVICE_PRESETS.map(d => {
+          PREVIEW_DEVICE_PRESETS.map(d => {
             // Scale all to fit: use a smaller scale for "all" view
             const maxH = window.innerHeight - 200
-            const isPhone = d.icon === 'phone' || d.icon === 'phone-lg'
-            const refH = isPhone ? DEVICE_H : d.height
+            const refH = d.height
             const s = Math.min(0.45, maxH / refH)
             return renderDeviceFrame(d, s)
           })

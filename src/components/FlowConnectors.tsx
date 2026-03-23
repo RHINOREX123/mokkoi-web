@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
-import { CANVAS_W, CANVAS_H } from './PhoneFrame'
+import { getCanvasDimensions, DEFAULT_DEVICE } from '../constants/devices'
 
-const PHONE_W = CANVAS_W
-const PHONE_H = CANVAS_H
 const LABEL_HEIGHT = 26 // approximate height of screen label above frame
 export const GAP = 40
 export const PAD_X = 60
@@ -89,11 +87,12 @@ export function getFlows(screens: GeneratedScreen[]): FlowGroup[] {
 }
 
 /** Get the bounding rect of a screen on the canvas, using explicit position or fallback to index */
-function getScreenRect(screenId: string, screenIndex: number, screenPositions?: Map<string, { x: number; y: number }>) {
+function getScreenRect(screenId: string, screenIndex: number, screenPositions?: Map<string, { x: number; y: number }>, deviceId?: string) {
+  const { CANVAS_W, CANVAS_H } = getCanvasDimensions(deviceId || DEFAULT_DEVICE)
   const pos = screenPositions?.get(screenId)
-  const x = pos ? pos.x : PAD_X + screenIndex * (PHONE_W + GAP)
+  const x = pos ? pos.x : PAD_X + screenIndex * (CANVAS_W + GAP)
   const y = (pos ? pos.y : PAD_Y) + LABEL_HEIGHT
-  return { x, y, w: PHONE_W, h: PHONE_H }
+  return { x, y, w: CANVAS_W, h: CANVAS_H }
 }
 
 function inferTransitionType(screenName: string): string {
@@ -108,9 +107,11 @@ interface FlowConnectorsProps {
   totalScreens: number
   /** Map of screenId → { x, y } canvas positions for free-drag layout */
   screenPositions?: Map<string, { x: number; y: number }>
+  /** Device ID for dimension calculations */
+  deviceId?: string
 }
 
-export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) {
+export function FlowConnectors({ flows, screenPositions, deviceId }: FlowConnectorsProps) {
   const connectors = useMemo(() => {
     const lines: Array<{
       key: string
@@ -125,8 +126,8 @@ export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) 
         const toIdx = flow.indices[i + 1]
         const fromId = flow.screens[i].id
         const toId = flow.screens[i + 1].id
-        const fromRect = getScreenRect(fromId, fromIdx, screenPositions)
-        const toRect = getScreenRect(toId, toIdx, screenPositions)
+        const fromRect = getScreenRect(fromId, fromIdx, screenPositions, deviceId)
+        const toRect = getScreenRect(toId, toIdx, screenPositions, deviceId)
 
         const x1 = fromRect.x + fromRect.w
         const y1 = fromRect.y + fromRect.h / 2

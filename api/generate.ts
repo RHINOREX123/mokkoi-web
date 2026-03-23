@@ -261,7 +261,7 @@ function parseDesignMdTokens(designMd: string | null): NormalizerOptions | undef
 }
 
 // --- Build system prompt ---
-function buildSystemPrompt(designMd: string | null, isEditMode: boolean = false, learnedPatterns: string = '', brandColor?: string, screenType: ScreenType = 'unknown', hasImage: boolean = false): string {
+function buildSystemPrompt(designMd: string | null, isEditMode: boolean = false, learnedPatterns: string = '', brandColor?: string, screenType: ScreenType = 'unknown', hasImage: boolean = false, deviceInfo?: { name: string; width: number; height: number; category: string }): string {
   let prompt = `You are a world-class mobile UI designer and React Native expert. You create screens that look like they were designed by senior designers at Airbnb, Spotify, Stripe, or Nike. Your output is production-quality — not a prototype, not a wireframe, but a polished, beautiful screen ready to ship.
 
 Your designs follow these principles:
@@ -272,7 +272,9 @@ Your designs follow these principles:
 - Content is realistic and contextual — never generic placeholder text
 
 Generate a React Native component tree as JSON. Return a single JSON object. Return ONLY valid JSON, no markdown, no explanation.
-
+${deviceInfo ? `
+TARGET DEVICE: You are designing for a ${deviceInfo.name} screen at ${deviceInfo.width}x${deviceInfo.height} pixels. Design content to fit within this viewport. ${deviceInfo.category === 'Android' ? 'This is an Android device — use Material Design conventions where appropriate.' : 'This is an iOS device — use iOS/HIG conventions where appropriate.'}
+` : ''}
 ${DESIGN_TOKENS}
 
 ${COMPONENT_TYPES}
@@ -373,7 +375,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) return // 401 already sent
 
   // --- Credit deduction (skip for MCP — they use their own key via BYOK) ---
-  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId, screenName, conversationHistory, brandColor } = req.body ?? {}
+  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId, screenName, conversationHistory, brandColor, deviceId } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
   }
@@ -447,7 +449,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isEditMode = !!currentScreen && generationType === 'edit'
   const learnedPatterns = isNewScreen ? await getLearnedPatterns() : ''
   const screenType = classifyScreenType(cleanPrompt)
-  const systemPromptText = buildSystemPrompt(designMd, isEditMode, learnedPatterns, brandColor, screenType, hasImage)
+  // Resolve device info for prompt context
+  const DEVICE_MAP: Record<string, { name: string; width: number; height: number; category: string }> = {
+    'iphone-standard': { name: 'iPhone Standard', width: 393, height: 852, category: 'iOS' },
+    'iphone-max': { name: 'iPhone Max', width: 430, height: 932, category: 'iOS' },
+    'iphone-se': { name: 'iPhone SE', width: 375, height: 667, category: 'iOS' },
+    'android-standard': { name: 'Android', width: 360, height: 800, category: 'Android' },
+    'android-large': { name: 'Android Large', width: 412, height: 917, category: 'Android' },
+  }
+  const deviceInfo = deviceId ? DEVICE_MAP[deviceId as string] : undefined
+  const systemPromptText = buildSystemPrompt(designMd, isEditMode, learnedPatterns, brandColor, screenType, hasImage, deviceInfo)
   const normalizerOpts = parseDesignMdTokens(designMd)
 
   // Build user message — include current screen if editing, or image if attached

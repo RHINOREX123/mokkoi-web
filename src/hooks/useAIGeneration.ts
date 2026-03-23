@@ -5,8 +5,9 @@ import { supabase } from '../lib/supabase'
 import { trackEvent } from '../lib/analytics'
 import type { GeneratedScreen } from './useScreenManagement'
 import type { VariationSettings } from '../components/VariationsPanel'
-import { CANVAS_W } from '../components/PhoneFrame'
 import { GAP } from '../components/FlowConnectors'
+import { getCanvasDimensions } from '../constants/devices'
+import type { DeviceId } from '../constants/devices'
 
 const FLOW_KEYWORDS = [
   'flow', 'onboarding', 'walkthrough', 'multi-screen', 'complete app',
@@ -118,6 +119,7 @@ interface AIGenerationDeps {
   setToastMessage: (msg: string) => void
   setShowVariationsPanel: (show: boolean) => void
   getNextScreenPosition: () => { x: number; y: number }
+  deviceId: DeviceId
 }
 
 /** Build conversation history from recent messages for Claude context */
@@ -148,6 +150,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     setToastMessage,
     setShowVariationsPanel,
     getNextScreenPosition,
+    deviceId,
   } = deps
 
   const [isGenerating, setIsGenerating] = useState(false)
@@ -247,7 +250,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
           name: s.name,
           tree: s.tree,
           flowId,
-          x: nextPos.x + i * (CANVAS_W + GAP), // CANVAS_W + GAP for each subsequent screen
+          x: nextPos.x + i * (getCanvasDimensions(deviceId).CANVAS_W + GAP), // getCanvasDimensions(deviceId).CANVAS_W + GAP for each subsequent screen
           y: nextPos.y,
         }))
 
@@ -324,6 +327,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         prompt,
         projectId,
         conversationHistory,
+        deviceId,
         ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
         ...(regenerateTree ? { currentScreen: regenerateTree, screenName: screenName } : {}),
         ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
@@ -474,7 +478,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         name: `${activeGenerated.name} v${i + 1}`,
         originalPrompt: activeGenerated.originalPrompt,
         tree: { type: 'View', style: {}, children: [] },
-        x: varPos.x + i * (CANVAS_W + GAP), // CANVAS_W + GAP
+        x: varPos.x + i * (getCanvasDimensions(deviceId).CANVAS_W + GAP), // getCanvasDimensions(deviceId).CANVAS_W + GAP
         y: varPos.y,
       }
       placeholders.push(ph)

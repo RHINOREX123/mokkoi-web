@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
 import type { ChatMessage } from '../components/ChatPanel'
-import { CANVAS_W } from '../components/PhoneFrame'
 import { GAP, PAD_X, PAD_Y } from '../components/FlowConnectors'
+import { DEFAULT_DEVICE, getCanvasDimensions } from '../constants/devices'
+import type { DeviceId } from '../constants/devices'
 
 export interface GeneratedScreen {
   id: string
@@ -50,6 +51,10 @@ export interface ScreenManagement {
   hasTreeRef: React.MutableRefObject<boolean>
   /** Returns the next available {x, y} position for a new screen (right of all existing screens) */
   getNextScreenPosition: () => { x: number; y: number }
+
+  // Device selection
+  deviceId: DeviceId
+  setDeviceId: (id: DeviceId) => void
 }
 
 export function useScreenManagement(projectId: string | undefined): ScreenManagement {
@@ -59,6 +64,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   const [editingScreenLabelValue, setEditingScreenLabelValue] = useState('')
   const [projectMessages, setProjectMessages] = useState<ChatMessage[]>([])
   const [projectName, setProjectName] = useState('Untitled Project')
+  const [deviceId, setDeviceIdState] = useState<DeviceId>(DEFAULT_DEVICE)
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectLoadedRef = useRef(false)
@@ -81,6 +87,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
         .single()
       if (project) {
         setProjectName(project.name || 'Untitled Project')
+        setDeviceIdState((project.device_id as DeviceId) || DEFAULT_DEVICE)
       }
 
       const { data: screens } = await supabase
@@ -237,6 +244,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
 
   /** Calculate the next available position for a new screen (right of all existing screens) */
   const getNextScreenPosition = useCallback((): { x: number; y: number } => {
+    const { CANVAS_W } = getCanvasDimensions(deviceId)
     if (generatedScreens.length === 0) return { x: PAD_X, y: PAD_Y }
     let maxRight = 0
     generatedScreens.forEach((s, i) => {
@@ -245,7 +253,15 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       if (right > maxRight) maxRight = right
     })
     return { x: maxRight + GAP, y: PAD_Y }
-  }, [generatedScreens])
+  }, [generatedScreens, deviceId])
+
+  /** Update device and persist to Supabase */
+  const setDeviceId = useCallback((id: DeviceId) => {
+    setDeviceIdState(id)
+    if (projectId && supabase) {
+      supabase.from('projects').update({ device_id: id, updated_at: new Date().toISOString() }).eq('id', projectId).then()
+    }
+  }, [projectId])
 
   const handleDuplicateScreen = useCallback(() => {
     if (!activeGenerated) return
@@ -308,5 +324,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     projectLoadedRef,
     hasTreeRef,
     getNextScreenPosition,
+    deviceId,
+    setDeviceId,
   }
 }

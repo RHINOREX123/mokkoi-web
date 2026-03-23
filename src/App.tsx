@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
-import { PhoneFrame, CANVAS_W, CANVAS_H } from './components/PhoneFrame'
+import { PhoneFrame } from './components/PhoneFrame'
+import { getCanvasDimensions, DEVICE_PRESETS, getDevicePreset } from './constants/devices'
 import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
@@ -69,6 +70,7 @@ function App() {
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const [flowViewMode, setFlowViewMode] = useState(false)
+  const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Resizable panel
@@ -90,7 +92,12 @@ function App() {
     setToastMessage,
     setShowVariationsPanel,
     getNextScreenPosition: screens.getNextScreenPosition,
+    deviceId: screens.deviceId,
   })
+
+  // Device-aware canvas dimensions
+  const deviceDims = useMemo(() => getCanvasDimensions(screens.deviceId), [screens.deviceId])
+  const selectedDevice = useMemo(() => getDevicePreset(screens.deviceId), [screens.deviceId])
 
   // Direct Edit
   const directEdit = useDirectEdit({
@@ -221,12 +228,12 @@ function App() {
     const map = new Map<string, { x: number; y: number }>()
     screens.generatedScreens.forEach((s, i) => {
       map.set(s.id, {
-        x: s.x ?? (PAD_X + i * (CANVAS_W + GAP)),
+        x: s.x ?? (PAD_X + i * (deviceDims.CANVAS_W + GAP)),
         y: s.y ?? PAD_Y,
       })
     })
     return map
-  }, [screens.generatedScreens])
+  }, [screens.generatedScreens, deviceDims.CANVAS_W])
 
   const handleViewFlow = useCallback((flow: { indices: number[]; screens?: { id: string }[] }) => {
     // Zoom and pan to fit all screens in the flow
@@ -234,7 +241,7 @@ function App() {
     if (!canvasEl || flow.indices.length === 0) return
     const rect = canvasEl.getBoundingClientRect()
 
-    const PHONE_W = CANVAS_W, PHONE_H = CANVAS_H, LABEL_H = 26
+    const PHONE_W = deviceDims.CANVAS_W, PHONE_H = deviceDims.CANVAS_H, LABEL_H = 26
     // Use actual screen positions for bounding box
     let leftEdge = Infinity, rightEdge = -Infinity, topEdge = Infinity, bottomEdge = -Infinity
     for (const idx of flow.indices) {
@@ -302,7 +309,7 @@ function App() {
     if (!screens.activeGeneratedId || !projectId) return
     // Store the current in-memory tree in sessionStorage so PreviewPage can render it
     // without needing a Supabase round-trip (works for unsaved screens too)
-    const payload = { tree: screens.generatedTree, name: screens.activeGenerated?.name || 'Untitled Screen' }
+    const payload = { tree: screens.generatedTree, name: screens.activeGenerated?.name || 'Untitled Screen', deviceId: screens.deviceId }
     try { sessionStorage.setItem('mokkoi-preview-data', JSON.stringify(payload)) } catch { /* quota exceeded, fall back to Supabase fetch */ }
     window.open(`/preview/${projectId}/${screens.activeGeneratedId}`, '_blank')
   }, [screens.activeGeneratedId, screens.generatedTree, screens.activeGenerated, projectId])
@@ -499,13 +506,13 @@ function App() {
                 cursor: canvas.panActive ? 'inherit' : 'default',
               }}>
                 {flowViewMode && flows.length > 0 && (
-                  <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} screenPositions={screenPositions} />
+                  <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} screenPositions={screenPositions} deviceId={screens.deviceId} />
                 )}
 
                 {screens.generatedScreens.map((screen, idx) => {
                   const isActive = screen.id === screens.activeGeneratedId
                   const isImage = screen.type === 'image'
-                  const sx = screen.x ?? (PAD_X + idx * (CANVAS_W + GAP))
+                  const sx = screen.x ?? (PAD_X + idx * (deviceDims.CANVAS_W + GAP))
                   const sy = screen.y ?? PAD_Y
                   return (
                     <div key={screen.id}
@@ -545,7 +552,7 @@ function App() {
                           onMouseOverCapture={directEdit.directEditMode ? directEdit.handleDirectEditHover : undefined}
                           onMouseOutCapture={directEdit.directEditMode ? directEdit.handleDirectEditHoverOut : undefined}
                         >
-                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} />
+                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} deviceId={screens.deviceId} />
                           {directEdit.directEditMode && isActive && directEdit.directEditSelectedEl && (
                             <div data-direct-edit-toolbar="true">
                               <DirectEditToolbar target={directEdit.directEditSelectedEl} phoneFrameEl={phoneFrameRefs.current.get(screen.id)!} onClose={() => directEdit.setDirectEditSelectedEl(null)} onChanged={() => directEdit.setDirectEditDirty(true)} />
@@ -617,6 +624,65 @@ function App() {
                 ><Check size={14} />Save changes</button>
               </div>
             )}
+
+            {/* Device Selector Dropdown */}
+            <div style={{ position: 'absolute', top: 12, right: 16, zIndex: 60 }}>
+              <button
+                onClick={() => setDeviceDropdownOpen(!deviceDropdownOpen)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 12px', borderRadius: 10,
+                  background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#e2e8f0', fontSize: 12, fontWeight: 500,
+                  cursor: 'pointer', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.8)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.65)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)' }}
+              >
+                <span>{selectedDevice.icon}</span>
+                <span>{selectedDevice.name}</span>
+                <span style={{ color: '#64748b', fontSize: 11 }}>{selectedDevice.width}×{selectedDevice.height}</span>
+                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ marginLeft: 2, transform: deviceDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+                  <path d="M1 1L5 5L9 1" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              {deviceDropdownOpen && (
+                <>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 59 }} onClick={() => setDeviceDropdownOpen(false)} />
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, marginTop: 6,
+                    background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 12, padding: 4, minWidth: 220,
+                    boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+                    zIndex: 61,
+                    animation: 'fadeInDown 0.15s ease-out',
+                  }}>
+                    {DEVICE_PRESETS.map(preset => (
+                      <button
+                        key={preset.id}
+                        onClick={() => { screens.setDeviceId(preset.id as typeof screens.deviceId); setDeviceDropdownOpen(false) }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                          padding: '8px 12px', borderRadius: 8,
+                          background: screens.deviceId === preset.id ? 'rgba(99,102,241,0.15)' : 'transparent',
+                          border: screens.deviceId === preset.id ? '1px solid rgba(99,102,241,0.3)' : '1px solid transparent',
+                          color: screens.deviceId === preset.id ? '#818CF8' : '#e2e8f0',
+                          fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.1s',
+                          textAlign: 'left',
+                        }}
+                        onMouseEnter={e => { if (screens.deviceId !== preset.id) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                        onMouseLeave={e => { if (screens.deviceId !== preset.id) e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <span style={{ fontSize: 15, width: 22, textAlign: 'center' }}>{preset.icon}</span>
+                        <span style={{ flex: 1 }}>{preset.name}</span>
+                        <span style={{ color: '#64748b', fontSize: 11 }}>{preset.width}×{preset.height}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
 
             <CanvasToolbar activeTool={canvas.activeTool} zoomLevel={canvas.zoomLevel} directEditMode={directEdit.directEditMode}
               setActiveTool={canvas.setActiveTool} zoomIn={canvas.zoomIn} zoomOut={canvas.zoomOut} resetZoom={canvas.resetZoom}

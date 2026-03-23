@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { ScreenRenderer } from './ScreenRenderer'
+import { getCanvasDimensions, getDevicePreset, DEFAULT_DEVICE } from '../constants/devices'
 
 interface PhoneFrameProps {
   /** Component tree from AI-generated screen */
@@ -15,18 +16,20 @@ interface PhoneFrameProps {
   imageUrl?: string
   /** Rendering mode: 'canvas' clips content, 'preview' allows scrolling */
   mode?: 'canvas' | 'preview'
+  /** Device ID from project settings */
+  deviceId?: string
 }
 
-/** Full device dimensions (iPhone 14/15) */
+/** @deprecated Use getCanvasDimensions() from constants/devices.ts instead */
 export const DEVICE_W = 390
+/** @deprecated Use getCanvasDimensions() from constants/devices.ts instead */
 export const DEVICE_H = 844
-
-/** Scale factor for canvas display */
+/** @deprecated Use getCanvasDimensions() from constants/devices.ts instead */
 export const CANVAS_SCALE = 0.67
-
-/** Visual dimensions on canvas after scaling */
-export const CANVAS_W = Math.round(DEVICE_W * CANVAS_SCALE)   // ~261
-export const CANVAS_H = Math.round(DEVICE_H * CANVAS_SCALE)   // ~565
+/** @deprecated Use getCanvasDimensions() from constants/devices.ts instead */
+export const CANVAS_W = Math.round(DEVICE_W * CANVAS_SCALE)
+/** @deprecated Use getCanvasDimensions() from constants/devices.ts instead */
+export const CANVAS_H = Math.round(DEVICE_H * CANVAS_SCALE)
 
 const PROGRESS_MESSAGES = [
   { text: 'Analyzing prompt...', icon: '\u{1F9E0}' },
@@ -103,39 +106,66 @@ function ShimmerSkeleton({ isStreaming }: { isStreaming?: boolean }) {
   )
 }
 
-export function PhoneFrame({ generatedTree, isGenerating, isStreaming, streamingTree, imageUrl, mode = 'canvas' }: PhoneFrameProps) {
+export function PhoneFrame({ generatedTree, isGenerating, isStreaming, streamingTree, imageUrl, mode = 'canvas', deviceId }: PhoneFrameProps) {
   const isCanvas = mode === 'canvas'
+  const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
+  const dims = getCanvasDimensions(deviceId || DEFAULT_DEVICE)
+  const isAndroid = device.category === 'Android'
 
   const phoneChassisEl = (
     <div
-      className="relative rounded-[48px]"
+      className="relative"
       style={{
-        width: DEVICE_W, height: DEVICE_H,
+        width: device.width, height: device.height,
+        borderRadius: isAndroid ? 36 : 48,
         border: '2px solid rgba(255,255,255,0.15)',
         boxShadow: '0 0 60px rgba(99,102,241,0.06)',
       }}
     >
       {/* Inner bezel */}
-      <div className="w-full h-full rounded-[46px] bg-black p-3 flex flex-col overflow-hidden">
+      <div className="w-full h-full bg-black p-3 flex flex-col overflow-hidden"
+        style={{ borderRadius: isAndroid ? 34 : 46 }}
+      >
         {/* Status bar */}
-        <div className="flex items-center justify-between px-5 pt-1 pb-2 shrink-0">
-          <span className="text-[11px] font-semibold text-white/80 font-mono">9:41</span>
-          <div className="w-[90px] h-[28px] rounded-full bg-black" />
-          <div className="flex items-center gap-1">
-            <svg width="14" height="12" viewBox="0 0 12 10" fill="white" opacity="0.7">
-              <rect x="0" y="6" width="2" height="4" rx="0.5"/>
-              <rect x="3" y="4" width="2" height="6" rx="0.5"/>
-              <rect x="6" y="2" width="2" height="8" rx="0.5"/>
-              <rect x="9" y="0" width="2" height="10" rx="0.5"/>
-            </svg>
+        {isAndroid ? (
+          /* Android status bar — simpler, no notch */
+          <div className="flex items-center justify-between px-4 pt-1 pb-2 shrink-0">
+            <span className="text-[11px] font-semibold text-white/80 font-mono">12:00</span>
+            <div className="flex items-center gap-2">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="white" opacity="0.6">
+                <rect x="0" y="7" width="2" height="5" rx="0.5"/>
+                <rect x="3.5" y="4" width="2" height="8" rx="0.5"/>
+                <rect x="7" y="1" width="2" height="11" rx="0.5"/>
+              </svg>
+              <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke="white" strokeWidth="1.2" opacity="0.6">
+                <rect x="0.5" y="1" width="11" height="8" rx="1.5" />
+                <rect x="12" y="3.5" width="1.5" height="3" rx="0.5" fill="white" />
+                <rect x="2" y="2.5" width="7" height="5" rx="0.5" fill="white" opacity="0.6" />
+              </svg>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* iOS status bar with Dynamic Island notch */
+          <div className="flex items-center justify-between px-5 pt-1 pb-2 shrink-0">
+            <span className="text-[11px] font-semibold text-white/80 font-mono">9:41</span>
+            <div className="w-[90px] h-[28px] rounded-full bg-black" />
+            <div className="flex items-center gap-1">
+              <svg width="14" height="12" viewBox="0 0 12 10" fill="white" opacity="0.7">
+                <rect x="0" y="6" width="2" height="4" rx="0.5"/>
+                <rect x="3" y="4" width="2" height="6" rx="0.5"/>
+                <rect x="6" y="2" width="2" height="8" rx="0.5"/>
+                <rect x="9" y="0" width="2" height="10" rx="0.5"/>
+              </svg>
+            </div>
+          </div>
+        )}
 
         {/* Screen content area */}
         <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
         <div
-          className="flex-1 rounded-b-[36px] overflow-hidden phone-screen"
+          className="flex-1 overflow-hidden phone-screen"
           style={{
+            borderRadius: isAndroid ? '0 0 24px 24px' : '0 0 36px 36px',
             backgroundColor: '#0F172A',
             overflowX: 'hidden',
             overflowY: isCanvas ? 'hidden' : 'auto',
@@ -209,7 +239,7 @@ export function PhoneFrame({ generatedTree, isGenerating, isStreaming, streaming
 
         {/* Home indicator */}
         <div className="flex justify-center pt-2 pb-1 shrink-0">
-          <div className="w-[120px] h-[4px] rounded-full bg-white/20" />
+          <div className={`${isAndroid ? 'w-[100px]' : 'w-[120px]'} h-[4px] rounded-full bg-white/20`} />
         </div>
       </div>
     </div>
@@ -219,12 +249,12 @@ export function PhoneFrame({ generatedTree, isGenerating, isStreaming, streaming
     // Canvas mode: scale down to fit canvas layout, clip content
     return (
       <div style={{
-        width: CANVAS_W,
-        height: CANVAS_H,
+        width: dims.CANVAS_W,
+        height: dims.CANVAS_H,
         overflow: 'hidden',
       }}>
         <div style={{
-          transform: `scale(${CANVAS_SCALE})`,
+          transform: `scale(${dims.CANVAS_SCALE})`,
           transformOrigin: 'top left',
         }}>
           {phoneChassisEl}
