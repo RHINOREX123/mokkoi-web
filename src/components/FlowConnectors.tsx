@@ -87,9 +87,9 @@ export function getFlows(screens: GeneratedScreen[]): FlowGroup[] {
 }
 
 /** Get the bounding rect of a screen on the canvas, using explicit position or fallback to index */
-function getScreenRect(screenId: string, screenIndex: number, screenPositions?: Map<string, { x: number; y: number }>, deviceId?: string) {
-  const { CANVAS_W, CANVAS_H } = getCanvasDimensions(deviceId || DEFAULT_DEVICE)
-  const pos = screenPositions?.get(screenId)
+function getScreenRect(screen: GeneratedScreen, screenIndex: number, screenPositions?: Map<string, { x: number; y: number }>) {
+  const { CANVAS_W, CANVAS_H } = getCanvasDimensions(screen.deviceId || DEFAULT_DEVICE)
+  const pos = screenPositions?.get(screen.id)
   const x = pos ? pos.x : PAD_X + screenIndex * (CANVAS_W + GAP)
   const y = (pos ? pos.y : PAD_Y) + LABEL_HEIGHT
   return { x, y, w: CANVAS_W, h: CANVAS_H }
@@ -107,11 +107,9 @@ interface FlowConnectorsProps {
   totalScreens: number
   /** Map of screenId → { x, y } canvas positions for free-drag layout */
   screenPositions?: Map<string, { x: number; y: number }>
-  /** Device ID for dimension calculations */
-  deviceId?: string
 }
 
-export function FlowConnectors({ flows, screenPositions, deviceId }: FlowConnectorsProps) {
+export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) {
   const connectors = useMemo(() => {
     const lines: Array<{
       key: string
@@ -124,10 +122,8 @@ export function FlowConnectors({ flows, screenPositions, deviceId }: FlowConnect
       for (let i = 0; i < flow.indices.length - 1; i++) {
         const fromIdx = flow.indices[i]
         const toIdx = flow.indices[i + 1]
-        const fromId = flow.screens[i].id
-        const toId = flow.screens[i + 1].id
-        const fromRect = getScreenRect(fromId, fromIdx, screenPositions, deviceId)
-        const toRect = getScreenRect(toId, toIdx, screenPositions, deviceId)
+        const fromRect = getScreenRect(flow.screens[i], fromIdx, screenPositions)
+        const toRect = getScreenRect(flow.screens[i + 1], toIdx, screenPositions)
 
         const x1 = fromRect.x + fromRect.w
         const y1 = fromRect.y + fromRect.h / 2

@@ -91,11 +91,9 @@ function App() {
     setToastMessage,
     setShowVariationsPanel,
     getNextScreenPosition: screens.getNextScreenPosition,
-    deviceId: screens.deviceId,
+    deviceId: screens.activeDeviceId,
   })
 
-  // Device-aware canvas dimensions
-  const deviceDims = useMemo(() => getCanvasDimensions(screens.deviceId), [screens.deviceId])
   // Direct Edit
   const directEdit = useDirectEdit({
     activeGeneratedId: screens.activeGeneratedId,
@@ -223,14 +221,17 @@ function App() {
   // Build screen positions map for flow connectors and view-flow zoom
   const screenPositions = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>()
-    screens.generatedScreens.forEach((s, i) => {
+    let xOffset = PAD_X
+    screens.generatedScreens.forEach((s) => {
+      const { CANVAS_W } = getCanvasDimensions(s.deviceId || screens.projectDeviceId)
       map.set(s.id, {
-        x: s.x ?? (PAD_X + i * (deviceDims.CANVAS_W + GAP)),
+        x: s.x ?? xOffset,
         y: s.y ?? PAD_Y,
       })
+      xOffset += CANVAS_W + GAP
     })
     return map
-  }, [screens.generatedScreens, deviceDims.CANVAS_W])
+  }, [screens.generatedScreens, screens.projectDeviceId])
 
   const handleViewFlow = useCallback((flow: { indices: number[]; screens?: { id: string }[] }) => {
     // Zoom and pan to fit all screens in the flow
@@ -238,19 +239,20 @@ function App() {
     if (!canvasEl || flow.indices.length === 0) return
     const rect = canvasEl.getBoundingClientRect()
 
-    const PHONE_W = deviceDims.CANVAS_W, PHONE_H = deviceDims.CANVAS_H, LABEL_H = 26
+    const LABEL_H = 26
     // Use actual screen positions for bounding box
     let leftEdge = Infinity, rightEdge = -Infinity, topEdge = Infinity, bottomEdge = -Infinity
     for (const idx of flow.indices) {
       const s = screens.generatedScreens[idx]
       if (!s) continue
+      const { CANVAS_W, CANVAS_H } = getCanvasDimensions(s.deviceId || screens.projectDeviceId)
       const pos = screenPositions.get(s.id)
-      const sx = pos?.x ?? (PAD_X + idx * (PHONE_W + GAP))
+      const sx = pos?.x ?? PAD_X
       const sy = pos?.y ?? PAD_Y
       leftEdge = Math.min(leftEdge, sx)
-      rightEdge = Math.max(rightEdge, sx + PHONE_W)
+      rightEdge = Math.max(rightEdge, sx + CANVAS_W)
       topEdge = Math.min(topEdge, sy)
-      bottomEdge = Math.max(bottomEdge, sy + LABEL_H + PHONE_H)
+      bottomEdge = Math.max(bottomEdge, sy + LABEL_H + CANVAS_H)
     }
 
     const contentW = rightEdge - leftEdge + 80
@@ -306,7 +308,7 @@ function App() {
     if (!screens.activeGeneratedId || !projectId) return
     // Store the current in-memory tree in sessionStorage so PreviewPage can render it
     // without needing a Supabase round-trip (works for unsaved screens too)
-    const payload = { tree: screens.generatedTree, name: screens.activeGenerated?.name || 'Untitled Screen', deviceId: screens.deviceId }
+    const payload = { tree: screens.generatedTree, name: screens.activeGenerated?.name || 'Untitled Screen', deviceId: screens.activeDeviceId }
     try { sessionStorage.setItem('mokkoi-preview-data', JSON.stringify(payload)) } catch { /* quota exceeded, fall back to Supabase fetch */ }
     window.open(`/preview/${projectId}/${screens.activeGeneratedId}`, '_blank')
   }, [screens.activeGeneratedId, screens.generatedTree, screens.activeGenerated, projectId])
@@ -503,13 +505,13 @@ function App() {
                 cursor: canvas.panActive ? 'inherit' : 'default',
               }}>
                 {flowViewMode && flows.length > 0 && (
-                  <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} screenPositions={screenPositions} deviceId={screens.deviceId} />
+                  <FlowConnectors flows={flows} totalScreens={screens.generatedScreens.length} screenPositions={screenPositions} />
                 )}
 
                 {screens.generatedScreens.map((screen, idx) => {
                   const isActive = screen.id === screens.activeGeneratedId
                   const isImage = screen.type === 'image'
-                  const sx = screen.x ?? (PAD_X + idx * (deviceDims.CANVAS_W + GAP))
+                  const sx = screen.x ?? (screenPositions.get(screen.id)?.x ?? PAD_X)
                   const sy = screen.y ?? PAD_Y
                   return (
                     <div key={screen.id}
@@ -549,7 +551,7 @@ function App() {
                           onMouseOverCapture={directEdit.directEditMode ? directEdit.handleDirectEditHover : undefined}
                           onMouseOutCapture={directEdit.directEditMode ? directEdit.handleDirectEditHoverOut : undefined}
                         >
-                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} deviceId={screens.deviceId} />
+                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} deviceId={screen.deviceId || screens.projectDeviceId} />
                           {directEdit.directEditMode && isActive && directEdit.directEditSelectedEl && (
                             <div data-direct-edit-toolbar="true">
                               <DirectEditToolbar target={directEdit.directEditSelectedEl} phoneFrameEl={phoneFrameRefs.current.get(screen.id)!} onClose={() => directEdit.setDirectEditSelectedEl(null)} onChanged={() => directEdit.setDirectEditDirty(true)} />
@@ -599,7 +601,14 @@ function App() {
               onRename={screens.handleRenameScreen}
               onDelete={() => setShowDeleteScreenConfirm(true)}
               onToast={setToastMessage} onDirectEdit={directEdit.enterDirectEdit}
-              deviceId={screens.deviceId} onDeviceChange={screens.setDeviceId}
+              deviceId={screens.activeDeviceId}
+              onDeviceChange={(id) => {
+                if (screens.activeGeneratedId) {
+                  screens.setScreenDeviceId(screens.activeGeneratedId, id)
+                } else {
+                  screens.setProjectDeviceId(id)
+                }
+              }}
             />
 
             {directEdit.directEditMode && (

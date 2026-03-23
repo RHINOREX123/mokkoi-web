@@ -221,6 +221,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         name: placeholderName,
         originalPrompt: prompt,
         tree: { type: 'View', style: {}, children: [] },
+        deviceId,
         ...nextPos,
       }
       setGeneratedScreens(prev => [...prev, placeholderScreen])
@@ -250,7 +251,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
           name: s.name,
           tree: s.tree,
           flowId,
-          x: nextPos.x + i * (getCanvasDimensions(deviceId).CANVAS_W + GAP), // getCanvasDimensions(deviceId).CANVAS_W + GAP for each subsequent screen
+          deviceId,
+          x: nextPos.x + i * (getCanvasDimensions(deviceId).CANVAS_W + GAP),
           y: nextPos.y,
         }))
 
@@ -305,6 +307,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         name: screenName,
         originalPrompt: prompt,
         tree: { type: 'View', style: {}, children: [] },
+        deviceId,
         ...singlePos,
       }
       setGeneratedScreens(prev => [...prev, newScreen])
@@ -478,7 +481,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         name: `${activeGenerated.name} v${i + 1}`,
         originalPrompt: activeGenerated.originalPrompt,
         tree: { type: 'View', style: {}, children: [] },
-        x: varPos.x + i * (getCanvasDimensions(deviceId).CANVAS_W + GAP), // getCanvasDimensions(deviceId).CANVAS_W + GAP
+        deviceId: activeGenerated.deviceId || deviceId,
+        x: varPos.x + i * (getCanvasDimensions(deviceId).CANVAS_W + GAP),
         y: varPos.y,
       }
       placeholders.push(ph)
