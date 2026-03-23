@@ -67,7 +67,6 @@ export default function PreviewPage() {
     // 2. Fall back to Supabase fetch for shared/public links
     const load = async () => {
       if (!supabase) { setError('Not configured'); setLoading(false); return }
-      // Check project access: public OR owned by authenticated user
       const { data: project } = await supabase
         .from('projects')
         .select('name, is_public, user_id, device_id')
@@ -94,12 +93,10 @@ export default function PreviewPage() {
         return
       }
 
-      // Set the project's device as default
       if (project.device_id) {
         setActiveDevice(project.device_id)
       }
 
-      // Fetch the specific screen
       const { data: screen } = await supabase
         .from('screens')
         .select('name, component_tree')
@@ -137,6 +134,11 @@ export default function PreviewPage() {
     }
   }
 
+  const handleDeviceClick = (presetId: string) => {
+    setActiveDevice(presetId)
+    setShowAll(false)
+  }
+
   const device = PREVIEW_DEVICE_PRESETS.find(d => d.id === activeDevice) || PREVIEW_DEVICE_PRESETS[0]
 
   const deviceIcon = (preset: PreviewDevicePreset) => {
@@ -149,12 +151,10 @@ export default function PreviewPage() {
 
   // Scale factor to fit device in viewport
   const getScale = (d: PreviewDevicePreset) => {
-    const maxH = window.innerHeight - 160 // navbar + label + padding
+    const maxH = window.innerHeight - 160
     const maxW = window.innerWidth - 80
-    const refW = d.width
-    const refH = d.height
-    const scaleH = maxH / refH
-    const scaleW = maxW / refW
+    const scaleH = maxH / d.height
+    const scaleW = maxW / d.width
     return Math.min(1, scaleH, scaleW)
   }
 
@@ -211,57 +211,66 @@ export default function PreviewPage() {
     const s = scale ?? getScale(d)
     const isPhone = d.icon === 'phone' || d.icon === 'phone-lg'
 
+    // For grid view, compute rendered height so we can use it for container sizing
+    const renderedH = isPhone ? d.height * s : d.height * s
+
     return (
       <div key={d.id} style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
         flexShrink: 0,
       }}>
-        {isPhone ? (
-          /* Phone presets: reuse PhoneFrame with preview mode + viewport-fit scaling */
-          <div style={{
-            transform: `scale(${s})`,
-            transformOrigin: 'top center',
-          }}>
-            <PhoneFrame mode="preview" generatedTree={tree ?? undefined} deviceId={d.deviceId} />
-          </div>
-        ) : (
-          /* Tablet/Desktop presets: simple container, no phone chrome */
-          <div style={{
-            width: d.width,
-            height: d.height,
-            borderRadius: d.borderRadius,
-            overflow: 'hidden',
-            background: '#000',
-            border: '2px solid rgba(255,255,255,0.12)',
-            boxShadow: '0 0 60px rgba(99,102,241,0.06), 0 20px 60px rgba(0,0,0,0.5)',
-            transform: `scale(${s})`,
-            transformOrigin: 'top center',
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
-            <div
-              className="phone-screen"
-              style={{
-                flex: 1,
-                overflowX: 'hidden',
-                overflowY: 'auto',
-                backgroundColor: '#0F172A',
-                WebkitOverflowScrolling: 'touch',
-                scrollbarWidth: 'none',
-              }}
-            >
-              <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
-              {tree && <ScreenRenderer tree={tree} />}
+        <div style={{ height: renderedH, display: 'flex', alignItems: 'flex-start' }}>
+          {isPhone ? (
+            <div style={{
+              transform: `scale(${s})`,
+              transformOrigin: 'top center',
+            }}>
+              <PhoneFrame mode="preview" generatedTree={tree ?? undefined} deviceId={d.deviceId} />
             </div>
-          </div>
-        )}
+          ) : (
+            <div style={{
+              width: d.width,
+              height: d.height,
+              borderRadius: d.borderRadius,
+              overflow: 'hidden',
+              background: '#000',
+              border: '2px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 0 60px rgba(99,102,241,0.06), 0 20px 60px rgba(0,0,0,0.5)',
+              transform: `scale(${s})`,
+              transformOrigin: 'top center',
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
+              <div
+                className="phone-screen"
+                style={{
+                  flex: 1,
+                  overflowX: 'hidden',
+                  overflowY: 'auto',
+                  backgroundColor: '#0F172A',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                }}
+              >
+                <style>{`.phone-screen::-webkit-scrollbar { display: none; }`}</style>
+                {tree && <ScreenRenderer tree={tree} />}
+              </div>
+            </div>
+          )}
+        </div>
 
-        {/* Device label */}
+        {/* Device label — always readable */}
+        <span style={{
+          fontSize: 14, fontWeight: 600, color: '#e2e8f0',
+          textAlign: 'center',
+        }}>
+          {d.name}
+        </span>
         <span style={{
           fontSize: 12, fontWeight: 500, color: '#64748b',
-          transform: `scale(${s})`, transformOrigin: 'top center',
+          marginTop: -8,
         }}>
-          {d.name} — {d.width} × {d.height}
+          {d.width} × {d.height}
         </span>
       </div>
     )
@@ -301,7 +310,7 @@ export default function PreviewPage() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Center: Device switcher */}
+        {/* Center: Device switcher — each button shows short name */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 2,
           padding: '4px 6px',
@@ -309,29 +318,34 @@ export default function PreviewPage() {
           borderRadius: 10,
           border: '1px solid rgba(255,255,255,0.06)',
         }}>
-          {PREVIEW_DEVICE_PRESETS.map(preset => (
-            <button
-              key={preset.id}
-              title={`${preset.name} (${preset.width}×${preset.height})`}
-              onClick={() => { setActiveDevice(preset.id); setShowAll(false) }}
-              style={{
-                width: 34, height: 30, borderRadius: 7,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: !showAll && activeDevice === preset.id ? 'rgba(99,102,241,0.2)' : 'transparent',
-                color: !showAll && activeDevice === preset.id ? '#818CF8' : '#888',
-                border: !showAll && activeDevice === preset.id ? '1px solid rgba(99,102,241,0.3)' : '1px solid transparent',
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => {
-                if (showAll || activeDevice !== preset.id) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-              }}
-              onMouseLeave={e => {
-                if (showAll || activeDevice !== preset.id) e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              {deviceIcon(preset)}
-            </button>
-          ))}
+          {PREVIEW_DEVICE_PRESETS.map(preset => {
+            const isActive = !showAll && activeDevice === preset.id
+            return (
+              <button
+                key={preset.id}
+                title={`${preset.name} (${preset.width}×${preset.height})`}
+                onClick={() => handleDeviceClick(preset.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px', borderRadius: 7, height: 30,
+                  background: isActive ? 'rgba(99,102,241,0.2)' : 'transparent',
+                  color: isActive ? '#818CF8' : '#888',
+                  border: isActive ? '1px solid rgba(99,102,241,0.3)' : '1px solid transparent',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                  fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                {deviceIcon(preset)}
+                <span>{preset.name.replace('iPhone ', '').replace('Android ', 'A.')}</span>
+              </button>
+            )
+          })}
 
           {/* Separator */}
           <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
@@ -394,17 +408,19 @@ export default function PreviewPage() {
 
       {/* ----- Center: Device frame(s) ----- */}
       <div style={{
-        flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        overflow: 'auto', padding: '40px 20px',
-        gap: 40,
+        flex: 1, display: 'flex',
+        alignItems: showAll ? 'flex-start' : 'flex-start',
+        justifyContent: 'center',
+        overflow: 'auto', padding: showAll ? '32px 40px' : '40px 20px',
+        gap: showAll ? 32 : 40,
+        flexWrap: showAll ? 'wrap' : 'nowrap',
       }}>
         {showAll ? (
-          // Show all devices side by side
+          // Grid view: reasonable scale, responsive wrap, readable labels
           PREVIEW_DEVICE_PRESETS.map(d => {
-            // Scale all to fit: use a smaller scale for "all" view
-            const maxH = window.innerHeight - 200
-            const refH = d.height
-            const s = Math.min(0.45, maxH / refH)
+            // Scale to fit ~300px wide per device in the grid
+            const targetW = 280
+            const s = Math.min(0.55, targetW / d.width)
             return renderDeviceFrame(d, s)
           })
         ) : (
