@@ -473,15 +473,15 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         const avatarStyle = (node.props?.avatarStyle as string) ?? 'avataaars-neutral'
         src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w, h)}`
       } else if (searchQuery) {
-        // LoremFlickr: free, keyword-based real stock photos
-        // Extract top 3 keywords for better matching
-        const keywords = searchQuery.split(/\s+/).slice(0, 4).join(',')
-        // Use searchQuery length as hash for consistent images per query
-        const hash = Math.abs(searchQuery.split('').reduce((a, c) => a + c.charCodeAt(0), 0))
-        src = `https://loremflickr.com/${w}/${h}/${encodeURIComponent(keywords)}?lock=${hash}`
+        // Primary: Pollinations.ai — AI-generated images via FLUX model (free, no API key for image.pollinations.ai)
+        src = `https://image.pollinations.ai/prompt/${encodeURIComponent(searchQuery + ', high quality professional photo')}?width=${w}&height=${h}&nologo=true&model=flux`
       } else {
         src = source?.uri ?? ''
       }
+      // LoremFlickr fallback if primary image fails
+      const keywords = searchQuery?.split(/\s+/).slice(0, 4).join(',') ?? ''
+      const hash = searchQuery ? Math.abs(searchQuery.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) : 0
+      const fallbackSrc = searchQuery ? `https://loremflickr.com/${w}/${h}/${encodeURIComponent(keywords)}?lock=${hash}` : undefined
       return (
         <img
           key={key}
@@ -489,6 +489,13 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
           alt={avatar ?? searchQuery ?? ''}
           loading="lazy"
           style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }}
+          onError={fallbackSrc ? (e) => {
+            const img = e.target as HTMLImageElement
+            if (!img.dataset.fallback) {
+              img.dataset.fallback = '1'
+              img.src = fallbackSrc
+            }
+          } : undefined}
         />
       )
     }
