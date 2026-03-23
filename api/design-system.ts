@@ -168,8 +168,11 @@ These are the ONLY types you may use. Using any other type will show an error.
    The renderer automatically fetches a matching real photo from Unsplash using searchQuery.
    IMPORTANT: Always include searchQuery with 2-4 descriptive keywords. Always set explicit width and height in style.
    Example: { "type": "Image", "style": { "width": "100%", "height": 200, "borderRadius": 12 }, "props": { "searchQuery": "modern gym interior dark" } }
-   For avatars/profile photos use: searchQuery "portrait person" or use a colored View with Text initial instead.
-   Fallback: If you need a specific URL, use source: { uri: "https://..." } instead of searchQuery.
+   For avatars/profile photos use the avatar prop: {"type":"Image","style":{"width":48,"height":48,"borderRadius":9999},"props":{"avatar":"Sarah"}}
+   Avatar styles: "avataaars-neutral" (default), "lorelei", "notionists", "thumbs", "bottts" (robot), "fun-emoji"
+   Use avatar for: profile screens, chat avatars, user lists, team members.
+   Use searchQuery for: hero images, product photos, food, landscapes, venues.
+   Fallback: If you need a specific URL, use source: { uri: "https://..." } instead.
 
 8. ActivityIndicator — Loading spinner.
    Props: color (string), size ("large" | "small")
@@ -283,6 +286,36 @@ A stat card should be:
   { height: 80, borderRadius: 12, padding: 12, justifyContent: "center" }
 NOT:
   { height: 160, borderRadius: 16, padding: 24 }
+
+LAYOUT PATTERNS (use these to create variety, not just vertical stacking):
+
+1. HORIZONTAL SCROLL SECTION (category chips, card carousel):
+{"type":"ScrollView","props":{"horizontal":true,"showsVerticalScrollIndicator":false},"style":{"marginTop":16},"children":[
+  {"type":"View","style":{"flexDirection":"row","gap":12,"paddingHorizontal":20},"children":[
+    {"type":"TouchableOpacity","style":{"backgroundColor":"#6C5CE7","borderRadius":24,"paddingHorizontal":16,"height":36,"justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"fontWeight":"600","color":"#FFFFFF"},"children":["All"]}]},
+    {"type":"TouchableOpacity","style":{"backgroundColor":"#222236","borderRadius":24,"paddingHorizontal":16,"height":36,"justifyContent":"center"},"children":[{"type":"Text","style":{"fontSize":13,"color":"#A0A0B8"},"children":["Popular"]}]}
+  ]}
+]}
+
+2. TWO-COLUMN GRID (product cards, image tiles):
+{"type":"View","style":{"flexDirection":"row","flexWrap":"wrap","gap":12,"paddingHorizontal":20},"children":[
+  {"type":"View","style":{"width":"48%","backgroundColor":"#12121F","borderRadius":12,"overflow":"hidden"},"children":[
+    {"type":"Image","style":{"width":"100%","height":160},"props":{"searchQuery":"product photo"}},
+    {"type":"View","style":{"padding":12},"children":[{"type":"Text","style":{"fontSize":14,"fontWeight":"600","color":"#FFFFFF"},"children":["Item Name"]}]}
+  ]}
+]}
+
+3. HERO CARD WITH OVERLAY (travel, streaming, food):
+{"type":"View","style":{"borderRadius":16,"overflow":"hidden","height":200},"children":[
+  {"type":"Image","style":{"width":"100%","height":"100%","position":"absolute"},"props":{"searchQuery":"scenic landscape"}},
+  {"type":"LinearGradient","style":{"position":"absolute","bottom":0,"left":0,"right":0,"padding":16},"props":{"colors":["transparent","rgba(0,0,0,0.8)"],"start":{"x":0,"y":0},"end":{"x":0,"y":1}},"children":[
+    {"type":"Text","style":{"fontSize":20,"fontWeight":"700","color":"#FFFFFF"},"children":["Title"]}
+  ]}
+]}
+
+Use horizontal scrolls for: category filters, story avatars, featured cards, quick actions.
+Use grids for: product listings, photo galleries, menu items, team members.
+Use hero overlays for: travel destinations, movie posters, restaurant hero, event banners.
 `
 
 export const PLATFORM_RULES = `

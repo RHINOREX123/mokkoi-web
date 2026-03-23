@@ -382,16 +382,24 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
     case 'Image': {
       const searchQuery = node.props?.searchQuery as string | undefined
       const source = node.props?.source as { uri: string } | undefined
+      const avatar = node.props?.avatar as string | undefined
       const w = typeof style.width === 'number' ? Math.min(style.width, 800) : 400
       const h = typeof style.height === 'number' ? Math.min(style.height, 800) : 300
-      const src = searchQuery
-        ? `https://source.unsplash.com/${w}x${h}/?${encodeURIComponent(searchQuery)}`
-        : (source?.uri ?? '')
+      let src: string
+      if (avatar) {
+        // DiceBear avatar: generates consistent illustrated avatars from a seed string
+        const avatarStyle = (node.props?.avatarStyle as string) ?? 'avataaars-neutral'
+        src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w, h)}`
+      } else if (searchQuery) {
+        src = `https://source.unsplash.com/${w}x${h}/?${encodeURIComponent(searchQuery)}`
+      } else {
+        src = source?.uri ?? ''
+      }
       return (
         <img
           key={key}
           src={src}
-          alt={searchQuery ?? ''}
+          alt={avatar ?? searchQuery ?? ''}
           loading="lazy"
           style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }}
         />
