@@ -2,97 +2,14 @@ import { useMemo } from 'react'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import { getCanvasDimensions, DEFAULT_DEVICE } from '../constants/devices'
 
-const LABEL_HEIGHT = 26 // approximate height of screen label above frame
+const LABEL_HEIGHT = 26
 export const GAP = 40
 export const PAD_X = 60
 export const PAD_Y = 40
 
-export interface FlowGroup {
-  flowId: string
-  name: string
-  screens: GeneratedScreen[]
-  /** indices into the full generatedScreens array */
-  indices: number[]
-}
-
-export function getFlows(screens: GeneratedScreen[]): FlowGroup[] {
-  const flowMap = new Map<string, { screens: GeneratedScreen[]; indices: number[] }>()
-
-  // Group by explicit flowId
-  screens.forEach((s, i) => {
-    if (s.flowId) {
-      const existing = flowMap.get(s.flowId)
-      if (existing) {
-        existing.screens.push(s)
-        existing.indices.push(i)
-      } else {
-        flowMap.set(s.flowId, { screens: [s], indices: [i] })
-      }
-    }
-  })
-
-  // Detect implicit flows: screens generated within 5 seconds of each other
-  // with sequential names and no explicit flowId
-  // (We check by looking for sequential screens without flowId that share naming patterns)
-  const ungrouped = screens
-    .map((s, i) => ({ screen: s, index: i }))
-    .filter(({ screen }) => !screen.flowId)
-
-  // Group consecutive ungrouped screens that were likely generated together
-  // Heuristic: screens adjacent in order with similar naming patterns
-  let runStart = -1
-  for (let i = 0; i < ungrouped.length; i++) {
-    const curr = ungrouped[i]
-    const next = ungrouped[i + 1]
-    if (runStart === -1) runStart = i
-
-    const isConsecutive = next && next.index === curr.index + 1
-    if (!isConsecutive || i === ungrouped.length - 1) {
-      const runEnd = i
-      const runLength = runEnd - runStart + 1
-      if (runLength >= 2) {
-        // Check if names look sequential (e.g. "Welcome", "Login", "Dashboard")
-        // Simple heuristic: if they were generated as consecutive screens they likely belong together
-        // We'll be conservative and only group if there are 3+ consecutive screens
-        if (runLength >= 3) {
-          const implicitFlowId = `implicit-${ungrouped[runStart].index}`
-          const flowScreens = ungrouped.slice(runStart, runEnd + 1)
-          flowMap.set(implicitFlowId, {
-            screens: flowScreens.map(f => f.screen),
-            indices: flowScreens.map(f => f.index),
-          })
-        }
-      }
-      runStart = -1
-    }
-  }
-
-  // Convert to FlowGroup array, only include groups with 2+ screens
-  const flows: FlowGroup[] = []
-  flowMap.forEach((value, flowId) => {
-    if (value.screens.length < 2) return
-    const firstName = value.screens[0].name
-    const flowName = firstName.includes('Flow')
-      ? firstName
-      : `${firstName} Flow`
-    flows.push({
-      flowId,
-      name: flowName,
-      screens: value.screens,
-      indices: value.indices,
-    })
-  })
-
-  return flows
-}
-
-/** Get the bounding rect of a screen on the canvas, using explicit position or fallback to index */
-function getScreenRect(screen: GeneratedScreen, screenIndex: number, screenPositions?: Map<string, { x: number; y: number }>) {
-  const { CANVAS_W, CANVAS_H } = getCanvasDimensions(screen.deviceId || DEFAULT_DEVICE)
-  const pos = screenPositions?.get(screen.id)
-  const x = pos ? pos.x : PAD_X + screenIndex * (CANVAS_W + GAP)
-  const y = (pos ? pos.y : PAD_Y) + LABEL_HEIGHT
-  return { x, y, w: CANVAS_W, h: CANVAS_H }
+export interface FlowConnection {
+  fromScreenId: string
+  toScreenId: string
 }
 
 function inferTransitionType(screenName: string): string {
@@ -103,55 +20,60 @@ function inferTransitionType(screenName: string): string {
 }
 
 interface FlowConnectorsProps {
-  flows: FlowGroup[]
-  totalScreens: number
-  /** Map of screenId → { x, y } canvas positions for free-drag layout */
-  screenPositions?: Map<string, { x: number; y: number }>
+  connections: FlowConnection[]
+  screens: GeneratedScreen[]
+  screenPositions: Map<string, { x: number; y: number }>
+  selectedConnectionIdx: number | null
+  onConnectionClick: (idx: number, e: React.MouseEvent) => void
+  /** Temporary line while user is dragging to create a connection */
+  draggingLine?: { fromX: number; fromY: number; toX: number; toY: number } | null
 }
 
-export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) {
+export function FlowConnectors({
+  connections,
+  screens,
+  screenPositions,
+  selectedConnectionIdx,
+  onConnectionClick,
+  draggingLine,
+}: FlowConnectorsProps) {
   const connectors = useMemo(() => {
     const lines: Array<{
       key: string
+      idx: number
       x1: number; y1: number
       x2: number; y2: number
       transitionType: string
     }> = []
 
-    for (const flow of flows) {
-      for (let i = 0; i < flow.indices.length - 1; i++) {
-        const fromIdx = flow.indices[i]
-        const toIdx = flow.indices[i + 1]
-        const fromRect = getScreenRect(flow.screens[i], fromIdx, screenPositions)
-        const toRect = getScreenRect(flow.screens[i + 1], toIdx, screenPositions)
+    for (let i = 0; i < connections.length; i++) {
+      const conn = connections[i]
+      const fromScreen = screens.find(s => s.id === conn.fromScreenId)
+      const toScreen = screens.find(s => s.id === conn.toScreenId)
+      if (!fromScreen || !toScreen) continue
 
-        const x1 = fromRect.x + fromRect.w
-        const y1 = fromRect.y + fromRect.h / 2
-        const x2 = toRect.x
-        const y2 = toRect.y + toRect.h / 2
+      const fromDims = getCanvasDimensions(fromScreen.deviceId || DEFAULT_DEVICE)
+      const toDims = getCanvasDimensions(toScreen.deviceId || DEFAULT_DEVICE)
+      const fromPos = screenPositions.get(fromScreen.id)
+      const toPos = screenPositions.get(toScreen.id)
+      if (!fromPos || !toPos) continue
 
-        const transitionType = inferTransitionType(flow.screens[i + 1].name)
+      const x1 = fromPos.x + fromDims.CANVAS_W
+      const y1 = fromPos.y + LABEL_HEIGHT + fromDims.CANVAS_H / 2
+      const x2 = toPos.x
+      const y2 = toPos.y + LABEL_HEIGHT + toDims.CANVAS_H / 2
 
-        lines.push({
-          key: `${flow.flowId}-${i}`,
-          x1, y1, x2, y2,
-          transitionType,
-        })
-      }
+      lines.push({
+        key: `${conn.fromScreenId}-${conn.toScreenId}`,
+        idx: i,
+        x1, y1, x2, y2,
+        transitionType: inferTransitionType(toScreen.name),
+      })
     }
     return lines
-  }, [flows])
+  }, [connections, screens, screenPositions])
 
-  if (connectors.length === 0) return null
-
-  // Calculate SVG viewBox to cover all connectors
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const c of connectors) {
-    minX = Math.min(minX, c.x1 - 10, c.x2 - 10)
-    minY = Math.min(minY, c.y1 - 30, c.y2 - 30)
-    maxX = Math.max(maxX, c.x1 + 10, c.x2 + 10)
-    maxY = Math.max(maxY, c.y1 + 30, c.y2 + 30)
-  }
+  if (connectors.length === 0 && !draggingLine) return null
 
   return (
     <svg
@@ -176,6 +98,26 @@ export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) 
         >
           <path d="M0,0 L8,3 L0,6" fill="rgba(99,102,241,0.6)" />
         </marker>
+        <marker
+          id="flow-arrow-selected"
+          markerWidth="8"
+          markerHeight="6"
+          refX="7"
+          refY="3"
+          orient="auto"
+        >
+          <path d="M0,0 L8,3 L0,6" fill="rgba(129,140,248,0.9)" />
+        </marker>
+        <marker
+          id="flow-arrow-dragging"
+          markerWidth="8"
+          markerHeight="6"
+          refX="7"
+          refY="3"
+          orient="auto"
+        >
+          <path d="M0,0 L8,3 L0,6" fill="rgba(129,140,248,0.5)" />
+        </marker>
         <style>{`
           @keyframes flowDash {
             to { stroke-dashoffset: -20; }
@@ -184,38 +126,49 @@ export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) 
       </defs>
 
       {connectors.map(c => {
+        const isSelected = c.idx === selectedConnectionIdx
         const dx = c.x2 - c.x1
         const cpOffset = Math.min(Math.abs(dx) * 0.4, 60)
         const cpX1 = c.x1 + cpOffset
         const cpX2 = c.x2 - cpOffset
+        const pathD = `M${c.x1},${c.y1} C${cpX1},${c.y1} ${cpX2},${c.y2} ${c.x2},${c.y2}`
 
         const midX = (c.x1 + c.x2) / 2
         const midY = (c.y1 + c.y2) / 2
 
         return (
           <g key={c.key}>
-            {/* Shadow line for depth */}
+            {/* Invisible wide hit area for clicking */}
             <path
-              d={`M${c.x1},${c.y1} C${cpX1},${c.y1} ${cpX2},${c.y2} ${c.x2},${c.y2}`}
+              d={pathD}
               fill="none"
-              stroke="rgba(99,102,241,0.15)"
-              strokeWidth={6}
+              stroke="transparent"
+              strokeWidth={16}
+              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); onConnectionClick(c.idx, e) }}
+            />
+            {/* Shadow line */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke={isSelected ? 'rgba(129,140,248,0.25)' : 'rgba(99,102,241,0.15)'}
+              strokeWidth={isSelected ? 8 : 6}
               strokeLinecap="round"
             />
             {/* Main bezier line */}
             <path
-              d={`M${c.x1},${c.y1} C${cpX1},${c.y1} ${cpX2},${c.y2} ${c.x2},${c.y2}`}
+              d={pathD}
               fill="none"
-              stroke="rgba(99,102,241,0.5)"
-              strokeWidth={2}
+              stroke={isSelected ? 'rgba(129,140,248,0.8)' : 'rgba(99,102,241,0.5)'}
+              strokeWidth={isSelected ? 3 : 2}
               strokeLinecap="round"
-              markerEnd="url(#flow-arrow)"
+              markerEnd={isSelected ? 'url(#flow-arrow-selected)' : 'url(#flow-arrow)'}
             />
             {/* Animated dashed overlay */}
             <path
-              d={`M${c.x1},${c.y1} C${cpX1},${c.y1} ${cpX2},${c.y2} ${c.x2},${c.y2}`}
+              d={pathD}
               fill="none"
-              stroke="rgba(99,102,241,0.7)"
+              stroke={isSelected ? 'rgba(129,140,248,0.9)' : 'rgba(99,102,241,0.7)'}
               strokeWidth={2}
               strokeDasharray="4 6"
               strokeLinecap="round"
@@ -235,21 +188,73 @@ export function FlowConnectors({ flows, screenPositions }: FlowConnectorsProps) 
                 justifyContent: 'center',
                 width: '100%',
                 height: '100%',
-                background: 'rgba(30, 30, 46, 0.85)',
+                background: isSelected ? 'rgba(99,102,241,0.3)' : 'rgba(30, 30, 46, 0.85)',
                 borderRadius: 11,
-                border: '1px solid rgba(99,102,241,0.3)',
+                border: `1px solid ${isSelected ? 'rgba(129,140,248,0.6)' : 'rgba(99,102,241,0.3)'}`,
                 fontSize: 10,
                 fontWeight: 600,
-                color: 'rgba(129,140,248,0.9)',
+                color: isSelected ? 'rgba(165,180,252,1)' : 'rgba(129,140,248,0.9)',
                 letterSpacing: '0.3px',
                 backdropFilter: 'blur(4px)',
               }}>
                 {c.transitionType}
               </div>
             </foreignObject>
+
+            {/* Delete button when selected */}
+            {isSelected && (
+              <foreignObject
+                x={midX + 26}
+                y={midY - 11}
+                width={22}
+                height={22}
+                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+              >
+                <div
+                  onClick={(e) => { e.stopPropagation(); onConnectionClick(c.idx, e) }}
+                  title="Delete connection"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    background: 'rgba(248,113,113,0.2)',
+                    border: '1px solid rgba(248,113,113,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#f87171',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ×
+                </div>
+              </foreignObject>
+            )}
           </g>
         )
       })}
+
+      {/* Dragging line preview */}
+      {draggingLine && (() => {
+        const dx = draggingLine.toX - draggingLine.fromX
+        const cpOffset = Math.min(Math.abs(dx) * 0.4, 60)
+        const cpX1 = draggingLine.fromX + cpOffset
+        const cpX2 = draggingLine.toX - cpOffset
+        const pathD = `M${draggingLine.fromX},${draggingLine.fromY} C${cpX1},${draggingLine.fromY} ${cpX2},${draggingLine.toY} ${draggingLine.toX},${draggingLine.toY}`
+        return (
+          <path
+            d={pathD}
+            fill="none"
+            stroke="rgba(129,140,248,0.5)"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            strokeLinecap="round"
+            markerEnd="url(#flow-arrow-dragging)"
+          />
+        )
+      })()}
     </svg>
   )
 }

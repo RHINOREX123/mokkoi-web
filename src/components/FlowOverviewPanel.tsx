@@ -1,27 +1,95 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Maximize2, X } from 'lucide-react'
-import type { FlowGroup } from './FlowConnectors'
+import type { GeneratedScreen } from '../hooks/useScreenManagement'
+import type { FlowConnection } from './FlowConnectors'
 
 interface FlowOverviewPanelProps {
-  flows: FlowGroup[]
+  screens: GeneratedScreen[]
+  connections: FlowConnection[]
   activeScreenId: string | null
   onScreenClick: (screenId: string) => void
-  onViewFlow: (flow: FlowGroup) => void
-  /** Whether flow view mode is active (arrows visible) */
+  onViewFlow: () => void
   flowViewMode?: boolean
-  /** Called to exit flow view mode */
   onExitFlowView?: () => void
 }
 
-export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onViewFlow, flowViewMode, onExitFlowView }: FlowOverviewPanelProps) {
+/** Derive display order from connections via topological sort. Unconnected screens go last. */
+function getOrderedScreens(screens: GeneratedScreen[], connections: FlowConnection[]): { screen: GeneratedScreen; connected: boolean }[] {
+  if (connections.length === 0) {
+    return screens.map(s => ({ screen: s, connected: false }))
+  }
+
+  const connectedIds = new Set<string>()
+  const inbound = new Map<string, string[]>()
+  const outbound = new Map<string, string[]>()
+
+  for (const conn of connections) {
+    connectedIds.add(conn.fromScreenId)
+    connectedIds.add(conn.toScreenId)
+    if (!outbound.has(conn.fromScreenId)) outbound.set(conn.fromScreenId, [])
+    outbound.get(conn.fromScreenId)!.push(conn.toScreenId)
+    if (!inbound.has(conn.toScreenId)) inbound.set(conn.toScreenId, [])
+    inbound.get(conn.toScreenId)!.push(conn.fromScreenId)
+  }
+
+  // Find roots: connected screens with no inbound connections
+  const roots = [...connectedIds].filter(id => !inbound.has(id) || inbound.get(id)!.length === 0)
+
+  // BFS from roots to build ordered list
+  const ordered: string[] = []
+  const visited = new Set<string>()
+  const queue = [...roots]
+
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    ordered.push(id)
+    const children = outbound.get(id) || []
+    for (const child of children) {
+      if (!visited.has(child)) queue.push(child)
+    }
+  }
+
+  // Add any connected but unvisited (cycles)
+  for (const id of connectedIds) {
+    if (!visited.has(id)) ordered.push(id)
+  }
+
+  const result: { screen: GeneratedScreen; connected: boolean }[] = []
+  const screenMap = new Map(screens.map(s => [s.id, s]))
+
+  // Connected screens in flow order
+  for (const id of ordered) {
+    const s = screenMap.get(id)
+    if (s) result.push({ screen: s, connected: true })
+  }
+
+  // Unconnected screens in original order
+  for (const s of screens) {
+    if (!connectedIds.has(s.id)) {
+      result.push({ screen: s, connected: false })
+    }
+  }
+
+  return result
+}
+
+export function FlowOverviewPanel({ screens, connections, activeScreenId, onScreenClick, onViewFlow, flowViewMode, onExitFlowView }: FlowOverviewPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
-  const [activeFlowIdx, setActiveFlowIdx] = useState(0)
 
   const toggle = useCallback(() => setCollapsed(c => !c), [])
 
-  if (flows.length === 0) return null
+  const orderedScreens = useMemo(
+    () => getOrderedScreens(screens, connections),
+    [screens, connections]
+  )
 
-  const flow = flows[Math.min(activeFlowIdx, flows.length - 1)]
+  if (screens.length === 0) return null
+
+  const connectedCount = connections.length > 0
+    ? new Set([...connections.map(c => c.fromScreenId), ...connections.map(c => c.toScreenId)]).size
+    : 0
 
   return (
     <div style={{
@@ -30,7 +98,7 @@ export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onView
       right: 16,
       zIndex: 40,
       minWidth: collapsed ? 180 : 240,
-      maxWidth: 360,
+      maxWidth: 420,
       background: 'rgba(15, 15, 25, 0.9)',
       borderRadius: 14,
       border: '1px solid rgba(99,102,241,0.2)',
@@ -60,41 +128,14 @@ export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onView
             transition: 'all 0.2s',
           }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
-            {flowViewMode ? `${flow.name} — Flow View` : `${flow.name} — ${flow.screens.length} screens`}
+            {flowViewMode
+              ? 'Flow View'
+              : `${screens.length} screens${connectedCount > 0 ? ` · ${connections.length} connections` : ''}`
+            }
           </span>
         </div>
         {collapsed ? <ChevronUp size={14} color="#94a3b8" /> : <ChevronDown size={14} color="#94a3b8" />}
       </div>
-
-      {/* Flow tabs if multiple flows */}
-      {!collapsed && flows.length > 1 && (
-        <div style={{
-          display: 'flex',
-          gap: 4,
-          padding: '0 14px 8px',
-          overflowX: 'auto',
-        }}>
-          {flows.map((f, i) => (
-            <button
-              key={f.flowId}
-              onClick={() => setActiveFlowIdx(i)}
-              style={{
-                padding: '3px 8px',
-                borderRadius: 6,
-                fontSize: 10,
-                fontWeight: 500,
-                border: 'none',
-                cursor: 'pointer',
-                flexShrink: 0,
-                background: i === activeFlowIdx ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.05)',
-                color: i === activeFlowIdx ? '#818CF8' : '#94a3b8',
-              }}
-            >
-              {f.screens[0].name}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Thumbnail strip */}
       {!collapsed && (
@@ -105,7 +146,7 @@ export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onView
             overflowX: 'auto',
             paddingBottom: 4,
           }}>
-            {flow.screens.map((screen, i) => {
+            {orderedScreens.map(({ screen, connected }, i) => {
               const isActive = screen.id === activeScreenId
               return (
                 <div
@@ -119,6 +160,7 @@ export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onView
                     alignItems: 'center',
                     gap: 4,
                     transition: 'transform 0.15s',
+                    opacity: connected || connections.length === 0 ? 1 : 0.4,
                   }}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)' }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
@@ -193,7 +235,7 @@ export function FlowOverviewPanel({ flows, activeScreenId, onScreenClick, onView
             </button>
           ) : (
             <button
-              onClick={() => onViewFlow(flow)}
+              onClick={() => onViewFlow()}
               style={{
                 display: 'flex',
                 alignItems: 'center',
