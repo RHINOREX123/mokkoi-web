@@ -23,6 +23,16 @@ function safeName(name: string): string {
   return (name || 'Screen').replace(/[^a-zA-Z0-9]/g, '')
 }
 
+/** Clean filename: remove special chars, replace spaces with underscores, prefix with Mokkoi_ */
+function brandedName(name: string): string {
+  const clean = (name || 'Screen')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 40)
+  return `Mokkoi_${clean}`
+}
+
 function generateReadme(target: ExportTarget): string {
   const device = getDevicePreset(target.deviceId)
   const name = safeName(target.screenName)
@@ -85,7 +95,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     onToast('Capturing screenshot...')
     try {
       const blob = await captureScreenAtFullRes(target.screenId, phoneFrameRefs.current!)
-      triggerDownload(blob, `${target.screenName || 'screen'}.png`)
+      triggerDownload(blob, `${brandedName(target.screenName)}.png`)
       onToast('Screenshot saved!')
       trackEvent('screen_downloaded', { format: 'png' })
     } catch (err) {
@@ -97,7 +107,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     try {
       const code = convertTreeToTSX(target.tree, target.screenName)
       const blob = new Blob([code], { type: 'text/plain' })
-      triggerDownload(blob, `${safeName(target.screenName)}.tsx`)
+      triggerDownload(blob, `${brandedName(target.screenName)}.tsx`)
       onToast('Code downloaded!')
       trackEvent('screen_downloaded', { format: 'tsx' })
     } catch (err) {
@@ -122,7 +132,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
       zip.file('README.md', generateReadme(target))
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
-      triggerDownload(zipBlob, `${target.screenName || 'screen'}.zip`)
+      triggerDownload(zipBlob, `${brandedName(target.screenName)}.zip`)
       onToast('Package downloaded!')
       trackEvent('screen_downloaded', { format: 'zip' })
     } catch (err) {
