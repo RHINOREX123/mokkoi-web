@@ -129,3 +129,29 @@ export async function generateFlow(
 ): Promise<GenerateFlowResponse> {
   return apiRequest<GenerateFlowResponse>('/api/generate-flow', req, MAX_RETRIES, FLOW_TIMEOUT_MS);
 }
+
+// --- HTML Import ---
+
+export interface ImportHtmlRequest {
+  code: string;
+  source?: string;
+  projectId?: string;
+  screenName?: string;
+}
+
+export interface ImportHtmlResponse {
+  success: boolean;
+  screen: {
+    name: string;
+    tree: ComponentNode;
+    detectedColors: string[];
+    detectedSource: string;
+    conversionNotes: string[];
+  };
+}
+
+export async function importHtml(
+  req: ImportHtmlRequest
+): Promise<ImportHtmlResponse> {
+  return apiRequest<ImportHtmlResponse>('/api/import-html', req);
+}

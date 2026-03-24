@@ -21,6 +21,7 @@ import { generateFlowTool, handleGenerateFlow } from './tools/generate-flow.js';
 import { listTemplatesTool, handleListTemplates } from './tools/list-templates.js';
 import { syncFromCanvasTool, handleSyncFromCanvas } from './tools/sync-from-canvas.js';
 import { watchCanvasTool, handleWatchCanvas } from './tools/watch-canvas.js';
+import { importHtmlTool, handleImportHtml } from './tools/import-html.js';
 
 const server = new Server(
   {
@@ -43,6 +44,7 @@ const TOOLS = [
   listTemplatesTool,
   syncFromCanvasTool,
   watchCanvasTool,
+  importHtmlTool,
 ];
 
 // Handle tools/list
@@ -75,6 +77,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case 'watch_canvas':
       return handleWatchCanvas(args as Parameters<typeof handleWatchCanvas>[0]);
+
+    case 'import_html':
+      return handleImportHtml(args as Parameters<typeof handleImportHtml>[0]);
 
     default:
       return {
