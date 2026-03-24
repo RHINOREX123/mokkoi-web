@@ -56,6 +56,20 @@ export async function captureScreenAtFullRes(
   clone.style.boxShadow = 'none'
   document.body.appendChild(clone)
 
+  // Expand all overflow-hidden containers so full scrollable content is captured.
+  // The PhoneFrame clips content in canvas mode via overflow:hidden on .phone-screen.
+  const allEls = clone.querySelectorAll('*') as NodeListOf<HTMLElement>
+  for (const child of allEls) {
+    const ov = window.getComputedStyle(child).overflow
+    if (ov === 'hidden' || ov === 'clip') {
+      child.style.overflow = 'visible'
+    }
+    const ovY = window.getComputedStyle(child).overflowY
+    if (ovY === 'hidden' || ovY === 'clip') {
+      child.style.overflowY = 'visible'
+    }
+  }
+
   sanitizeColors(clone)
 
   try {
