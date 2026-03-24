@@ -153,5 +153,8 @@ export interface ImportHtmlResponse {
 export async function importHtml(
   req: ImportHtmlRequest
 ): Promise<ImportHtmlResponse> {
-  return apiRequest<ImportHtmlResponse>('/api/import-html', req);
+  return apiRequest<ImportHtmlResponse>('/api/generate', {
+    mode: 'import-html',
+    ...req,
+  });
 }
