@@ -606,7 +606,7 @@ function App() {
       {showImportHtmlModal && <ImportHtmlModal
         onClose={() => setShowImportHtmlModal(false)}
         projectId={projectId}
-        onImported={(screen) => {
+        onImported={(screen, modelUsed) => {
           setShowImportHtmlModal(false)
           const pos = screens.getNextScreenPosition()
           const newScreen = {
@@ -620,8 +620,8 @@ function App() {
           }
           screens.setGeneratedScreens(prev => [...prev, newScreen])
           screens.setActiveGeneratedId(newScreen.id)
-          const notes = screen.conversionNotes?.length ? ` (${screen.conversionNotes.join(', ')})` : ''
-          setToastMessage(`Imported: ${screen.name}${notes}`)
+          const modelLabel = modelUsed === 'sonnet' ? ' via Sonnet (complex layout)' : ' via Haiku'
+          setToastMessage(`Imported: ${screen.name}${modelLabel}`)
         }}
       />}
 

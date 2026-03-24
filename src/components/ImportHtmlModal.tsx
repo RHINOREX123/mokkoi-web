@@ -6,15 +6,17 @@ import type { ComponentNode } from '../types/mokkoi'
 const SOURCES = ['Other', 'Stitch', 'v0', 'Bolt', 'Lovable'] as const
 type Source = typeof SOURCES[number]
 
+interface ImportResult {
+  name: string
+  tree: ComponentNode
+  detectedColors: string[]
+  detectedSource: string
+  conversionNotes: string[]
+}
+
 interface ImportHtmlModalProps {
   onClose: () => void
-  onImported: (screen: {
-    name: string
-    tree: ComponentNode
-    detectedColors: string[]
-    detectedSource: string
-    conversionNotes: string[]
-  }) => void
+  onImported: (screen: ImportResult, modelUsed?: string) => void
   projectId?: string
   isGenerating?: boolean
 }
@@ -25,6 +27,7 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
   const [source, setSource] = useState<Source>('Other')
   const [isConverting, setIsConverting] = useState(false)
   const [error, setError] = useState('')
+  const [statusMessage, setStatusMessage] = useState('')
   const [showSlowWarning, setShowSlowWarning] = useState(false)
   const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -50,9 +53,10 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
     setError('')
     setIsConverting(true)
     setShowSlowWarning(false)
+    setStatusMessage('Analyzing layout...')
 
-    // Show slow warning after 8 seconds
-    slowTimerRef.current = setTimeout(() => setShowSlowWarning(true), 8000)
+    // Show slow warning after 15 seconds (streaming takes longer to complete but doesn't timeout)
+    slowTimerRef.current = setTimeout(() => setShowSlowWarning(true), 15000)
 
     try {
       if (!supabase) throw new Error('Not authenticated. Please sign in.')
@@ -60,11 +64,12 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
       const token = session?.access_token
       if (!token) throw new Error('Not authenticated. Please sign in.')
 
-      const response = await fetch('/api/generate', {
+      const response = await fetch('/api/generate?stream=true', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          'Accept': 'text/event-stream',
         },
         body: JSON.stringify({
           mode: 'import-html',
@@ -75,38 +80,68 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
         }),
       })
 
-      // Read as text first to handle non-JSON errors (e.g. timeouts, 502s)
-      const text = await response.text()
-
       if (!response.ok) {
+        const text = await response.text()
         let errorMsg = `Server error: ${response.status}`
-        try {
-          const errData = JSON.parse(text)
-          errorMsg = errData.error || errorMsg
-        } catch {
-          if (text.length < 200) errorMsg = text || errorMsg
-        }
+        try { errorMsg = JSON.parse(text).error || errorMsg } catch { if (text.length < 200) errorMsg = text || errorMsg }
         throw new Error(errorMsg)
       }
 
-      let data: any
-      try {
-        data = JSON.parse(text)
-      } catch {
-        throw new Error('Invalid response from server. The conversion may have timed out. Try with shorter code.')
+      // Read SSE stream
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('Streaming not supported')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = line.slice(6).trim()
+          if (!data || data === '[DONE]') continue
+
+          try {
+            const event = JSON.parse(data)
+
+            if (event.type === 'status') {
+              setStatusMessage(event.message || 'Converting...')
+            } else if (event.type === 'progress') {
+              // Update status based on progress
+              if (event.chars > 2000) setStatusMessage('Building component tree...')
+              else if (event.chars > 500) setStatusMessage('Converting elements...')
+            } else if (event.type === 'complete') {
+              if (event.success && event.screen?.tree) {
+                onImported(event.screen, event.modelUsed)
+                return
+              } else {
+                throw new Error(event.error || 'Conversion failed')
+              }
+            } else if (event.type === 'error') {
+              throw new Error(event.message || 'Conversion failed')
+            }
+          } catch (e) {
+            // If it's our thrown error, re-throw
+            if (e instanceof Error && e.message !== 'Unexpected token') throw e
+          }
+        }
       }
 
-      if (!data.success || !data.screen?.tree) {
-        throw new Error(data.error || 'Conversion failed')
-      }
-
-      onImported(data.screen)
+      // If we get here without a complete event, something went wrong
+      throw new Error('Stream ended without result. Try with shorter code.')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       setError(message)
     } finally {
       setIsConverting(false)
       setShowSlowWarning(false)
+      setStatusMessage('')
       if (slowTimerRef.current) clearTimeout(slowTimerRef.current)
     }
   }
@@ -335,7 +370,7 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
               {isConverting ? (
                 <>
                   <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                  Converting...
+                  {statusMessage || 'Converting...'}
                 </>
               ) : (
                 'Convert to Mobile'

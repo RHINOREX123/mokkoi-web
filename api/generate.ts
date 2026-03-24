@@ -869,6 +869,103 @@ function preprocessHtmlForConversion(code: string): {
   return { cleanedCode: s.trim(), extractedColors, extractedGradients }
 }
 
+/** Call Anthropic non-streaming, return raw text + usage */
+async function callAnthropicImport(
+  model: string, maxTokens: number, systemPrompt: string,
+  messages: Array<{ role: string; content: string }>, apiKey: string
+): Promise<{ text: string; inputTokens: number; outputTokens: number } | null> {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+    body: JSON.stringify({
+      model, max_tokens: maxTokens,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages,
+    }),
+  })
+  if (!response.ok) return null
+  const data = await response.json() as { content?: Array<{ text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } }
+  const text = data.content?.[0]?.text
+  if (!text) return null
+  return { text, inputTokens: data.usage?.input_tokens || 0, outputTokens: data.usage?.output_tokens || 0 }
+}
+
+/** Stream Anthropic response as SSE, collect full text, return it */
+async function streamAnthropicImport(
+  model: string, maxTokens: number, systemPrompt: string,
+  messages: Array<{ role: string; content: string }>, apiKey: string,
+  res: VercelResponse, phase: string
+): Promise<{ text: string; inputTokens: number; outputTokens: number } | null> {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+    body: JSON.stringify({
+      model, max_tokens: maxTokens, stream: true,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages,
+    }),
+  })
+  if (!response.ok) return null
+
+  const reader = response.body as any
+  if (!reader || typeof reader[Symbol.asyncIterator] !== 'function') {
+    // Fallback to non-streaming
+    const text = await response.text()
+    return { text, inputTokens: 0, outputTokens: 0 }
+  }
+
+  let fullText = ''
+  let inputTokens = 0, outputTokens = 0
+  const decoder = new TextDecoder()
+  let sseBuffer = ''
+
+  for await (const chunk of reader) {
+    const text = typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true })
+    sseBuffer += text
+    const lines = sseBuffer.split('\n')
+    sseBuffer = lines.pop() || ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (!data || data === '[DONE]') continue
+      try {
+        const event = JSON.parse(data)
+        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          fullText += event.delta.text
+          // Send progress to client
+          res.write(`data: ${JSON.stringify({ type: 'progress', phase, chars: fullText.length })}\n\n`)
+        } else if (event.type === 'message_delta' && event.usage) {
+          outputTokens = event.usage.output_tokens || 0
+        } else if (event.type === 'message_start' && event.message?.usage) {
+          inputTokens = event.message.usage.input_tokens || 0
+        }
+      } catch { /* skip */ }
+    }
+  }
+
+  if (!fullText) return null
+  return { text: fullText, inputTokens, outputTokens }
+}
+
+/** Validate import tree quality — returns true if tree is good enough */
+function isImportTreeGoodEnough(tree: any): boolean {
+  if (!tree || typeof tree !== 'object' || !tree.type) return false
+  let nodeCount = 0
+  let textNodes = 0
+  function walk(node: any) {
+    if (!node || typeof node !== 'object') return
+    nodeCount++
+    if (node.type === 'Text') textNodes++
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) { if (typeof child === 'object') walk(child) }
+    }
+  }
+  walk(tree)
+  // Minimum: 3 nodes and at least 1 text node
+  return nodeCount >= 3 && textNodes >= 1
+}
+
 async function handleImportHtml(req: VercelRequest, res: VercelResponse, user: { id: string; email?: string; isMCP?: boolean }) {
   const { code, source: providedSource, projectId, screenName: providedScreenName } = req.body ?? {}
 
@@ -899,8 +996,11 @@ async function handleImportHtml(req: VercelRequest, res: VercelResponse, user: {
   const tailwindNote = detected.hasTailwind ? ' (uses Tailwind CSS — convert all utility classes to React Native style objects)' : ''
   const sourceNote = source !== 'unknown' ? ` from ${source}` : ''
 
-  // Preprocess HTML to reduce token count (avoids Vercel 10s timeout)
+  // Preprocess HTML to reduce token count
   const { cleanedCode, extractedColors: preColors, extractedGradients } = preprocessHtmlForConversion(trimmedCode)
+
+  // Cost tracking
+  console.log(`[import-html] Input: ${trimmedCode.length} chars → ${cleanedCode.length} chars after preprocessing (${Math.round((1 - cleanedCode.length / trimmedCode.length) * 100)}% reduction)`)
 
   // Build color context if we extracted custom colors/gradients
   let colorContext = ''
@@ -929,91 +1029,138 @@ Requirements:
 - For icons, use Google Material Symbols names (lowercase with underscores)
 - Return ONLY valid JSON`
 
-  const importModel = 'claude-sonnet-4-20250514'
+  const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
+  const HAIKU = 'claude-haiku-4-5-20251001'
+  const SONNET = 'claude-sonnet-4-20250514'
   const importMaxTokens = 8192
+  const messages = [{ role: 'user', content: userMessage }]
 
-  try {
-    const apiPayload = {
-      model: importModel,
-      max_tokens: importMaxTokens,
-      system: [{ type: 'text', text: HTML_IMPORT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: userMessage }],
-    }
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31',
-      },
-      body: JSON.stringify(apiPayload),
-    })
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => 'Unknown error')
-      console.error(`[import-html] Claude API error ${response.status}:`, errText)
-      return res.status(502).json({ error: `AI service error (${response.status})` })
-    }
-
-    const data = await response.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } }
-    const rawText = data.content?.[0]?.text
-    if (!rawText) return res.status(502).json({ error: 'Empty response from AI service' })
-
-    let tree: any
-    try {
-      tree = repairImportJSON(rawText)
-    } catch {
-      // Retry once with stricter prompt
-      console.warn('[import-html] JSON parse failed, retrying')
-      const retryPayload = {
-        model: importModel,
-        max_tokens: importMaxTokens,
-        system: [{ type: 'text', text: HTML_IMPORT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: [
-          { role: 'user', content: userMessage },
-          { role: 'assistant', content: 'I apologize, let me return ONLY valid JSON this time:' },
-          { role: 'user', content: 'Return ONLY the JSON component tree. No text before or after. Start with { and end with }.' },
-        ],
-      }
-      const retryResponse = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
-        body: JSON.stringify(retryPayload),
-      })
-      if (!retryResponse.ok) return res.status(502).json({ error: 'Failed to parse AI response as valid JSON' })
-      const retryData = await retryResponse.json() as { content?: Array<{ text?: string }> }
-      const retryText = retryData.content?.[0]?.text
-      if (!retryText) return res.status(502).json({ error: 'Empty retry response from AI service' })
-      try { tree = repairImportJSON(retryText) } catch { return res.status(502).json({ error: 'Failed to parse AI response as valid JSON after retry' }) }
-    }
-
-    const validation = validateImportTree(tree)
-    if (!validation.valid) return res.status(422).json({ error: validation.error })
-
-    const normalizedTree = normalizeComponentTree(tree)
+  // Helper to build the final success response
+  function buildSuccessResponse(normalizedTree: any, modelUsed: string) {
     const detectedColors = extractColorsFromTree(normalizedTree)
     const screenName = providedScreenName || detectImportScreenName(trimmedCode)
-
     const conversionNotes: string[] = []
     if (detected.hasTailwind) conversionNotes.push('Tailwind CSS classes converted to React Native style objects')
     if (detected.hasCSS) conversionNotes.push('CSS styles converted to React Native StyleSheet properties')
     if (detected.type === 'react-jsx' || detected.type === 'react-tsx') conversionNotes.push('React component converted to Mokkoi JSON component tree')
     if (source !== 'unknown') conversionNotes.push(`Source detected: ${source}`)
+    return { success: true, screen: { name: screenName, tree: normalizedTree, detectedColors, detectedSource: source, conversionNotes }, modelUsed }
+  }
+
+  // --- Streaming path ---
+  if (wantsStream) {
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+
+    try {
+      // Phase 1: Try Haiku (fast, cheap)
+      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing layout...', model: 'haiku' })}\n\n`)
+      console.log(`[import-html] Streaming with Haiku first...`)
+      const haikuResult = await streamAnthropicImport(HAIKU, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'haiku')
+
+      let tree: any = null
+      let modelUsed = 'haiku'
+      let totalInputTokens = 0
+      let totalOutputTokens = 0
+
+      if (haikuResult) {
+        totalInputTokens += haikuResult.inputTokens
+        totalOutputTokens += haikuResult.outputTokens
+        try {
+          tree = repairImportJSON(haikuResult.text)
+        } catch { tree = null }
+      }
+
+      // Check if Haiku output is good enough
+      if (tree && isImportTreeGoodEnough(tree)) {
+        console.log(`[import-html] Haiku succeeded (${haikuResult!.inputTokens} in, ${haikuResult!.outputTokens} out, ~$${((haikuResult!.inputTokens * 0.8 + haikuResult!.outputTokens * 4) / 1000000).toFixed(4)})`)
+      } else {
+        // Phase 2: Fallback to Sonnet (streaming)
+        console.log(`[import-html] Haiku output insufficient, falling back to Sonnet (streaming)...`)
+        res.write(`data: ${JSON.stringify({ type: 'status', message: 'Enhancing with advanced model...', model: 'sonnet' })}\n\n`)
+        modelUsed = 'sonnet'
+        const sonnetResult = await streamAnthropicImport(SONNET, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'sonnet')
+
+        if (sonnetResult) {
+          totalInputTokens += sonnetResult.inputTokens
+          totalOutputTokens += sonnetResult.outputTokens
+          try { tree = repairImportJSON(sonnetResult.text) } catch { tree = null }
+          console.log(`[import-html] Sonnet fallback (${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)})`)
+        }
+      }
+
+      if (!tree || !isImportTreeGoodEnough(tree)) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Could not convert the HTML. Try simplifying the code.' })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: false })
+        return res.end()
+      }
+
+      const normalizedTree = normalizeComponentTree(tree)
+      const result = buildSuccessResponse(normalizedTree, modelUsed)
+
+      if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: totalInputTokens, tokensOut: totalOutputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
+
+      res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
+      res.write('data: [DONE]\n\n')
+      return res.end()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[import-html] Streaming error:', message)
+      res.write(`data: ${JSON.stringify({ type: 'error', message: `Import failed: ${message}` })}\n\n`)
+      res.write('data: [DONE]\n\n')
+      return res.end()
+    }
+  }
+
+  // --- Non-streaming path (MCP clients, simple requests) ---
+  try {
+    // Try Haiku first
+    console.log(`[import-html] Non-streaming, trying Haiku...`)
+    let modelUsed = 'haiku'
+    let tree: any = null
+    let totalInputTokens = 0
+    let totalOutputTokens = 0
+
+    const haikuResult = await callAnthropicImport(HAIKU, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey)
+    if (haikuResult) {
+      totalInputTokens += haikuResult.inputTokens
+      totalOutputTokens += haikuResult.outputTokens
+      try { tree = repairImportJSON(haikuResult.text) } catch { tree = null }
+      console.log(`[import-html] Haiku: ${haikuResult.inputTokens} in, ${haikuResult.outputTokens} out, ~$${((haikuResult.inputTokens * 0.8 + haikuResult.outputTokens * 4) / 1000000).toFixed(4)}`)
+    }
+
+    // Fallback to Sonnet if Haiku failed
+    if (!tree || !isImportTreeGoodEnough(tree)) {
+      console.log(`[import-html] Haiku insufficient, falling back to Sonnet...`)
+      modelUsed = 'sonnet'
+      const sonnetResult = await callAnthropicImport(SONNET, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey)
+      if (sonnetResult) {
+        totalInputTokens += sonnetResult.inputTokens
+        totalOutputTokens += sonnetResult.outputTokens
+        try { tree = repairImportJSON(sonnetResult.text) } catch { tree = null }
+        console.log(`[import-html] Sonnet: ${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)}`)
+      }
+    }
+
+    if (!tree) return res.status(502).json({ error: 'Failed to generate component tree from HTML' })
+    const validation = validateImportTree(tree)
+    if (!validation.valid) return res.status(422).json({ error: validation.error })
+
+    const normalizedTree = normalizeComponentTree(tree)
+    const result = buildSuccessResponse(normalizedTree, modelUsed)
 
     if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+    logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: totalInputTokens, tokensOut: totalOutputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
 
-    logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: importModel, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
-
-    return res.status(200).json({
-      success: true,
-      screen: { name: screenName, tree: normalizedTree, detectedColors, detectedSource: source, conversionNotes },
-    })
+    return res.status(200).json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[import-html] Error:', message)
-    logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: importModel, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: false })
+    logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'haiku', generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: false })
     return res.status(500).json({ error: `Import failed: ${message}` })
   }
 }
