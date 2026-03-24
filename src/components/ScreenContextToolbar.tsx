@@ -3,6 +3,7 @@ import {
   Sparkles, RefreshCw, LayoutGrid, Pencil, MessageSquare, Palette, Moon, Sun,
   Play, ExternalLink, QrCode, Smartphone, MoreHorizontal, Code,
   Download, Copy, Type, Trash2, Star, ThumbsUp, ThumbsDown, ChevronDown, PenTool,
+  ImagePlus, FileCode, Package, ChevronRight,
 } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
 import { DEVICE_PRESETS } from '../constants/devices'
@@ -22,7 +23,9 @@ interface ScreenContextToolbarProps {
   onPreviewNewTab: () => void
   onShowQrCode: () => void
   onExportCode: () => void
-  onDownloadImage: () => void
+  onDownloadPNG: () => void
+  onDownloadTSX: () => void
+  onDownloadZIP: () => void
   onDuplicate: () => void
   onRename: () => void
   onDelete: () => void
@@ -68,11 +71,12 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
     visible, onRegenerate, onOpenVariations, onEditViaChat,
     onChangeColorScheme, onMakeDarker, onMakeLighter,
     onPreviewNewTab, onShowQrCode,
-    onExportCode, onDownloadImage, onDuplicate, onRename, onDelete,
+    onExportCode, onDownloadPNG, onDownloadTSX, onDownloadZIP, onDuplicate, onRename, onDelete,
     onToast, onDirectEdit, deviceId, onDeviceChange,
   } = props
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const [showDownloadSub, setShowDownloadSub] = useState(false)
   const toolbarRef = useRef<HTMLDivElement>(null)
 
   // Close dropdown on click outside
@@ -88,7 +92,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
 
   // Close dropdown when toolbar hides
   useEffect(() => {
-    if (!visible) setOpenDropdown(null)
+    if (!visible) { setOpenDropdown(null); setShowDownloadSub(false) }
   }, [visible])
 
   const toggleDropdown = (name: string) => {
@@ -284,7 +288,50 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
         {openDropdown === 'more' && (
           <div style={DROPDOWN_STYLE}>
             {menuItem(<Code size={16} color="#94a3b8" />, 'Export code', onExportCode, { shortcut: 'Ctrl+E' })}
-            {menuItem(<Download size={16} color="#94a3b8" />, 'Download as image', onDownloadImage)}
+            <div
+              style={{ position: 'relative' }}
+              onMouseEnter={() => setShowDownloadSub(true)}
+              onMouseLeave={() => setShowDownloadSub(false)}
+            >
+              <button
+                style={{
+                  ...MENU_ITEM_STYLE,
+                  justifyContent: 'space-between',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                onClick={() => setShowDownloadSub(prev => !prev)}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Download size={16} color="#94a3b8" />
+                  Download
+                </span>
+                <ChevronRight size={14} color="#555" />
+              </button>
+              {showDownloadSub && (
+                <div style={{
+                  position: 'absolute',
+                  left: '100%',
+                  top: -4,
+                  marginLeft: 4,
+                  background: '#1A1A1A',
+                  borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+                  minWidth: 200,
+                  padding: 4,
+                  zIndex: 101,
+                }}>
+                  {menuItem(<ImagePlus size={16} color="#94a3b8" />, 'Screenshot (PNG)', onDownloadPNG)}
+                  {menuItem(<FileCode size={16} color="#94a3b8" />, 'Code (TSX)', onDownloadTSX)}
+                  {divider}
+                  {menuItem(<Package size={16} color="#818CF8" />, 'Full Package (ZIP)', onDownloadZIP)}
+                  <div style={{ padding: '2px 12px 6px', fontSize: 10, color: '#555', lineHeight: 1.4 }}>
+                    PNG + TSX + README
+                  </div>
+                </div>
+              )}
+            </div>
             {menuItem(<Copy size={16} color="#94a3b8" />, 'Duplicate screen', onDuplicate)}
             {menuItem(<Type size={16} color="#94a3b8" />, 'Rename screen', onRename)}
             {divider}
