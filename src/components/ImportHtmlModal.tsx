@@ -94,47 +94,66 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
       const decoder = new TextDecoder()
       let buffer = ''
 
+      const processLine = (line: string) => {
+        if (!line.startsWith('data: ')) return
+        const data = line.slice(6).trim()
+        if (!data || data === '[DONE]') return
+
+        const event = JSON.parse(data)
+
+        if (event.type === 'status') {
+          setStatusMessage(event.message || 'Converting...')
+        } else if (event.type === 'progress') {
+          if (event.chars > 2000) setStatusMessage('Building component tree...')
+          else if (event.chars > 500) setStatusMessage('Converting elements...')
+        } else if (event.type === 'complete') {
+          if (event.success && event.screen?.tree) {
+            onImported(event.screen, event.modelUsed)
+            return 'done'
+          } else {
+            throw new Error(event.error || 'Conversion failed')
+          }
+        } else if (event.type === 'error') {
+          throw new Error(event.message || 'Conversion failed')
+        }
+      }
+
+      let completed = false
+
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
+        // Append new data (or flush decoder on stream end)
+        buffer += done
+          ? decoder.decode()
+          : decoder.decode(value, { stream: true })
+
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6).trim()
-          if (!data || data === '[DONE]') continue
-
           try {
-            const event = JSON.parse(data)
-
-            if (event.type === 'status') {
-              setStatusMessage(event.message || 'Converting...')
-            } else if (event.type === 'progress') {
-              // Update status based on progress
-              if (event.chars > 2000) setStatusMessage('Building component tree...')
-              else if (event.chars > 500) setStatusMessage('Converting elements...')
-            } else if (event.type === 'complete') {
-              if (event.success && event.screen?.tree) {
-                onImported(event.screen, event.modelUsed)
-                return
-              } else {
-                throw new Error(event.error || 'Conversion failed')
-              }
-            } else if (event.type === 'error') {
-              throw new Error(event.message || 'Conversion failed')
-            }
+            if (processLine(line) === 'done') { completed = true; break }
           } catch (e) {
-            // If it's our thrown error, re-throw
-            if (e instanceof Error && e.message !== 'Unexpected token') throw e
+            if (e instanceof Error && !e.message.startsWith('Unexpected token')) throw e
           }
+        }
+
+        if (completed || done) break
+      }
+
+      // Process any remaining buffered line
+      if (!completed && buffer.trim()) {
+        try {
+          if (processLine(buffer) === 'done') completed = true
+        } catch (e) {
+          if (e instanceof Error && !e.message.startsWith('Unexpected token')) throw e
         }
       }
 
-      // If we get here without a complete event, something went wrong
-      throw new Error('Stream ended without result. Try with shorter code.')
+      if (!completed) {
+        throw new Error('Stream ended without result. Try with shorter code.')
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       setError(message)
