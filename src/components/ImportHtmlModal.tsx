@@ -94,18 +94,12 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
       const decoder = new TextDecoder()
       let buffer = ''
 
-      let eventCount = 0
       const processLine = (line: string) => {
         if (!line.startsWith('data: ')) return
         const data = line.slice(6).trim()
-        if (!data || data === '[DONE]') {
-          console.log('[import-html-fe] SSE line: [DONE] or empty')
-          return
-        }
+        if (!data || data === '[DONE]') return
 
         const event = JSON.parse(data)
-        eventCount++
-        console.log(`[import-html-fe] Event #${eventCount}: type=${event.type} keys=${Object.keys(event).join(',')}${event.type === 'complete' ? ` success=${event.success} hasScreen=${!!event.screen} hasTree=${!!event.screen?.tree}` : ''}`)
 
         if (event.type === 'status') {
           setStatusMessage(event.message || 'Converting...')
@@ -114,36 +108,26 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
           else if (event.chars > 500) setStatusMessage('Converting elements...')
         } else if (event.type === 'complete') {
           if (event.success && event.screen?.tree) {
-            console.log(`[import-html-fe] SUCCESS: screen.name=${event.screen.name} modelUsed=${event.modelUsed}`)
             onImported(event.screen, event.modelUsed)
             return 'done'
           } else {
-            console.log(`[import-html-fe] COMPLETE but invalid: success=${event.success} screen=${JSON.stringify(event.screen)?.substring(0, 200)}`)
             throw new Error(event.error || 'Conversion failed')
           }
         } else if (event.type === 'error') {
-          console.log(`[import-html-fe] ERROR event: ${event.message}`)
           throw new Error(event.message || 'Conversion failed')
         }
       }
 
       let completed = false
-      let chunkIndex = 0
 
       while (true) {
         const { done, value } = await reader.read()
-        chunkIndex++
 
         // Append new data (or flush decoder on stream end)
-        const decoded = done
+        buffer += done
           ? decoder.decode()
           : decoder.decode(value, { stream: true })
 
-        if (chunkIndex <= 3 || done) {
-          console.log(`[import-html-fe] Chunk #${chunkIndex}: done=${done} len=${decoded.length} preview=${JSON.stringify(decoded.substring(0, 150))}`)
-        }
-
-        buffer += decoded
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
@@ -151,7 +135,6 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
           try {
             if (processLine(line) === 'done') { completed = true; break }
           } catch (e) {
-            console.log(`[import-html-fe] processLine error:`, e instanceof Error ? e.message : e)
             if (e instanceof Error && !e.message.startsWith('Unexpected token')) throw e
           }
         }
@@ -161,17 +144,14 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
 
       // Process any remaining buffered line
       if (!completed && buffer.trim()) {
-        console.log(`[import-html-fe] Processing remaining buffer: len=${buffer.length} preview=${JSON.stringify(buffer.substring(0, 200))}`)
         try {
           if (processLine(buffer) === 'done') completed = true
         } catch (e) {
-          console.log(`[import-html-fe] remaining buffer error:`, e instanceof Error ? e.message : e)
           if (e instanceof Error && !e.message.startsWith('Unexpected token')) throw e
         }
       }
 
       if (!completed) {
-        console.log(`[import-html-fe] FAIL: Stream ended without result. eventCount=${eventCount} bufferLen=${buffer.length} buffer=${JSON.stringify(buffer.substring(0, 300))}`)
         throw new Error('Stream ended without result. Try with shorter code.')
       }
     } catch (err) {

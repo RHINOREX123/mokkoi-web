@@ -605,14 +605,20 @@ function validateImportTree(tree: any): { valid: boolean; error?: string } {
 
 function repairImportJSON(raw: string): any {
   let s = raw.trim()
+  // Strip markdown fences
   s = s.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim()
   const firstBrace = s.indexOf('{')
   if (firstBrace === -1) throw new Error('No JSON object found in response')
   const lastBrace = s.lastIndexOf('}')
   if (lastBrace > firstBrace) s = s.slice(firstBrace, lastBrace + 1)
   else s = s.slice(firstBrace)
-  try { return JSON.parse(s) } catch { /* continue */ }
+  try { return JSON.parse(s) } catch { /* continue — likely truncated at max_tokens */ }
+
+  // Truncation repair: the model hit max_tokens and output was cut mid-JSON.
+  // Strategy: find the last valid structural point and close everything.
   let repaired = s
+
+  // Step 1: Close any unclosed string
   let inString = false, escaped = false
   for (const ch of repaired) {
     if (escaped) { escaped = false; continue }
@@ -620,23 +626,68 @@ function repairImportJSON(raw: string): any {
     if (ch === '"') { inString = !inString }
   }
   if (inString) repaired += '"'
-  repaired = repaired.replace(/,\s*"[^"]*":\s*"?[^"}\]]*$/, '')
-  repaired = repaired.replace(/[,:\s]+$/, '')
-  let openBraces = 0, openBrackets = 0
-  inString = false; escaped = false
-  for (const ch of repaired) {
-    if (escaped) { escaped = false; continue }
-    if (ch === '\\') { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === '{') openBraces++
-    else if (ch === '}') openBraces--
-    else if (ch === '[') openBrackets++
-    else if (ch === ']') openBrackets--
+
+  // Step 2: Repeatedly strip trailing incomplete constructs until parseable or stable.
+  // This handles truncation at any nesting depth:
+  //   ..."color":"#0A"  → strip incomplete property
+  //   ...,              → strip trailing comma
+  //   ...:"val          → already closed by step 1, strip incomplete property
+  for (let attempt = 0; attempt < 20; attempt++) {
+    // Strip trailing incomplete key-value pair (key with no/partial value)
+    repaired = repaired.replace(/,\s*"[^"]*"\s*:\s*"[^"]*"?\s*$/, '')
+    // Strip trailing incomplete value after colon
+    repaired = repaired.replace(/:\s*"[^"]*"?\s*$/, '')
+    // Strip trailing key with no value
+    repaired = repaired.replace(/,\s*"[^"]*"\s*$/, '')
+    // Strip trailing punctuation/whitespace
+    repaired = repaired.replace(/[,:\s]+$/, '')
+
+    // Recount and close brackets/braces
+    let openBraces = 0, openBrackets = 0
+    inString = false; escaped = false
+    for (const ch of repaired) {
+      if (escaped) { escaped = false; continue }
+      if (ch === '\\') { escaped = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+      if (ch === '{') openBraces++
+      else if (ch === '}') openBraces--
+      else if (ch === '[') openBrackets++
+      else if (ch === ']') openBrackets--
+    }
+
+    let closed = repaired
+    for (let i = 0; i < openBrackets; i++) closed += ']'
+    for (let i = 0; i < openBraces; i++) closed += '}'
+
+    try { return JSON.parse(closed) } catch { /* try stripping more */ }
   }
-  for (let i = 0; i < openBrackets; i++) repaired += ']'
-  for (let i = 0; i < openBraces; i++) repaired += '}'
-  return JSON.parse(repaired)
+
+  // Last resort: find the last valid closing brace/bracket and truncate there
+  for (let i = repaired.length - 1; i > 0; i--) {
+    if (repaired[i] === '}' || repaired[i] === ']') {
+      const truncated = repaired.slice(0, i + 1)
+      // Recount and close
+      let openBraces = 0, openBrackets = 0
+      inString = false; escaped = false
+      for (const ch of truncated) {
+        if (escaped) { escaped = false; continue }
+        if (ch === '\\') { escaped = true; continue }
+        if (ch === '"') { inString = !inString; continue }
+        if (inString) continue
+        if (ch === '{') openBraces++
+        else if (ch === '}') openBraces--
+        else if (ch === '[') openBrackets++
+        else if (ch === ']') openBrackets--
+      }
+      let closed = truncated
+      for (let j = 0; j < openBrackets; j++) closed += ']'
+      for (let j = 0; j < openBraces; j++) closed += '}'
+      try { return JSON.parse(closed) } catch { continue }
+    }
+  }
+
+  throw new Error('Could not repair truncated JSON')
 }
 
 const HTML_IMPORT_SYSTEM_PROMPT = `You are Mokkoi's HTML-to-React-Native converter. Your job is to convert web UI code (HTML, CSS, React, Tailwind) into Mokkoi's React Native JSON component tree format.
@@ -780,13 +831,20 @@ ${COMPONENT_TYPES}
 ${VIEWPORT_BUDGET}
 ${PLATFORM_RULES}
 
-## IMPORTANT
-- Return ONLY valid JSON. No markdown backticks, no explanation, no preamble.
+## IMPORTANT — OUTPUT FORMAT
+- Return ONLY valid JSON. No markdown backticks, no \`\`\`json, no explanation, no preamble, no trailing text.
+- Output MINIFIED JSON: NO newlines, NO indentation, NO extra spaces. Compact single-line output.
+  CORRECT: {"type":"View","style":{"flex":1},"children":[{"type":"Text","children":["Hello"]}]}
+  WRONG: {
+    "type": "View",
+    "style": { "flex": 1 }
+  }
 - The JSON must parse with JSON.parse() directly.
 - Every node MUST have: type, style (with at least {})
 - Text content goes as a string in the children array: "children": ["Hello"]
 - Style values must be numbers (not "16px") or valid strings (colors, "center", etc.)
-- The output should render correctly as a React Native mobile screen`
+- The output should render correctly as a React Native mobile screen
+- CRITICAL: The entire JSON tree MUST be complete. Do NOT truncate or cut off the output. If the tree is getting long, simplify deeply nested sections rather than stopping mid-output.`
 
 // --- Preprocess HTML to reduce token count and avoid Vercel 10s timeout ---
 
@@ -905,10 +963,7 @@ async function streamAnthropicImport(
       messages,
     }),
   })
-  if (!response.ok) {
-    console.log(`[import-html] Anthropic API error: ${response.status} ${response.statusText}`)
-    return null
-  }
+  if (!response.ok) return null
 
   const reader = response.body as any
   if (!reader || typeof reader[Symbol.asyncIterator] !== 'function') {
@@ -947,7 +1002,6 @@ async function streamAnthropicImport(
     }
   }
 
-  console.log(`[import-html] streamAnthropicImport done: phase=${phase} fullText.length=${fullText.length} first200=${fullText.substring(0, 200)}`)
   if (!fullText) return null
   return { text: fullText, inputTokens, outputTokens }
 }
@@ -1034,7 +1088,6 @@ Requirements:
 - Return ONLY valid JSON`
 
   const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
-  console.log(`[import-html] accept=${req.headers['accept']} stream=${req.query?.stream} wantsStream=${wantsStream}`)
   const HAIKU = 'claude-haiku-4-5-20251001'
   const SONNET = 'claude-sonnet-4-20250514'
   const importMaxTokens = 8192
@@ -1062,7 +1115,6 @@ Requirements:
     try {
       // Phase 1: Try Haiku (fast, cheap)
       res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing layout...', model: 'haiku' })}\n\n`)
-      console.log(`[import-html] Streaming with Haiku first...`)
       const haikuResult = await streamAnthropicImport(HAIKU, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'haiku')
 
       let tree: any = null
@@ -1073,24 +1125,15 @@ Requirements:
       if (haikuResult) {
         totalInputTokens += haikuResult.inputTokens
         totalOutputTokens += haikuResult.outputTokens
-        try {
-          tree = repairImportJSON(haikuResult.text)
-          console.log(`[import-html] Haiku repairImportJSON succeeded, tree type=${tree?.type}, children=${tree?.children?.length}`)
-        } catch (e) {
-          console.log(`[import-html] Haiku repairImportJSON FAILED:`, e instanceof Error ? e.message : e)
-          tree = null
-        }
-      } else {
-        console.log(`[import-html] Haiku returned null result`)
+        try { tree = repairImportJSON(haikuResult.text) } catch { tree = null }
       }
 
       // Check if Haiku output is good enough
-      console.log(`[import-html] isImportTreeGoodEnough=${tree ? isImportTreeGoodEnough(tree) : 'null tree'}`)
       if (tree && isImportTreeGoodEnough(tree)) {
         console.log(`[import-html] Haiku succeeded (${haikuResult!.inputTokens} in, ${haikuResult!.outputTokens} out, ~$${((haikuResult!.inputTokens * 0.8 + haikuResult!.outputTokens * 4) / 1000000).toFixed(4)})`)
       } else {
         // Phase 2: Fallback to Sonnet (streaming)
-        console.log(`[import-html] Haiku output insufficient, falling back to Sonnet (streaming)...`)
+        console.log(`[import-html] Haiku insufficient (text=${haikuResult?.text.length ?? 0} chars, tree=${!!tree}), trying Sonnet...`)
         res.write(`data: ${JSON.stringify({ type: 'status', message: 'Enhancing with advanced model...', model: 'sonnet' })}\n\n`)
         modelUsed = 'sonnet'
         const sonnetResult = await streamAnthropicImport(SONNET, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'sonnet')
@@ -1098,22 +1141,12 @@ Requirements:
         if (sonnetResult) {
           totalInputTokens += sonnetResult.inputTokens
           totalOutputTokens += sonnetResult.outputTokens
-          try {
-            tree = repairImportJSON(sonnetResult.text)
-            console.log(`[import-html] Sonnet repairImportJSON succeeded, tree type=${tree?.type}, children=${tree?.children?.length}`)
-          } catch (e) {
-            console.log(`[import-html] Sonnet repairImportJSON FAILED:`, e instanceof Error ? e.message : e)
-            tree = null
-          }
-          console.log(`[import-html] Sonnet fallback (${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)})`)
-        } else {
-          console.log(`[import-html] Sonnet returned null result`)
+          try { tree = repairImportJSON(sonnetResult.text) } catch { tree = null }
+          console.log(`[import-html] Sonnet (${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)})`)
         }
       }
 
-      console.log(`[import-html] Final tree check: tree=${!!tree}, goodEnough=${tree ? isImportTreeGoodEnough(tree) : false}`)
       if (!tree || !isImportTreeGoodEnough(tree)) {
-        console.log(`[import-html] SENDING ERROR EVENT: tree not good enough`)
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Could not convert the HTML. Try simplifying the code.' })}\n\n`)
         res.write('data: [DONE]\n\n')
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: false })
@@ -1126,11 +1159,8 @@ Requirements:
       if (!user.isMCP) await deductCredits(user.id, 'new_screen')
       logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: totalInputTokens, tokensOut: totalOutputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
 
-      const completeEvent = JSON.stringify({ type: 'complete', ...result })
-      console.log(`[import-html] SENDING COMPLETE EVENT: length=${completeEvent.length} hasScreen=${!!result.screen} hasTree=${!!result.screen?.tree}`)
-      res.write(`data: ${completeEvent}\n\n`)
+      res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
       res.write('data: [DONE]\n\n')
-      console.log(`[import-html] Stream complete, calling res.end()`)
       return res.end()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
