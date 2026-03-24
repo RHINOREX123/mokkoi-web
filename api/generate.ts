@@ -1113,37 +1113,17 @@ Requirements:
     res.setHeader('X-Accel-Buffering', 'no')
 
     try {
-      // Phase 1: Try Haiku (fast, cheap)
-      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing layout...', model: 'haiku' })}\n\n`)
+      // Streaming: Haiku only (no Sonnet fallback — avoids 120s timeout)
+      // The improved repairImportJSON handles truncated output from max_tokens
+      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Converting to mobile...', model: 'haiku' })}\n\n`)
       const haikuResult = await streamAnthropicImport(HAIKU, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'haiku')
 
       let tree: any = null
-      let modelUsed = 'haiku'
-      let totalInputTokens = 0
-      let totalOutputTokens = 0
+      const modelUsed = 'haiku'
 
       if (haikuResult) {
-        totalInputTokens += haikuResult.inputTokens
-        totalOutputTokens += haikuResult.outputTokens
         try { tree = repairImportJSON(haikuResult.text) } catch { tree = null }
-      }
-
-      // Check if Haiku output is good enough
-      if (tree && isImportTreeGoodEnough(tree)) {
-        console.log(`[import-html] Haiku succeeded (${haikuResult!.inputTokens} in, ${haikuResult!.outputTokens} out, ~$${((haikuResult!.inputTokens * 0.8 + haikuResult!.outputTokens * 4) / 1000000).toFixed(4)})`)
-      } else {
-        // Phase 2: Fallback to Sonnet (streaming)
-        console.log(`[import-html] Haiku insufficient (text=${haikuResult?.text.length ?? 0} chars, tree=${!!tree}), trying Sonnet...`)
-        res.write(`data: ${JSON.stringify({ type: 'status', message: 'Enhancing with advanced model...', model: 'sonnet' })}\n\n`)
-        modelUsed = 'sonnet'
-        const sonnetResult = await streamAnthropicImport(SONNET, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'sonnet')
-
-        if (sonnetResult) {
-          totalInputTokens += sonnetResult.inputTokens
-          totalOutputTokens += sonnetResult.outputTokens
-          try { tree = repairImportJSON(sonnetResult.text) } catch { tree = null }
-          console.log(`[import-html] Sonnet (${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)})`)
-        }
+        console.log(`[import-html] Haiku (${haikuResult.inputTokens} in, ${haikuResult.outputTokens} out, tree=${!!tree}, ~$${((haikuResult.inputTokens * 0.8 + haikuResult.outputTokens * 4) / 1000000).toFixed(4)})`)
       }
 
       if (!tree || !isImportTreeGoodEnough(tree)) {
@@ -1157,7 +1137,7 @@ Requirements:
       const result = buildSuccessResponse(normalizedTree, modelUsed)
 
       if (!user.isMCP) await deductCredits(user.id, 'new_screen')
-      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: totalInputTokens, tokensOut: totalOutputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: haikuResult!.inputTokens, tokensOut: haikuResult!.outputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
 
       res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
       res.write('data: [DONE]\n\n')
