@@ -97,6 +97,12 @@ body {
   box-shadow: 0 4px 32px rgba(99, 102, 241, 0.15);
 }
 
+/* Spin animation for image loading indicator */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Shimmer skeleton loading animation */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

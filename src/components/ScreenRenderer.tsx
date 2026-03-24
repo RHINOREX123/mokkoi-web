@@ -1,4 +1,88 @@
+import { useState, useEffect, useCallback } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
+
+// --- Async image loader: calls /api/generate-image backend proxy ---
+// Client-side cache so we don't re-fetch the same query on every re-render
+const imageCache = new Map<string, string>()
+
+function ProxyImage({ searchQuery, width, height, alt, style }: {
+  searchQuery: string; width: number; height: number; alt: string; style: React.CSSProperties
+}) {
+  const cacheKey = `${searchQuery}:${width}x${height}`
+  const [src, setSrc] = useState(() => imageCache.get(cacheKey) || '')
+  const [loading, setLoading] = useState(!imageCache.has(cacheKey))
+
+  const fetchImage = useCallback(async () => {
+    if (imageCache.has(cacheKey)) {
+      setSrc(imageCache.get(cacheKey)!)
+      setLoading(false)
+      return
+    }
+    try {
+      const res = await fetch(
+        `/api/generate-image?query=${encodeURIComponent(searchQuery)}&width=${width}&height=${height}`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        if (data.url) {
+          imageCache.set(cacheKey, data.url)
+          setSrc(data.url)
+        }
+      }
+    } catch {
+      // Fallback to LoremFlickr if backend is unreachable (dev mode, etc.)
+      const keywords = searchQuery.split(/\s+/).slice(0, 3).join(',')
+      const hash = Math.abs(searchQuery.split('').reduce((a, c) => a + c.charCodeAt(0), 0))
+      const fallback = `https://loremflickr.com/${width}/${height}/${encodeURIComponent(keywords)}?lock=${hash}`
+      imageCache.set(cacheKey, fallback)
+      setSrc(fallback)
+    } finally {
+      setLoading(false)
+    }
+  }, [cacheKey, searchQuery, width, height])
+
+  useEffect(() => {
+    if (!imageCache.has(cacheKey)) fetchImage()
+  }, [cacheKey, fetchImage])
+
+  if (loading || !src) {
+    // Shimmer placeholder while loading
+    return (
+      <div
+        style={{
+          ...style,
+          backgroundColor: '#1A1A2E',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '3px solid rgba(255,255,255,0.1)',
+          borderTopColor: 'rgba(255,255,255,0.4)',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }}
+      onError={() => {
+        // If the proxy URL also fails to render, fall back to LoremFlickr
+        const keywords = searchQuery.split(/\s+/).slice(0, 3).join(',')
+        const hash = Math.abs(searchQuery.split('').reduce((a, c) => a + c.charCodeAt(0), 0))
+        setSrc(`https://loremflickr.com/${width}/${height}/${encodeURIComponent(keywords)}?lock=${hash}`)
+      }}
+    />
+  )
+}
 
 // Map Lucide-style icon names → Google Material Symbols names.
 // If the AI outputs a Material Symbols name directly, it passes through (via ?? iconName fallback).
@@ -467,27 +551,35 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const avatar = node.props?.avatar as string | undefined
       const w = typeof style.width === 'number' ? Math.min(style.width, 800) : 400
       const h = typeof style.height === 'number' ? Math.min(style.height, 800) : 300
-      let src: string
+
       if (avatar) {
         // DiceBear avatar: consistent illustrated avatars from a seed name
         const avatarStyle = (node.props?.avatarStyle as string) ?? 'avataaars-neutral'
-        src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w, h)}`
-      } else if (searchQuery) {
-        // LoremFlickr: free keyword-based stock photos, no API key
-        const keywords = searchQuery.split(/\s+/).slice(0, 4).join(',')
-        const hash = Math.abs(searchQuery.split('').reduce((a, c) => a + c.charCodeAt(0), 0))
-        src = `https://loremflickr.com/${w}/${h}/${encodeURIComponent(keywords)}?lock=${hash}`
-      } else {
-        src = source?.uri ?? ''
+        const src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w, h)}`
+        return (
+          <img key={key} src={src} alt={avatar} loading="lazy"
+            style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }} />
+        )
       }
+
+      if (searchQuery) {
+        // Use backend proxy: FLUX AI → Pexels → LoremFlickr fallback
+        return (
+          <ProxyImage
+            key={key}
+            searchQuery={searchQuery}
+            width={w}
+            height={h}
+            alt={searchQuery}
+            style={style}
+          />
+        )
+      }
+
+      // Direct URI source
       return (
-        <img
-          key={key}
-          src={src}
-          alt={avatar ?? searchQuery ?? ''}
-          loading="lazy"
-          style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }}
-        />
+        <img key={key} src={source?.uri ?? ''} alt="" loading="lazy"
+          style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }} />
       )
     }
 

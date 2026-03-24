@@ -20,6 +20,9 @@
     },
     "api/mcp-sync.ts": {
       "maxDuration": 15
+    },
+    "api/generate-image.ts": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
