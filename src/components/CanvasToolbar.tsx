@@ -1,4 +1,4 @@
-import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, ImagePlus } from 'lucide-react'
+import { MousePointer2, Hand, ZoomOut, ZoomIn, PenTool, Upload, ImagePlus, Code2 } from 'lucide-react'
 
 interface CanvasToolbarProps {
   activeTool: 'select' | 'pan'
@@ -12,6 +12,7 @@ interface CanvasToolbarProps {
   exitDirectEdit: (save?: boolean) => void
   onScreenshotModal: () => void
   onUploadRef: () => void
+  onImportHtml: () => void
 }
 
 function ToolbarButton({ icon, tooltip, onClick, isActive }: {
@@ -44,7 +45,7 @@ export function CanvasToolbar({
   activeTool, zoomLevel, directEditMode,
   setActiveTool, zoomIn, zoomOut, resetZoom,
   enterDirectEdit, exitDirectEdit,
-  onScreenshotModal, onUploadRef,
+  onScreenshotModal, onUploadRef, onImportHtml,
 }: CanvasToolbarProps) {
   return (
     <div style={{
@@ -105,6 +106,7 @@ export function CanvasToolbar({
         <PenTool size={18} />
       </button>
       <ToolbarButton icon={<ImagePlus size={18} />} tooltip="Screenshot to Screen" onClick={onScreenshotModal} />
+      <ToolbarButton icon={<Code2 size={18} />} tooltip="Import HTML/React code" onClick={onImportHtml} />
       <ToolbarButton icon={<Upload size={18} />} tooltip="Upload reference image" onClick={onUploadRef} />
     </div>
   )

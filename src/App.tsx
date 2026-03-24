@@ -14,6 +14,7 @@ import { VariationsPanel } from './components/VariationsPanel'
 import { QrCodeModal } from './components/QrCodeModal'
 import { ScreenshotModal } from './components/ScreenshotModal'
 import { CanvasToolbar } from './components/CanvasToolbar'
+import { ImportHtmlModal } from './components/ImportHtmlModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { TopNavbar } from './components/TopNavbar'
 import { NoCreditsModal } from './components/PricingPage'
@@ -66,6 +67,7 @@ function App() {
   const [qrUrl, setQrUrl] = useState('')
   const [showDeleteScreenConfirm, setShowDeleteScreenConfirm] = useState(false)
   const [showScreenshotModal, setShowScreenshotModal] = useState(false)
+  const [showImportHtmlModal, setShowImportHtmlModal] = useState(false)
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -582,7 +584,8 @@ function App() {
             <CanvasToolbar activeTool={canvas.activeTool} zoomLevel={canvas.zoomLevel} directEditMode={directEdit.directEditMode}
               setActiveTool={canvas.setActiveTool} zoomIn={canvas.zoomIn} zoomOut={canvas.zoomOut} resetZoom={canvas.resetZoom}
               enterDirectEdit={directEdit.enterDirectEdit} exitDirectEdit={directEdit.exitDirectEdit}
-              onScreenshotModal={() => setShowScreenshotModal(true)} onUploadRef={() => fileInputRef.current?.click()} />
+              onScreenshotModal={() => setShowScreenshotModal(true)} onUploadRef={() => fileInputRef.current?.click()}
+              onImportHtml={() => setShowImportHtmlModal(true)} />
 
           </div>
         </ErrorBoundary>
@@ -599,6 +602,28 @@ function App() {
       <VariationsPanel isOpen={showVariationsPanel} onClose={() => setShowVariationsPanel(false)} onGenerate={ai.handleGenerateVariations} isGenerating={ai.isGeneratingVariations} />
       {showQrModal && <QrCodeModal url={qrUrl} onClose={() => setShowQrModal(false)} />}
       {showScreenshotModal && <ScreenshotModal onClose={() => setShowScreenshotModal(false)} onGenerate={(imageData, imageMimeType, prompt) => { setShowScreenshotModal(false); ai.handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true) }} isGenerating={ai.isGenerating} />}
+
+      {showImportHtmlModal && <ImportHtmlModal
+        onClose={() => setShowImportHtmlModal(false)}
+        projectId={projectId}
+        onImported={(screen) => {
+          setShowImportHtmlModal(false)
+          const pos = screens.getNextScreenPosition()
+          const newScreen = {
+            id: crypto.randomUUID(),
+            name: screen.name || 'Imported Screen',
+            tree: screen.tree,
+            originalPrompt: `[Imported from ${screen.detectedSource || 'web'}]`,
+            source: 'web' as const,
+            x: pos.x,
+            y: pos.y,
+          }
+          screens.setGeneratedScreens(prev => [...prev, newScreen])
+          screens.setActiveGeneratedId(newScreen.id)
+          const notes = screen.conversionNotes?.length ? ` (${screen.conversionNotes.join(', ')})` : ''
+          setToastMessage(`Imported: ${screen.name}${notes}`)
+        }}
+      />}
 
       {showDeleteScreenConfirm && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }} onClick={() => setShowDeleteScreenConfirm(false)}>
