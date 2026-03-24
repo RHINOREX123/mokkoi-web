@@ -777,6 +777,87 @@ ${PLATFORM_RULES}
 - Style values must be numbers (not "16px") or valid strings (colors, "center", etc.)
 - The output should render correctly as a React Native mobile screen`
 
+// --- Preprocess HTML to reduce token count and avoid Vercel 10s timeout ---
+
+function preprocessHtmlForConversion(code: string): {
+  cleanedCode: string
+  extractedColors: Record<string, string>
+  extractedGradients: string[]
+} {
+  let s = code
+  const extractedColors: Record<string, string> = {}
+  const extractedGradients: string[] = []
+
+  // Extract Tailwind color config from <script> or tailwind.config before stripping
+  const twConfigMatch = s.match(/tailwind\.config[^{]*\{[\s\S]*?colors\s*:\s*\{([\s\S]*?)\}/i)
+  if (twConfigMatch) {
+    const colorBlock = twConfigMatch[1]
+    const colorPairs = colorBlock.match(/'([^']+)'\s*:\s*'(#[0-9a-fA-F]{3,8})'/g)
+      || colorBlock.match(/"([^"]+)"\s*:\s*"(#[0-9a-fA-F]{3,8})"/g)
+    if (colorPairs) {
+      for (const pair of colorPairs) {
+        const m = pair.match(/['"]([^'"]+)['"]\s*:\s*['"]([^'"]+)['"]/)
+        if (m) extractedColors[m[1]] = m[2]
+      }
+    }
+  }
+
+  // Extract inline CSS colors and gradients from <style> tags before stripping
+  const styleMatches = s.match(/<style[^>]*>([\s\S]*?)<\/style>/gi)
+  if (styleMatches) {
+    for (const styleBlock of styleMatches) {
+      // Extract color definitions
+      const cssColors = styleBlock.match(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{3,8})/g)
+      if (cssColors) {
+        for (const c of cssColors) {
+          const m = c.match(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{3,8})/)
+          if (m) extractedColors[m[1]] = m[2]
+        }
+      }
+      // Extract gradient definitions
+      const grads = styleBlock.match(/linear-gradient\([^)]+\)/g)
+      if (grads) extractedGradients.push(...grads)
+    }
+  }
+
+  // Also extract gradients from inline styles
+  const inlineGrads = s.match(/background(?:-image)?\s*:\s*linear-gradient\([^)]+\)/g)
+  if (inlineGrads) {
+    for (const g of inlineGrads) {
+      const m = g.match(/linear-gradient\([^)]+\)/)
+      if (m && !extractedGradients.includes(m[0])) extractedGradients.push(m[0])
+    }
+  }
+
+  // Strip <head>...</head>
+  s = s.replace(/<head[\s\S]*?<\/head>/gi, '')
+  // Strip <script> tags
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, '')
+  // Strip <style> tags
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, '')
+  // Strip HTML comments
+  s = s.replace(/<!--[\s\S]*?-->/g, '')
+  // Strip all data- attributes
+  s = s.replace(/\s+data-[\w-]+="[^"]*"/g, '')
+  s = s.replace(/\s+data-[\w-]+='[^']*'/g, '')
+  s = s.replace(/\s+data-[\w-]+/g, '')
+  // Strip hover/focus/transition Tailwind classes (mobile doesn't need these)
+  s = s.replace(/\b(?:hover|focus|focus-within|focus-visible|active|group-hover|peer-hover):[^\s"']+/g, '')
+  s = s.replace(/\b(?:transition-\w+|duration-\w+|ease-\w+|animate-\w+|delay-\w+)/g, '')
+  // Strip React import statements (not needed for conversion)
+  s = s.replace(/^import\s+.*?\n/gm, '')
+  // Strip export statements wrapping (keep the JSX)
+  s = s.replace(/export\s+default\s+function\s+\w+\s*\([^)]*\)\s*\{?\s*return\s*\(/m, '')
+  // Collapse multiple blank lines
+  s = s.replace(/\n{3,}/g, '\n\n')
+  // Collapse multiple spaces (not inside quotes)
+  s = s.replace(/  +/g, ' ')
+  // Trim lines
+  s = s.split('\n').map(l => l.trim()).filter(l => l.length > 0).join('\n')
+
+  return { cleanedCode: s.trim(), extractedColors, extractedGradients }
+}
+
 async function handleImportHtml(req: VercelRequest, res: VercelResponse, user: { id: string; email?: string; isMCP?: boolean }) {
   const { code, source: providedSource, projectId, screenName: providedScreenName } = req.body ?? {}
 
@@ -807,11 +888,26 @@ async function handleImportHtml(req: VercelRequest, res: VercelResponse, user: {
   const tailwindNote = detected.hasTailwind ? ' (uses Tailwind CSS — convert all utility classes to React Native style objects)' : ''
   const sourceNote = source !== 'unknown' ? ` from ${source}` : ''
 
-  const userMessage = `Convert this ${typeLabel} code${tailwindNote}${sourceNote} into a Mokkoi React Native component tree JSON.
+  // Preprocess HTML to reduce token count (avoids Vercel 10s timeout)
+  const { cleanedCode, extractedColors: preColors, extractedGradients } = preprocessHtmlForConversion(trimmedCode)
 
+  // Build color context if we extracted custom colors/gradients
+  let colorContext = ''
+  const colorEntries = Object.entries(preColors)
+  if (colorEntries.length > 0) {
+    colorContext += '\n\nEXTRACTED COLOR TOKENS (use these exact colors):\n' +
+      colorEntries.map(([k, v]) => `${k}: ${v}`).join('\n')
+  }
+  if (extractedGradients.length > 0) {
+    colorContext += '\n\nEXTRACTED GRADIENTS (approximate with dominant color):\n' +
+      extractedGradients.slice(0, 5).join('\n')
+  }
+
+  const userMessage = `Convert this ${typeLabel} code${tailwindNote}${sourceNote} into a Mokkoi React Native component tree JSON.
+${colorContext}
 SOURCE CODE:
 \`\`\`
-${trimmedCode}
+${cleanedCode}
 \`\`\`
 
 Requirements:

@@ -25,6 +25,8 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
   const [source, setSource] = useState<Source>('Other')
   const [isConverting, setIsConverting] = useState(false)
   const [error, setError] = useState('')
+  const [showSlowWarning, setShowSlowWarning] = useState(false)
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Focus textarea on mount
@@ -47,6 +49,10 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
   const handleConvert = async () => {
     setError('')
     setIsConverting(true)
+    setShowSlowWarning(false)
+
+    // Show slow warning after 8 seconds
+    slowTimerRef.current = setTimeout(() => setShowSlowWarning(true), 8000)
 
     try {
       if (!supabase) throw new Error('Not authenticated. Please sign in.')
@@ -69,14 +75,29 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
         }),
       })
 
-      const data = await response.json()
+      // Read as text first to handle non-JSON errors (e.g. timeouts, 502s)
+      const text = await response.text()
 
       if (!response.ok) {
-        throw new Error(data.error || `Import failed (${response.status})`)
+        let errorMsg = `Server error: ${response.status}`
+        try {
+          const errData = JSON.parse(text)
+          errorMsg = errData.error || errorMsg
+        } catch {
+          if (text.length < 200) errorMsg = text || errorMsg
+        }
+        throw new Error(errorMsg)
+      }
+
+      let data: any
+      try {
+        data = JSON.parse(text)
+      } catch {
+        throw new Error('Invalid response from server. The conversion may have timed out. Try with shorter code.')
       }
 
       if (!data.success || !data.screen?.tree) {
-        throw new Error('Invalid response from server')
+        throw new Error(data.error || 'Conversion failed')
       }
 
       onImported(data.screen)
@@ -85,6 +106,8 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
       setError(message)
     } finally {
       setIsConverting(false)
+      setShowSlowWarning(false)
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current)
     }
   }
 
@@ -233,6 +256,20 @@ export function ImportHtmlModal({ onClose, onImported, projectId }: ImportHtmlMo
               {charCount > 0 && charCount < 50 && ' (min 50)'}
             </div>
           </div>
+
+          {/* Slow conversion warning */}
+          {showSlowWarning && isConverting && (
+            <div style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              background: 'rgba(251,191,36,0.1)',
+              border: '1px solid rgba(251,191,36,0.2)',
+              color: '#fbbf24',
+              fontSize: 12,
+            }}>
+              This is taking longer than usual. Large HTML files may need to be simplified.
+            </div>
+          )}
 
           {/* Error message */}
           {error && (
