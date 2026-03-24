@@ -61,6 +61,18 @@ const COMPLEX_REGEX_FALLBACK = [
   /multi.*screen|flow|onboarding.*flow/i,
 ]
 
+// Confidence threshold: override "simple" → "complex" if prompt is long with 3+ feature keywords.
+// Catches edge cases like "Real estate with map view, photo gallery and mortgage calculator".
+const FEATURE_KEYWORDS = /\b(map|gallery|calculator|chart|graph|stats|analytics|metrics|feed|stories|nested|carousel|timeline|portfolio|transaction|payment)\b/gi
+
+function shouldOverrideToComplex(prompt: string): boolean {
+  const wordCount = prompt.trim().split(/\s+/).length
+  if (wordCount <= 20) return false
+  const matches = prompt.match(FEATURE_KEYWORDS)
+  const uniqueMatches = new Set((matches || []).map(m => m.toLowerCase()))
+  return uniqueMatches.size >= 3
+}
+
 async function classifyComplexity(prompt: string, apiKey: string): Promise<boolean> {
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -82,11 +94,19 @@ async function classifyComplexity(prompt: string, apiKey: string): Promise<boole
     if (!resp.ok) throw new Error(`Classifier HTTP ${resp.status}`)
     const data = await resp.json() as { content?: Array<{ text?: string }> }
     const answer = (data.content?.[0]?.text ?? '').trim().toLowerCase()
+
+    // Confidence threshold: if classifier says "simple" but prompt has 3+ feature keywords in 20+ words, override to complex
+    if (answer !== 'complex' && shouldOverrideToComplex(prompt)) {
+      console.log(`[model-router] Haiku classifier: "${prompt.slice(0, 60)}..." → ${answer} → OVERRIDDEN to complex (confidence threshold)`)
+      return true
+    }
+
     console.log(`[model-router] Haiku classifier: "${prompt.slice(0, 60)}..." → ${answer}`)
     return answer === 'complex'
   } catch (err) {
     // Fallback to regex if classifier fails
     console.warn('[model-router] Classifier failed, falling back to regex:', err)
+    if (shouldOverrideToComplex(prompt)) return true
     return COMPLEX_REGEX_FALLBACK.some(pattern => pattern.test(prompt))
   }
 }
