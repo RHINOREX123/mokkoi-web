@@ -764,6 +764,17 @@ bg-black/#000000, bg-white/#FFFFFF
 - Complex SVG paths (approximate with View + backgroundColor + borderRadius)
 - iframes
 
+### CRITICAL — ELEMENTS YOU MUST NEVER SKIP
+These web patterns MUST be converted, not ignored:
+1. Bottom navigation bars (<nav> at page bottom, position: fixed/sticky at bottom) → View with flexDirection: "row", position: "absolute", bottom: 0, left: 0, right: 0, paddingBottom: 34 (home indicator). Each nav item → TouchableOpacity with Icon + Text label. NEVER omit bottom nav.
+2. Hero/promotional banners with gradients → View with backgroundColor set to the primary gradient color. ALL overlay text (discount %, headings, CTAs) MUST be included. If there is an image, include it as an Image component. NEVER skip promotional sections.
+3. Image cards with overlay badges (ratings, delivery time, price tags) → View containing Image + absolutely positioned View badges on top (position: "absolute", top/right/bottom/left).
+4. Floating action buttons or fixed buttons → TouchableOpacity with position: "absolute".
+5. Search inputs with icons → View wrapping Icon + TextInput with placeholder preserved.
+6. Tab bars, segmented controls → View with flexDirection: "row", children as TouchableOpacity buttons.
+
+Remember: position: fixed → position: "absolute" (do NOT skip fixed-position elements, convert them).
+
 ${DESIGN_TOKENS}
 ${COMPONENT_TYPES}
 ${VIEWPORT_BUDGET}
