@@ -488,20 +488,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Images always use Sonnet (vision capability required)
     model = 'claude-sonnet-4-20250514'
     maxTokens = 16000
-  } else if (userPlan === 'free') {
-    if (complex && (isNewScreen || isVariation || isRegenerate)) {
-      // Complex prompts get Sonnet even on free tier (costs 2x credits)
-      model = 'claude-sonnet-4-20250514'
-      maxTokens = 12000
-      freeTierSonnetUpgrade = true
-    } else {
-      model = 'claude-haiku-4-5-20251001'
-      maxTokens = (isNewScreen || isVariation || isRegenerate) ? 12000 : 8000
-    }
-  } else if (isNewScreen || isVariation || isRegenerate) {
+  } else if (complex && (isNewScreen || isVariation || isRegenerate)) {
+    // Complex prompts (dashboard, banking, analytics, multi-screen flow) get Sonnet on any plan
     model = 'claude-sonnet-4-20250514'
     maxTokens = 12000
+    if (userPlan === 'free') freeTierSonnetUpgrade = true
+  } else if (isNewScreen || isVariation || isRegenerate) {
+    // Simple new screens use Haiku on all plans — big cost saver
+    model = 'claude-haiku-4-5-20251001'
+    maxTokens = 12000
   } else {
+    // Edits always use Haiku
     model = 'claude-haiku-4-5-20251001'
     maxTokens = 8000
   }
@@ -820,6 +817,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify({ ...apiPayload, stream: true }),
       })
@@ -947,6 +945,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify(apiPayload),
     })
