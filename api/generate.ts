@@ -905,7 +905,10 @@ async function streamAnthropicImport(
       messages,
     }),
   })
-  if (!response.ok) return null
+  if (!response.ok) {
+    console.log(`[import-html] Anthropic API error: ${response.status} ${response.statusText}`)
+    return null
+  }
 
   const reader = response.body as any
   if (!reader || typeof reader[Symbol.asyncIterator] !== 'function') {
@@ -944,6 +947,7 @@ async function streamAnthropicImport(
     }
   }
 
+  console.log(`[import-html] streamAnthropicImport done: phase=${phase} fullText.length=${fullText.length} first200=${fullText.substring(0, 200)}`)
   if (!fullText) return null
   return { text: fullText, inputTokens, outputTokens }
 }
@@ -1030,6 +1034,7 @@ Requirements:
 - Return ONLY valid JSON`
 
   const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
+  console.log(`[import-html] accept=${req.headers['accept']} stream=${req.query?.stream} wantsStream=${wantsStream}`)
   const HAIKU = 'claude-haiku-4-5-20251001'
   const SONNET = 'claude-sonnet-4-20250514'
   const importMaxTokens = 8192
@@ -1070,10 +1075,17 @@ Requirements:
         totalOutputTokens += haikuResult.outputTokens
         try {
           tree = repairImportJSON(haikuResult.text)
-        } catch { tree = null }
+          console.log(`[import-html] Haiku repairImportJSON succeeded, tree type=${tree?.type}, children=${tree?.children?.length}`)
+        } catch (e) {
+          console.log(`[import-html] Haiku repairImportJSON FAILED:`, e instanceof Error ? e.message : e)
+          tree = null
+        }
+      } else {
+        console.log(`[import-html] Haiku returned null result`)
       }
 
       // Check if Haiku output is good enough
+      console.log(`[import-html] isImportTreeGoodEnough=${tree ? isImportTreeGoodEnough(tree) : 'null tree'}`)
       if (tree && isImportTreeGoodEnough(tree)) {
         console.log(`[import-html] Haiku succeeded (${haikuResult!.inputTokens} in, ${haikuResult!.outputTokens} out, ~$${((haikuResult!.inputTokens * 0.8 + haikuResult!.outputTokens * 4) / 1000000).toFixed(4)})`)
       } else {
@@ -1086,12 +1098,22 @@ Requirements:
         if (sonnetResult) {
           totalInputTokens += sonnetResult.inputTokens
           totalOutputTokens += sonnetResult.outputTokens
-          try { tree = repairImportJSON(sonnetResult.text) } catch { tree = null }
+          try {
+            tree = repairImportJSON(sonnetResult.text)
+            console.log(`[import-html] Sonnet repairImportJSON succeeded, tree type=${tree?.type}, children=${tree?.children?.length}`)
+          } catch (e) {
+            console.log(`[import-html] Sonnet repairImportJSON FAILED:`, e instanceof Error ? e.message : e)
+            tree = null
+          }
           console.log(`[import-html] Sonnet fallback (${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)})`)
+        } else {
+          console.log(`[import-html] Sonnet returned null result`)
         }
       }
 
+      console.log(`[import-html] Final tree check: tree=${!!tree}, goodEnough=${tree ? isImportTreeGoodEnough(tree) : false}`)
       if (!tree || !isImportTreeGoodEnough(tree)) {
+        console.log(`[import-html] SENDING ERROR EVENT: tree not good enough`)
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Could not convert the HTML. Try simplifying the code.' })}\n\n`)
         res.write('data: [DONE]\n\n')
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: false })
@@ -1104,8 +1126,11 @@ Requirements:
       if (!user.isMCP) await deductCredits(user.id, 'new_screen')
       logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: totalInputTokens, tokensOut: totalOutputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
 
-      res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
+      const completeEvent = JSON.stringify({ type: 'complete', ...result })
+      console.log(`[import-html] SENDING COMPLETE EVENT: length=${completeEvent.length} hasScreen=${!!result.screen} hasTree=${!!result.screen?.tree}`)
+      res.write(`data: ${completeEvent}\n\n`)
       res.write('data: [DONE]\n\n')
+      console.log(`[import-html] Stream complete, calling res.end()`)
       return res.end()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
