@@ -19,8 +19,15 @@ interface UseScreenExportOpts {
   onToast: (msg: string) => void
 }
 
+/** PascalCase name for TSX component filenames (e.g. "Create a fitness app" → "CreateAFitnessApp") */
 function safeName(name: string): string {
-  return (name || 'Screen').replace(/[^a-zA-Z0-9]/g, '')
+  return (name || 'Screen')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('')
+    .slice(0, 40)
 }
 
 /** Clean filename: remove special chars, replace spaces with underscores, prefix with Mokkoi_ */

@@ -56,10 +56,21 @@ export async function captureScreenAtFullRes(
   clone.style.boxShadow = 'none'
   document.body.appendChild(clone)
 
-  // Expand all overflow-hidden containers so full scrollable content is captured.
-  // The PhoneFrame clips content in canvas mode via overflow:hidden on .phone-screen.
+  // Remove canvas scaling and expand clipped containers for full-res capture.
+  // PhoneFrame canvas mode wraps the phone chassis in:
+  //   <div style="width:261px; height:...; overflow:hidden">
+  //     <div style="transform:scale(0.6); transformOrigin:top left">
+  //       <div class="relative" style="width:430; height:932"> ← actual phone
+  // We need to: remove the scale transform, expand overflow, and let the
+  // outer container size to the native phone dimensions.
   const allEls = clone.querySelectorAll('*') as NodeListOf<HTMLElement>
   for (const child of allEls) {
+    // Remove any CSS scale transforms (the canvas downscale)
+    const transform = child.style.transform || window.getComputedStyle(child).transform
+    if (transform && transform !== 'none' && /scale/.test(transform)) {
+      child.style.transform = 'none'
+    }
+    // Expand overflow-hidden containers
     const ov = window.getComputedStyle(child).overflow
     if (ov === 'hidden' || ov === 'clip') {
       child.style.overflow = 'visible'
@@ -69,6 +80,9 @@ export async function captureScreenAtFullRes(
       child.style.overflowY = 'visible'
     }
   }
+  // Remove fixed canvas dimensions on the outer wrapper so it expands to content
+  clone.style.width = 'auto'
+  clone.style.height = 'auto'
 
   sanitizeColors(clone)
 
