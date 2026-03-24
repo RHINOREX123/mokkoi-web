@@ -469,8 +469,14 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
   }
 
   const style = rnStyleToCSS(node.style)
-  const hasElementSiblings = node.children?.some(c => typeof c !== 'string') ?? false
-  const children = node.children?.map((child, i) => {
+  // Filter out prop-like junk strings the AI sometimes puts as children
+  // (e.g. "_HORIZONTAL", "true", "false", prop names starting with _)
+  const JUNK_CHILD_RE = /^[_A-Z]{2,}$|^(true|false|null|undefined|horizontal|vertical)$/i
+  const filteredChildren = node.children?.filter(c =>
+    typeof c !== 'string' || (c.trim().length > 0 && !JUNK_CHILD_RE.test(c.trim()))
+  )
+  const hasElementSiblings = filteredChildren?.some(c => typeof c !== 'string') ?? false
+  const children = filteredChildren?.map((child, i) => {
     if (typeof child === 'string' && hasElementSiblings) {
       return <span key={`t${i}`}>{child}</span>
     }
@@ -490,9 +496,18 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const containerStyle = rnStyleToCSS(
         node.props?.contentContainerStyle as Record<string, unknown> | undefined
       )
+      const isHorizontal = !!node.props?.horizontal
       return (
-        <div key={key} style={{ ...VIEW_BASE, ...style, overflow: 'auto', flex: style.flex ?? 1 }}>
-          <div style={{ ...VIEW_BASE, ...containerStyle }}>
+        <div key={key} style={{
+          ...VIEW_BASE, ...style,
+          overflow: 'auto',
+          flex: style.flex ?? 1,
+          ...(isHorizontal ? { overflowX: 'auto', overflowY: 'hidden' } : {}),
+        }}>
+          <div style={{
+            ...VIEW_BASE, ...containerStyle,
+            ...(isHorizontal ? { flexDirection: 'row', flexWrap: 'nowrap' } : {}),
+          }}>
             {children}
           </div>
         </div>
@@ -526,6 +541,9 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
               border: 'none',
               outline: 'none',
               fontFamily: 'inherit',
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              background: 'transparent',
               ...style,
               borderStyle: style.borderWidth ? 'solid' : undefined,
             }}
