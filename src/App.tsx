@@ -18,7 +18,7 @@ import { ImportHtmlModal } from './components/ImportHtmlModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { TopNavbar } from './components/TopNavbar'
 import { NoCreditsModal } from './components/PricingPage'
-import html2canvas from 'html2canvas'
+import { useScreenExport } from './hooks/useScreenExport'
 
 import { supabase } from './lib/supabase'
 import { resetAnalytics } from './lib/analytics'
@@ -58,6 +58,10 @@ function App() {
   const [showCodeExport, setShowCodeExport] = useState(false)
   const [referenceImages, setReferenceImages] = useState<CanvasRefImage[]>([])
   const [toastMessage, setToastMessage] = useState('')
+  const screenExport = useScreenExport({
+    phoneFrameRefs,
+    onToast: setToastMessage,
+  })
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [focusTrigger, setFocusTrigger] = useState(0)
@@ -268,44 +272,17 @@ function App() {
     setShowQrModal(true)
   }, [projectId, screens.activeGeneratedId])
 
-  const handleDownloadImage = useCallback(async () => {
-    if (!screens.activeGeneratedId) return
-    const el = document.querySelector(`[data-screen-id="${screens.activeGeneratedId}"]`) as HTMLElement | null ?? phoneFrameRefs.current.get(screens.activeGeneratedId) ?? null
-    if (!el) { setToastMessage('Could not find screen to capture'); return }
-    setToastMessage('Capturing screenshot...')
-    const clone = el.cloneNode(true) as HTMLElement
-    clone.style.transform = 'none'; clone.style.position = 'fixed'; clone.style.top = '0'; clone.style.left = '0'
-    clone.style.zIndex = '-9999'; clone.style.opacity = '1'; clone.style.pointerEvents = 'none'; clone.style.boxShadow = 'none'
-    document.body.appendChild(clone)
-    // Sanitize modern CSS colors
-    const allEls = [clone, ...Array.from(clone.querySelectorAll('*'))] as HTMLElement[]
-    for (const htmlEl of allEls) {
-      const computed = window.getComputedStyle(htmlEl)
-      for (const prop of ['color', 'backgroundColor', 'borderColor', 'outlineColor'] as const) {
-        const val = computed[prop]
-        if (val && (val.includes('oklab') || val.includes('oklch') || val.includes('color-mix'))) {
-          const c = document.createElement('canvas'); c.width = 1; c.height = 1
-          const ctx = c.getContext('2d')
-          if (ctx) { ctx.fillStyle = val; htmlEl.style[prop] = ctx.fillStyle }
-        }
-      }
-      if (htmlEl.style.cssText && /oklab|oklch|color-mix/.test(htmlEl.style.cssText)) {
-        htmlEl.style.cssText = htmlEl.style.cssText.replace(/oklab\([^)]*\)/g, '#000').replace(/oklch\([^)]*\)/g, '#000').replace(/color-mix\([^)]*\)/g, '#000')
-      }
-      htmlEl.style.color = computed.color; htmlEl.style.backgroundColor = computed.backgroundColor; htmlEl.style.borderColor = computed.borderColor
+  const getExportTarget = useCallback(() => {
+    const screen = screens.activeGenerated
+    if (!screen?.tree) return null
+    return {
+      screenId: screen.id,
+      screenName: screen.name,
+      tree: screen.tree,
+      deviceId: screen.deviceId || screens.projectDeviceId,
+      originalPrompt: screen.originalPrompt,
     }
-    try {
-      const canvasEl = await html2canvas(clone, { backgroundColor: '#0A0A0A', scale: 2, useCORS: true, allowTaint: true, logging: false, width: clone.offsetWidth, height: clone.offsetHeight, windowWidth: clone.offsetWidth, windowHeight: clone.offsetHeight })
-      canvasEl.toBlob(blob => {
-        if (!blob) { setToastMessage('Failed to generate image'); return }
-        const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${screens.activeGenerated?.name || 'screen'}.png`
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); setToastMessage('Screenshot saved!')
-      }, 'image/png')
-    } catch (err) {
-      console.error('html2canvas failed:', err)
-      setToastMessage(`Screenshot failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    } finally { document.body.removeChild(clone) }
-  }, [screens.activeGeneratedId, screens.activeGenerated])
+  }, [screens.activeGenerated, screens.projectDeviceId])
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
@@ -545,7 +522,9 @@ function App() {
               onMakeDarker={handleMakeDarker} onMakeLighter={handleMakeLighter}
               onPreviewNewTab={handlePreviewNewTab} onShowQrCode={handleShowQrCode}
               onExportCode={() => { if (screens.generatedTree) setShowCodeExport(true) }}
-              onDownloadImage={handleDownloadImage}
+              onDownloadPNG={() => { const t = getExportTarget(); if (t) screenExport.downloadPNG(t) }}
+              onDownloadTSX={() => { const t = getExportTarget(); if (t) screenExport.downloadTSX(t) }}
+              onDownloadZIP={() => { const t = getExportTarget(); if (t) screenExport.downloadZIP(t) }}
               onDuplicate={() => { screens.handleDuplicateScreen(); setToastMessage('Screen duplicated!') }}
               onRename={screens.handleRenameScreen}
               onDelete={() => setShowDeleteScreenConfirm(true)}
