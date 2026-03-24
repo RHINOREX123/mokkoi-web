@@ -1011,17 +1011,23 @@ function isImportTreeGoodEnough(tree: any): boolean {
   if (!tree || typeof tree !== 'object' || !tree.type) return false
   let nodeCount = 0
   let textNodes = 0
+  let hasStringContent = false
   function walk(node: any) {
     if (!node || typeof node !== 'object') return
     nodeCount++
     if (node.type === 'Text') textNodes++
+    // Check for text in children array (strings) or props.children (string)
     if (Array.isArray(node.children)) {
-      for (const child of node.children) { if (typeof child === 'object') walk(child) }
+      for (const child of node.children) {
+        if (typeof child === 'string') hasStringContent = true
+        else if (typeof child === 'object') walk(child)
+      }
     }
+    if (typeof node.props?.children === 'string') hasStringContent = true
   }
   walk(tree)
-  // Minimum: 3 nodes and at least 1 text node
-  return nodeCount >= 3 && textNodes >= 1
+  // Accept if tree has reasonable structure: >= 2 nodes with any text content
+  return nodeCount >= 2 && (textNodes >= 1 || hasStringContent)
 }
 
 async function handleImportHtml(req: VercelRequest, res: VercelResponse, user: { id: string; email?: string; isMCP?: boolean }) {
@@ -1127,6 +1133,7 @@ Requirements:
       }
 
       if (!tree || !isImportTreeGoodEnough(tree)) {
+        console.log(`[import-html] Tree rejected: type=${tree?.type} children=${tree?.children?.length} firstChild=${JSON.stringify(tree?.children?.[0])?.substring(0, 200)}`)
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Could not convert the HTML. Try simplifying the code.' })}\n\n`)
         res.write('data: [DONE]\n\n')
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: false })
