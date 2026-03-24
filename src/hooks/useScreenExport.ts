@@ -3,6 +3,11 @@ import JSZip from 'jszip'
 import { captureScreenAtFullRes } from '../utils/screenCapture'
 import { convertTreeToTSX } from '../utils/exportTsx'
 import { getDevicePreset } from '../constants/devices'
+import {
+  generateAppTsx, generateAppJson, generatePackageJson,
+  generateTsConfig, generateBabelConfig, generateGitignore,
+  generateReadme as generateExpoReadme,
+} from '../utils/expoScaffold'
 import { trackEvent } from '../lib/analytics'
 import type { ComponentNode } from '../types/mokkoi'
 
@@ -147,5 +152,37 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     }
   }, [phoneFrameRefs, onToast])
 
-  return { downloadPNG, downloadTSX, downloadZIP }
+  const downloadExpoProject = useCallback(async (target: ExportTarget, projectName: string) => {
+    onToast('Building Expo project...')
+    try {
+      const zip = new JSZip()
+      const name = safeName(target.screenName)
+      const device = getDevicePreset(target.deviceId)
+      const opts = {
+        screenName: name,
+        projectName,
+        prompt: target.originalPrompt,
+        deviceWidth: device.width,
+        deviceHeight: device.height,
+      }
+
+      zip.file('App.tsx', generateAppTsx(opts))
+      zip.file(`${name}.tsx`, convertTreeToTSX(target.tree, target.screenName))
+      zip.file('app.json', generateAppJson(opts))
+      zip.file('package.json', generatePackageJson(opts))
+      zip.file('tsconfig.json', generateTsConfig())
+      zip.file('babel.config.js', generateBabelConfig())
+      zip.file('.gitignore', generateGitignore())
+      zip.file('README.md', generateExpoReadme(opts))
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      triggerDownload(zipBlob, `${brandedName(target.screenName)}_Expo.zip`)
+      onToast('Expo project downloaded!')
+      trackEvent('screen_downloaded', { format: 'expo' })
+    } catch (err) {
+      onToast(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }, [onToast])
+
+  return { downloadPNG, downloadTSX, downloadZIP, downloadExpoProject }
 }

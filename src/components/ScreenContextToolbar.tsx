@@ -26,6 +26,7 @@ interface ScreenContextToolbarProps {
   onDownloadPNG: () => void
   onDownloadTSX: () => void
   onDownloadZIP: () => void
+  onDownloadExpo: () => void
   onDuplicate: () => void
   onRename: () => void
   onDelete: () => void
@@ -71,7 +72,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
     visible, onRegenerate, onOpenVariations, onEditViaChat,
     onChangeColorScheme, onMakeDarker, onMakeLighter,
     onPreviewNewTab, onShowQrCode,
-    onExportCode, onDownloadPNG, onDownloadTSX, onDownloadZIP, onDuplicate, onRename, onDelete,
+    onExportCode, onDownloadPNG, onDownloadTSX, onDownloadZIP, onDownloadExpo, onDuplicate, onRename, onDelete,
     onToast, onDirectEdit, deviceId, onDeviceChange,
   } = props
 
@@ -328,6 +329,11 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
                   {menuItem(<Package size={16} color="#818CF8" />, 'Full Package (ZIP)', onDownloadZIP)}
                   <div style={{ padding: '2px 12px 6px', fontSize: 10, color: '#555', lineHeight: 1.4 }}>
                     PNG + TSX + README
+                  </div>
+                  {divider}
+                  {menuItem(<Smartphone size={16} color="#34D399" />, 'Expo Project (ZIP)', onDownloadExpo)}
+                  <div style={{ padding: '2px 12px 6px', fontSize: 10, color: '#555', lineHeight: 1.4 }}>
+                    Ready-to-run Expo app
                   </div>
                 </div>
               )}

@@ -525,6 +525,7 @@ function App() {
               onDownloadPNG={() => { const t = getExportTarget(); if (t) screenExport.downloadPNG(t) }}
               onDownloadTSX={() => { const t = getExportTarget(); if (t) screenExport.downloadTSX(t) }}
               onDownloadZIP={() => { const t = getExportTarget(); if (t) screenExport.downloadZIP(t) }}
+              onDownloadExpo={() => { const t = getExportTarget(); if (t) screenExport.downloadExpoProject(t, screens.projectName) }}
               onDuplicate={() => { screens.handleDuplicateScreen(); setToastMessage('Screen duplicated!') }}
               onRename={screens.handleRenameScreen}
               onDelete={() => setShowDeleteScreenConfirm(true)}
