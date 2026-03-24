@@ -467,7 +467,95 @@ function buildMessages(
   return [...messages, { role: 'user', content: currentContent }]
 }
 
+// --- Image generation proxy (merged to save serverless function slots) ---
+// Accessed via GET /api/generate?action=image&query=...&width=400&height=300
+const imgCache = new Map<string, { url: string; source: string; ts: number }>()
+const IMG_CACHE_TTL = 1000 * 60 * 30 // 30 minutes
+
+async function handleImageProxy(req: VercelRequest, res: VercelResponse) {
+  const query = ((req.query.query as string) || '').trim()
+  const width = parseInt(req.query.width as string) || 400
+  const height = parseInt(req.query.height as string) || 300
+
+  if (!query) return res.status(400).json({ error: 'No query provided' })
+
+  res.setHeader('Access-Control-Allow-Origin', '*')
+
+  // Check cache
+  const cacheKey = `${query}:${width}x${height}`
+  const cached = imgCache.get(cacheKey)
+  if (cached && Date.now() - cached.ts < IMG_CACHE_TTL) {
+    return res.json({ url: cached.url, source: cached.source, cached: true })
+  }
+
+  // Source 1: fal.ai FLUX schnell
+  const falKey = process.env.FAL_API_KEY
+  if (falKey) {
+    try {
+      const submitRes = await fetch('https://queue.fal.run/fal-ai/flux/schnell', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${falKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: query + ', high quality, professional photography, 4k',
+          image_size: { width, height },
+          num_images: 1, num_inference_steps: 4, enable_safety_checker: true,
+        }),
+      })
+      if (submitRes.ok) {
+        const data = await submitRes.json()
+        const imageUrl = data?.images?.[0]?.url
+        if (imageUrl) {
+          imgCache.set(cacheKey, { url: imageUrl, source: 'flux', ts: Date.now() })
+          return res.json({ url: imageUrl, source: 'flux' })
+        }
+      }
+    } catch (e) { console.error('[image] FLUX error:', (e as Error).message) }
+  }
+
+  // Source 2: Pexels API
+  const pexelsKey = process.env.PEXELS_API_KEY
+  if (pexelsKey) {
+    try {
+      const pexelsQuery = query.split(/\s+/).slice(0, 5).join(' ')
+      const pexelsRes = await fetch(
+        `https://api.pexels.com/v1/search?query=${encodeURIComponent(pexelsQuery)}&per_page=3&size=small`,
+        { headers: { 'Authorization': pexelsKey } }
+      )
+      if (pexelsRes.ok) {
+        const data = await pexelsRes.json()
+        if (data.photos?.length > 0) {
+          const photo = data.photos[Math.floor(Math.random() * data.photos.length)]
+          const imageUrl = width > 400
+            ? (photo.src?.landscape || photo.src?.medium || photo.src?.original)
+            : (photo.src?.medium || photo.src?.landscape || photo.src?.original)
+          if (imageUrl) {
+            imgCache.set(cacheKey, { url: imageUrl, source: 'pexels', ts: Date.now() })
+            return res.json({ url: imageUrl, source: 'pexels' })
+          }
+        }
+      }
+    } catch (e) { console.error('[image] Pexels error:', (e as Error).message) }
+  }
+
+  // Source 3: LoremFlickr fallback
+  const keywords = query.split(/\s+/).slice(0, 3).join(',')
+  const hash = Math.abs(query.split('').reduce((a, c) => a + c.charCodeAt(0), 0))
+  const fallbackUrl = `https://loremflickr.com/${width}/${height}/${encodeURIComponent(keywords)}?lock=${hash}`
+  imgCache.set(cacheKey, { url: fallbackUrl, source: 'loremflickr', ts: Date.now() })
+  return res.json({ url: fallbackUrl, source: 'loremflickr' })
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // GET requests with action=image → image proxy (no auth needed)
+  if (req.method === 'GET' && req.query.action === 'image') {
+    return handleImageProxy(req, res)
+  }
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    return res.status(200).end()
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }

@@ -20,7 +20,7 @@ function ProxyImage({ searchQuery, width, height, alt, style }: {
     }
     try {
       const res = await fetch(
-        `/api/generate-image?query=${encodeURIComponent(searchQuery)}&width=${width}&height=${height}`
+        `/api/generate?action=image&query=${encodeURIComponent(searchQuery)}&width=${width}&height=${height}`
       )
       if (res.ok) {
         const data = await res.json()
