@@ -44,12 +44,13 @@ function classifyScreenType(prompt: string): ScreenType {
 }
 
 // --- Complexity detection for model routing ---
+// Strict complexity detection — only genuinely complex screens get Sonnet.
+// Screenshot-to-screen is handled separately via hasImage flag.
 const COMPLEX_PROMPT_INDICATORS = [
-  /dashboard/i, /home\s*screen/i, /home.screen/i, /banking|finance|fintech/i,
-  /profile.*(?:stats|followers|posts)/i, /\$[\d,]+/, /\d+[KkMm]\s*(?:followers|steps|calories)/i,
-  /transaction|payment|history/i, /multiple.*(?:cards|sections|tabs)/i,
-  /(?:checking|savings|account).*balance/i, /fitness/i, /social.*media/i,
-  /e-?commerce/i, /chat.*app/i, /food.*delivery/i,
+  /dashboard/i,
+  /banking|finance|fintech/i,
+  /analytics|metrics.*chart/i,
+  /multi.*screen|flow|onboarding.*flow/i,
 ]
 
 function isComplexPrompt(prompt: string): boolean {
@@ -187,8 +188,9 @@ function parseDesignMdTokens(designMd: string | null): NormalizerOptions | undef
 }
 
 // --- Build system prompt ---
-function buildSystemPrompt(designMd: string | null, isEditMode: boolean = false, learnedPatterns: string = '', brandColor?: string, screenType: ScreenType = 'unknown', hasImage: boolean = false, deviceInfo?: { name: string; width: number; height: number; category: string }, themeResult?: ThemeResult): string {
-  let prompt = `You are a world-class mobile UI designer and React Native expert. You create screens that look like they were designed by senior designers at Airbnb, Spotify, Stripe, or Nike. Your output is production-quality — not a prototype, not a wireframe, but a polished, beautiful screen ready to ship.
+// Static system prompts — identical string every time for prompt cache hits.
+// All dynamic content (theme, device, brand color, design.md, learned patterns) goes in user message.
+const SYSTEM_PROMPT_NEW = `You are a world-class mobile UI designer and React Native expert. You create screens that look like they were designed by senior designers at Airbnb, Spotify, Stripe, or Nike. Your output is production-quality — not a prototype, not a wireframe, but a polished, beautiful screen ready to ship.
 
 Your designs follow these principles:
 - Hierarchy through size and weight, not just color
@@ -198,36 +200,30 @@ Your designs follow these principles:
 - Content is realistic and contextual — never generic placeholder text
 
 Generate a React Native component tree as JSON.
-${!isEditMode ? `
+
 DESIGN PROCESS — MANDATORY TWO PHASES:
 
 PHASE 1: Before generating ANY JSON, write a design brief inside <design_brief> tags:
 <design_brief>
-App Name: [Creative brand name inspired by the prompt, e.g. "VITALITY" for fitness, "NEXUS" for crypto, "VAULT" for banking]
-Design Mood: [2-3 word mood, e.g. "kinetic energy", "premium minimal", "warm comfort", "playful discovery"]
-Layout Strategy: [Specific layout choices, e.g. "Hero stat with SVG progress ring, horizontal 3-stat row, activity list with 3 items, bottom tab bar"]
-Typography: [e.g. "Bold 28px hero numbers with letterSpacing -0.5, uppercase 11px section labels with letterSpacing 1, regular 14px body text"]
-Visual Accents: [e.g. "Circular SVG progress ring at 75%, LinearGradient CTA button, Unsplash hero image, DiceBear avatar"]
-Icon Style: [e.g. "material-symbols filled for active nav, outlined for inactive, 20px for inline"]
-Image Strategy: [e.g. "searchQuery 'gym workout' for hero, avatar 'Sarah' for profile pic, searchQuery 'running trail' for activity card"]
+App Name: [Creative brand name inspired by the prompt]
+Design Mood: [2-3 word mood]
+Layout Strategy: [Specific layout choices]
+Typography: [Font size and weight choices]
+Visual Accents: [SVG rings, gradients, images, avatars]
+Icon Style: [material-symbols style and sizes]
+Image Strategy: [searchQuery and avatar usage]
 </design_brief>
 
-PHASE 2: Generate the JSON component tree following your design brief EXACTLY. The app name, layout strategy, typography, visual accents, and image strategy in your brief MUST appear in your JSON output.
+PHASE 2: Generate the JSON component tree following your design brief EXACTLY.
 
-For user avatars and profile pictures, use Image with avatar prop: {"type":"Image","style":{"width":40,"height":40,"borderRadius":9999},"props":{"avatar":"Sarah"}}
+For user avatars, use Image with avatar prop: {"type":"Image","style":{"width":40,"height":40,"borderRadius":9999},"props":{"avatar":"Sarah"}}
 
-After the design brief, return a single JSON object. No markdown fences, no explanation — just the brief then the JSON.
-` : 'Return ONLY valid JSON, no markdown, no explanation.'}
-${deviceInfo ? `
-TARGET DEVICE: You are designing for a ${deviceInfo.name} screen at ${deviceInfo.width}x${deviceInfo.height} pixels. Design content to fit within this viewport. ${deviceInfo.category === 'Android' ? 'This is an Android device — use Material Design conventions where appropriate.' : 'This is an iOS device — use iOS/HIG conventions where appropriate.'}
-` : ''}
+After the design brief, return a single JSON object. No markdown fences, no explanation.
+
 ICONS: Use Icon component with Google Material Symbols names only (lowercase, underscores). NEVER use emoji for icons.
 Common: home, search, menu, arrow_back, chevron_right, close, favorite, star, bookmark, share, send, person, notifications, play_arrow, pause, skip_next, shopping_cart, credit_card, trending_up, monitoring, bolt, location_on, fitness_center, settings, lock, calendar_today
 
 ${DESIGN_TOKENS}
-${themeResult && !isEditMode ? `
-${formatPaletteForPrompt(themeResult)}
-` : ''}
 ${COMPONENT_TYPES}
 ${CONTENT_LIBRARY}
 ${VIEWPORT_BUDGET}
@@ -242,32 +238,78 @@ SCREEN TYPES:
 - AUTH: logo + form inputs + CTA + social login + footer link
 - ONBOARDING: centered illustration + headline + dots + CTA
 
-SCREENSHOT FIDELITY: When recreating from screenshot, preserve ALL data displays, stat cards, navigation, and complexity. Never simplify or replace functional UI with decorative text.
+SCREENSHOT FIDELITY: When recreating from screenshot, preserve ALL data displays, stat cards, navigation, and complexity.
 
-IMAGE RULES: Every Image MUST have searchQuery (5-10 descriptive words like a photo prompt) or avatar prop. Never leave empty.
+IMAGE RULES: Every Image MUST have searchQuery (5-10 descriptive words) or avatar prop.
 
-DESIGN BRIEF: The App Name from <design_brief> MUST appear in the screen. Layout and mood must match the brief.
+DESIGN BRIEF: The App Name from <design_brief> MUST appear in the screen.
 
 VAGUE PROMPTS: If just an app name, generate a HOME DASHBOARD with header, stat cards, content, and bottom nav.
 
-${themeResult && !isEditMode ? 'IMPORTANT: Replace ALL colors with the DESIGN PALETTE colors above.\n' : ''}
-${screenType !== 'unknown' ? getRelevantExamples(screenType) : getDefaultExamples()}
+${getDefaultExamples()}
 
 ${QUALITY_CHECKLIST}
 
-${isEditMode ? EDIT_MODE_INSTRUCTIONS : ''}${learnedPatterns}
+Return ONLY valid JSON, no markdown, no explanation.`
+
+const SYSTEM_PROMPT_EDIT = `You are a world-class mobile UI designer and React Native expert. You create screens that look like they were designed by senior designers at Airbnb, Spotify, Stripe, or Nike. Your output is production-quality.
+
+Generate a React Native component tree as JSON.
+Return ONLY valid JSON, no markdown, no explanation.
+
+ICONS: Use Icon component with Google Material Symbols names only (lowercase, underscores). NEVER use emoji for icons.
+Common: home, search, menu, arrow_back, chevron_right, close, favorite, star, bookmark, share, send, person, notifications, play_arrow, pause, skip_next, shopping_cart, credit_card, trending_up, monitoring, bolt, location_on, fitness_center, settings, lock, calendar_today
+
+${DESIGN_TOKENS}
+${COMPONENT_TYPES}
+${CONTENT_LIBRARY}
+${VIEWPORT_BUDGET}
+${CONTENT_DENSITY}
+${PLATFORM_RULES}
+
+${QUALITY_CHECKLIST}
+
+${EDIT_MODE_INSTRUCTIONS}
 
 Return ONLY valid JSON, no markdown, no explanation.`
 
-  if (designMd) {
-    prompt += `\n\nThe user has provided a DESIGN.md with custom design tokens. Override the default tokens with these values where specified:\n${designMd}`
+/** Build dynamic context to prepend to the user message.
+ *  Keeps system prompt static for prompt caching. */
+function buildDynamicContext(opts: {
+  themeResult?: ThemeResult;
+  deviceInfo?: { name: string; width: number; height: number; category: string };
+  brandColor?: string;
+  designMd?: string | null;
+  learnedPatterns?: string;
+}): string {
+  const parts: string[] = []
+
+  if (opts.themeResult) {
+    parts.push(formatPaletteForPrompt(opts.themeResult))
+    parts.push('IMPORTANT: Replace ALL colors in your output with the DESIGN PALETTE colors above.')
   }
 
-  if (brandColor && /^#[0-9a-fA-F]{3,8}$/.test(brandColor)) {
-    prompt += `\n\nBRAND COLOR OVERRIDE: The user's brand/accent color is ${brandColor}. Use this instead of the default primary color (#6C5CE7) for all primary buttons, accents, active states, and highlights. Generate complementary light and surface variants by adjusting opacity.`
+  if (opts.deviceInfo) {
+    const d = opts.deviceInfo
+    const platform = d.category === 'Android'
+      ? 'This is an Android device — use Material Design conventions where appropriate.'
+      : 'This is an iOS device — use iOS/HIG conventions where appropriate.'
+    parts.push(`TARGET DEVICE: Designing for ${d.name} at ${d.width}x${d.height}px. ${platform}`)
   }
 
-  return prompt
+  if (opts.brandColor && /^#[0-9a-fA-F]{3,8}$/.test(opts.brandColor)) {
+    parts.push(`BRAND COLOR OVERRIDE: Use ${opts.brandColor} instead of #6C5CE7 for all primary buttons, accents, active states, and highlights.`)
+  }
+
+  if (opts.designMd) {
+    parts.push(`DESIGN.MD TOKENS — Override defaults with these:\n${opts.designMd}`)
+  }
+
+  if (opts.learnedPatterns) {
+    parts.push(opts.learnedPatterns)
+  }
+
+  return parts.length > 0 ? parts.join('\n\n') + '\n\n' : ''
 }
 
 /** Build a Claude-compatible messages array from conversation history + current prompt.
@@ -496,16 +538,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const deviceInfo = deviceId ? DEVICE_MAP[deviceId as string] : undefined
   // Resolve dynamic color theme — only for new screens, not edits
   const themeResult = !isEditMode ? resolveTheme(cleanPrompt) : undefined
-  const systemPromptText = buildSystemPrompt(designMd, isEditMode, learnedPatterns, brandColor, screenType, hasImage, deviceInfo, themeResult)
+  // Use static system prompt for cache hits; dynamic context goes in user message
+  const systemPromptText = isEditMode ? SYSTEM_PROMPT_EDIT : SYSTEM_PROMPT_NEW
+  const dynamicContext = buildDynamicContext({ themeResult, deviceInfo, brandColor, designMd, learnedPatterns })
   const normalizerOpts = parseDesignMdTokens(designMd)
 
   // Build user message — include current screen if editing, or image if attached
+  // Dynamic context (theme palette, device info, brand color, design.md, learned patterns)
+  // is prepended to user message to keep system prompt static for cache hits.
   let userContent: string | Array<{ type: string; [key: string]: unknown }>
   if (imageData && typeof imageData === 'string') {
     // Screenshot-to-screen: send image with text prompt
     const textPrompt = currentScreen
-      ? `Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${cleanPrompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
-      : `SCREENSHOT RECREATION — STRUCTURAL ANALYSIS REQUIRED
+      ? `${dynamicContext}Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${cleanPrompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
+      : `${dynamicContext}SCREENSHOT RECREATION — STRUCTURAL ANALYSIS REQUIRED
 
 Before generating JSON, you MUST perform this structural analysis of the screenshot:
 
@@ -558,7 +604,7 @@ Now generate the complete React Native component tree JSON that faithfully recre
     ]
   } else if (isRegenerate && currentScreen) {
     // Regenerate mode: send existing tree as reference so Claude preserves screen type
-    userContent = `REGENERATE MODE: You are regenerating an existing screen. The user wants a fresh design approach for the SAME type of screen. Keep the same purpose, features, and information architecture but create a new visual design. Do NOT change the screen type (e.g., if it's a fitness screen, keep it as fitness; if it's a dashboard, keep it as a dashboard).
+    userContent = `${dynamicContext}REGENERATE MODE: You are regenerating an existing screen. The user wants a fresh design approach for the SAME type of screen. Keep the same purpose, features, and information architecture but create a new visual design. Do NOT change the screen type (e.g., if it's a fitness screen, keep it as fitness; if it's a dashboard, keep it as a dashboard).
 
 Here is the current screen's component tree JSON for reference:
 ${JSON.stringify(currentScreen, null, 2)}
@@ -568,7 +614,7 @@ ${cleanPrompt}
 
 Generate a completely fresh design for this same type of screen. Use different layout patterns, card styles, and visual hierarchy — but preserve the same screen purpose and content type. Return ONLY valid JSON.`
   } else if (currentScreen) {
-    userContent = `EDIT MODE — You MUST preserve the existing screen's layout, content, and structure. Only change what the user explicitly asks to change.
+    userContent = `${dynamicContext}EDIT MODE — You MUST preserve the existing screen's layout, content, and structure. Only change what the user explicitly asks to change.
 
 Here is the current screen's component tree JSON:
 ${JSON.stringify(currentScreen, null, 2)}
@@ -577,7 +623,7 @@ The user's edit request: ${cleanPrompt}
 
 IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree above. Keep all text content, element positions, component structure, and styling that the user did NOT ask to change. If the user asks for a color/theme change, update ONLY colors — keep everything else identical. Return the complete modified JSON.`
   } else {
-    userContent = cleanPrompt
+    userContent = `${dynamicContext}${cleanPrompt}`
   }
 
   // --- Structural validation: checks generated tree for screenshot fidelity issues ---
