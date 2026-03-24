@@ -262,13 +262,14 @@ COMPACT SPACING:
 - Bottom tab bar: ~80px (49px content + 34px safe area).
 
 SCROLLVIEW RULES:
-- NEVER use ScrollView for: dashboards, home screens, product pages, profiles
-- ONLY use ScrollView for: settings pages (long list), chat/message lists
+- NEVER use ScrollView for: dashboards, home screens, profiles
+- ALWAYS use ScrollView for: product detail pages (PDPs), settings pages (long list), chat/message lists
+- Product detail pages are scrollable by design — they contain multiple dense sections between the hero image and the sticky CTA.
 - If a screen has a bottom tab bar, content above MUST fit without scrolling.
 
 HEIGHT BUDGET BY SCREEN TYPE:
 - Dashboard: 4-5 sections max, ~500-600px content + nav.
-- Product: Hero image (~200px) + title/price (~80px) + options (~100px) + CTA (~60px) + nav (~80px) = ~520px. NO long descriptions.
+- Product Detail (PDP): SCROLLABLE. Hero image (~320px) + title/price/rating (~80px) + color selector (~56px) + size grid (~60px) + features list (~180px) + description (~60px) + shipping/returns (~50px) + sticky CTA (~80px). Use ScrollView with paddingBottom to clear sticky CTA.
 - Profile: Avatar (~120px) + stats (~50px) + actions (~50px) + content (~250px) + nav (~80px) = ~550px
 - Banking: Balance (~100px) + accounts (~90px) + transactions (~180px) + nav (~80px) = ~450px
 `
@@ -283,6 +284,20 @@ DASHBOARD/HOME DENSITY RULES:
 - Transaction/activity list: Show 2-3 items maximum with a "See All" link. Each item: 48-56px height (icon + text + amount in one row).
 - Quick actions: Show 3-4 icon buttons in a horizontal row. Each: 44-48px.
 - Bottom tab bar: 4-5 tabs max, 49px height + 34px safe area.
+
+PRODUCT DETAIL PAGE (PDP) DENSITY RULES:
+- PDPs are SCROLLABLE — they need all content sections fully populated between hero and CTA.
+- Required section order: image carousel → title/price/rating → color selector → size grid → features list → description → shipping/returns → sticky CTA.
+- Image carousel: full-width hero (height 280-320px) with dot pagination overlay at bottom.
+- Title/price/rating: brand label (13px uppercase) + product name (24px bold) + price (24px bold accent) + star rating with review count.
+- Color selector: row of 3-5 circular swatches (40px), active one has accent border.
+- Size grid: row/wrap of selectable chips (48x44px each, borderRadius 8), active one uses accent bg.
+- Features list: 3-5 items, each in a styled card (backgroundColor surface-1, borderRadius 12, padding 12) with icon container (36x36px) + title + subtitle. NEVER use raw text bullets.
+- Description: short paragraph (max 2 lines, ~80 chars), fontSize 14, color text-secondary.
+- Shipping/returns: 2 rows, each with icon (18px) + text (13px). Shipping in success color, returns in secondary.
+- Sticky CTA: position absolute bottom, favorite button + full-width "Add to Cart" pill button. paddingBottom 34 for safe area.
+- Section spacing: 16px between sections, use 1px divider lines (#2A2A3E) to separate major groups. Gap within a section: 8px max.
+- ScrollView content needs paddingBottom ~98px to clear the sticky CTA bar.
 
 WHAT NOT TO DO:
 - Do NOT stack cards vertically when they can go side-by-side

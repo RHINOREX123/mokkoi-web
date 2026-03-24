@@ -53,8 +53,8 @@ const TEMPLATES: Template[] = [
   {
     name: 'Product Detail',
     category: 'ecommerce',
-    description: 'Single product page with image, description, size selector, and buy button',
-    previewPrompt: 'product detail screen with large product image, name, price, star rating, size selector chips, color options, add to cart button, and brief description',
+    description: 'Scrollable PDP with image carousel, title/price/rating, color selector, size grid, features list, description, shipping info, and sticky CTA',
+    previewPrompt: 'scrollable product detail page with hero image carousel with dot pagination, product title and brand label, price with star rating and review count, color selector row with circular swatches, size grid with selectable chips, product features list with 3-4 items each having icon and label in styled cards, short description paragraph, shipping and returns info with icons, and sticky bottom bar with favorite button and add to cart CTA',
   },
   {
     name: 'Shopping Cart',
