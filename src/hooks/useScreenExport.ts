@@ -26,15 +26,47 @@ interface UseScreenExportOpts {
   onToast: (msg: string) => void
 }
 
-/** PascalCase name for TSX component filenames (e.g. "Create a fitness app" → "CreateAFitnessApp") */
+/** Filler prefixes to strip from prompt-style names */
+const FILLER_RE = /^(create|make|design|build|generate|regenerate)\s+(a|an|the|my|this)\s+/i
+
+/** Noise words to drop from component names */
+const NOISE_WORDS = new Set([
+  'a', 'an', 'the', 'my', 'this', 'that', 'for', 'with', 'and', 'or', 'of', 'in', 'on', 'to',
+  'style', 'styled', 'like', 'screen', 'page', 'app', 'version', 'v1', 'v2', 'v3',
+])
+
+/**
+ * PascalCase name for TSX component filenames.
+ * Strips prompt filler ("Create a", "Design a"), noise words, and keeps meaningful tokens.
+ * "Create a fitness dashboard with progress rings" → "FitnessDashboardProgressRings"
+ * "DELIVER TO HOME" → "DeliverToHome"
+ * "Create a food delivery app v1" → "FoodDelivery"
+ */
 function safeName(name: string): string {
-  return (name || 'Screen')
+  let cleaned = (name || 'Screen')
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .trim()
-    .split(/\s+/)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+
+  // Strip prompt-style filler prefix
+  cleaned = cleaned.replace(FILLER_RE, '')
+
+  const allWords = cleaned.split(/\s+/).filter(w => w.length > 0)
+  // Drop noise words, but fall back to all words if nothing survives
+  const words = allWords.filter(w => !NOISE_WORDS.has(w.toLowerCase()))
+  const final = words.length > 0 ? words : allWords
+
+  if (final.length === 0) return 'Screen'
+
+  const pascal = final
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join('')
-    .slice(0, 40)
+
+  // Cap at 40 chars but don't cut mid-word
+  if (pascal.length <= 40) return pascal
+  let cut = pascal.slice(0, 40)
+  const lastUpper = cut.lastIndexOf(cut.match(/[A-Z][^A-Z]*$/)?.[0] || '')
+  if (lastUpper > 10) cut = cut.slice(0, lastUpper)
+  return cut || pascal.slice(0, 40)
 }
 
 /** Clean filename: remove special chars, replace spaces with underscores, prefix with Mokkoi_ */
