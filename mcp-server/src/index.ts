@@ -22,6 +22,7 @@ import { listTemplatesTool, handleListTemplates } from './tools/list-templates.j
 import { syncFromCanvasTool, handleSyncFromCanvas } from './tools/sync-from-canvas.js';
 import { watchCanvasTool, handleWatchCanvas } from './tools/watch-canvas.js';
 import { importHtmlTool, handleImportHtml } from './tools/import-html.js';
+import { exportProjectTool, handleExportProject } from './tools/export-project.js';
 
 const server = new Server(
   {
@@ -45,6 +46,7 @@ const TOOLS = [
   syncFromCanvasTool,
   watchCanvasTool,
   importHtmlTool,
+  exportProjectTool,
 ];
 
 // Handle tools/list
@@ -80,6 +82,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case 'import_html':
       return handleImportHtml(args as Parameters<typeof handleImportHtml>[0]);
+
+    case 'export_project':
+      return handleExportProject(args as Parameters<typeof handleExportProject>[0]);
 
     default:
       return {
