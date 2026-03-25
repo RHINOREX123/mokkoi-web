@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap } from 'lucide-react'
+import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
@@ -38,6 +38,8 @@ interface TopNavbarProps {
   setShowCommandPalette: (show: boolean) => void
   setShowDeleteConfirm: (show: boolean) => void
   setToastMessage: (msg: string) => void
+  onExportProject: () => void
+  screenCount: number
 }
 
 export function TopNavbar({
@@ -45,6 +47,7 @@ export function TopNavbar({
   isGenerating, generatedTree, activeGeneratedTree,
   setActiveGeneratedId, setShowCodeExport, setShowShareModal,
   setShowCommandPalette, setShowDeleteConfirm, setToastMessage,
+  onExportProject, screenCount,
 }: TopNavbarProps) {
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
@@ -235,10 +238,14 @@ export function TopNavbar({
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
             ><Share2 size={16} color="#94a3b8" />Share</button>
-            <button onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+            <button onClick={() => { onExportProject(); setShowHamburgerMenu(false) }}
+              style={{ ...hamburgerItemStyle, color: screenCount > 0 ? '#e2e8f0' : '#555' }}
+              onMouseEnter={e => { if (screenCount > 0) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-            ><Download size={16} color="#94a3b8" />Download project</button>
+              title={screenCount > 0 ? `Export ${screenCount} screen${screenCount > 1 ? 's' : ''} as Expo app` : 'No screens to export'}
+            ><Smartphone size={16} color={screenCount > 0 ? '#34D399' : '#555'} />Export as Expo App
+              {screenCount > 1 && <span style={{ fontSize: 10, color: '#34D399', marginLeft: 'auto' }}>{screenCount} screens</span>}
+            </button>
             <button onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}

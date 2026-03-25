@@ -284,6 +284,28 @@ function App() {
     }
   }, [screens.activeGenerated, screens.projectDeviceId])
 
+  /** Build ExportTarget[] for all screens in the project */
+  const getAllExportTargets = useCallback(() => {
+    return screens.generatedScreens
+      .filter(s => s.tree)
+      .map(s => ({
+        screenId: s.id,
+        screenName: s.name,
+        tree: s.tree,
+        deviceId: s.deviceId || screens.projectDeviceId,
+        originalPrompt: s.originalPrompt,
+      }))
+  }, [screens.generatedScreens, screens.projectDeviceId])
+
+  const handleExportProject = useCallback(() => {
+    const targets = getAllExportTargets()
+    if (targets.length === 0) {
+      setToastMessage('No screens to export')
+      return
+    }
+    screenExport.downloadExpoMultiScreen(targets, screens.projectName)
+  }, [getAllExportTargets, screenExport, screens.projectName])
+
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvasBg === 'true') {
@@ -354,6 +376,8 @@ function App() {
         setShowCommandPalette={setShowCommandPalette}
         setShowDeleteConfirm={setShowDeleteConfirm}
         setToastMessage={setToastMessage}
+        onExportProject={handleExportProject}
+        screenCount={screens.generatedScreens.filter(s => s.tree).length}
       />
 
       {/* Toast */}

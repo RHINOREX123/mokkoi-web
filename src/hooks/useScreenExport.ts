@@ -7,6 +7,8 @@ import {
   generateAppTsx, generateAppJson, generatePackageJson,
   generateTsConfig, generateBabelConfig, generateGitignore,
   generateReadme as generateExpoReadme,
+  generateMultiScreenAppTsx, generateMultiScreenPackageJson,
+  generateMultiScreenAppJson, generateMultiScreenReadme,
 } from '../utils/expoScaffold'
 import { trackEvent } from '../lib/analytics'
 import type { ComponentNode } from '../types/mokkoi'
@@ -184,5 +186,64 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     }
   }, [onToast])
 
-  return { downloadPNG, downloadTSX, downloadZIP, downloadExpoProject }
+  /** Export entire project as multi-screen Expo app with React Navigation */
+  const downloadExpoMultiScreen = useCallback(async (
+    allScreens: ExportTarget[],
+    projectName: string,
+  ) => {
+    if (allScreens.length === 0) {
+      onToast('No screens to export')
+      return
+    }
+
+    // Single screen → use the simpler single-screen export
+    if (allScreens.length === 1) {
+      return downloadExpoProject(allScreens[0], projectName)
+    }
+
+    onToast(`Building Expo project (${allScreens.length} screens)...`)
+    try {
+      const zip = new JSZip()
+
+      // Build screen name list (deduplicate PascalCase names)
+      const usedNames = new Set<string>()
+      const screenMeta: { name: string; prompt?: string }[] = []
+
+      for (const screen of allScreens) {
+        let name = safeName(screen.screenName)
+        // Deduplicate
+        if (usedNames.has(name)) {
+          let i = 2
+          while (usedNames.has(`${name}${i}`)) i++
+          name = `${name}${i}`
+        }
+        usedNames.add(name)
+        screenMeta.push({ name, prompt: screen.originalPrompt })
+
+        // Generate TSX for each screen → screens/ folder
+        const tsx = convertTreeToTSX(screen.tree, screen.screenName)
+        zip.file(`screens/${name}.tsx`, tsx)
+      }
+
+      const multiOpts = { projectName, screens: screenMeta }
+
+      // App.tsx with NavigationContainer + Stack
+      zip.file('App.tsx', generateMultiScreenAppTsx(multiOpts))
+      zip.file('app.json', generateMultiScreenAppJson(multiOpts))
+      zip.file('package.json', generateMultiScreenPackageJson(multiOpts))
+      zip.file('tsconfig.json', generateTsConfig())
+      zip.file('babel.config.js', generateBabelConfig())
+      zip.file('.gitignore', generateGitignore())
+      zip.file('README.md', generateMultiScreenReadme(multiOpts))
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      triggerDownload(zipBlob, `${brandedName(projectName)}_Expo.zip`)
+      onToast(`Expo project exported (${allScreens.length} screens)!`)
+      trackEvent('project_exported', { format: 'expo_multi', screen_count: allScreens.length })
+    } catch (err) {
+      onToast(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }, [onToast, downloadExpoProject])
+
+  return { downloadPNG, downloadTSX, downloadZIP, downloadExpoProject, downloadExpoMultiScreen }
 }
