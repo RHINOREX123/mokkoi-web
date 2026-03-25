@@ -488,12 +488,18 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
 
   switch (node.type) {
     case 'View':
-    case 'SafeAreaView':
+    case 'SafeAreaView': {
+      // Root View (key=0): constrain to parent height to prevent unbounded flex growth in web CSS
+      const isRoot = key === 0 && style.flex === 1
+      const rootOverrides: React.CSSProperties = isRoot
+        ? { flex: 1, minHeight: 0, overflow: 'hidden' }
+        : {}
       return (
-        <div key={key} style={{ ...VIEW_BASE, ...style }}>
+        <div key={key} style={{ ...VIEW_BASE, ...style, ...rootOverrides }}>
           {children}
         </div>
       )
+    }
 
     case 'ScrollView': {
       const containerStyle = rnStyleToCSS(
@@ -505,6 +511,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
           ...VIEW_BASE, ...style,
           overflow: 'auto',
           flex: style.flex ?? 1,
+          minHeight: 0, // Prevent flex item from growing beyond parent in web CSS
           ...(isHorizontal ? { overflowX: 'auto', overflowY: 'hidden' } : {}),
         }}>
           <div style={{
@@ -675,7 +682,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         node.props?.contentContainerStyle as Record<string, unknown> | undefined
       )
       return (
-        <div key={key} style={{ ...VIEW_BASE, ...style, overflow: 'auto', flex: style.flex ?? 1 }}>
+        <div key={key} style={{ ...VIEW_BASE, ...style, overflow: 'auto', flex: style.flex ?? 1, minHeight: 0 }}>
           <div style={{ ...VIEW_BASE, ...containerStyle }}>
             {children}
           </div>
@@ -797,7 +804,7 @@ export function ScreenRenderer({ tree }: ScreenRendererProps) {
     )
   }
   return (
-    <div style={{ width: '100%', maxWidth: '100%', minHeight: '100%' }}>
+    <div style={{ width: '100%', maxWidth: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {renderNode(tree, 0)}
     </div>
   )

@@ -79,6 +79,13 @@ export async function captureScreenAtFullRes(
     if (ovY === 'hidden' || ovY === 'clip') {
       child.style.overflowY = 'visible'
     }
+    // Remove height constraints that prevent full-content capture
+    // (ScreenRenderer wrapper uses height:100% to clip in canvas mode)
+    const h = child.style.height
+    if (h === '100%') {
+      child.style.height = 'auto'
+      child.style.minHeight = '100%'
+    }
   }
   // Remove fixed canvas dimensions on the outer wrapper so it expands to content
   clone.style.width = 'auto'
