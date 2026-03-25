@@ -34,6 +34,10 @@ function sanitizeColors(root: HTMLElement): void {
  * Capture a screen at full device resolution.
  * Clones the PhoneFrame element, removes canvas scaling,
  * renders off-screen at native device dimensions, returns PNG Blob.
+ *
+ * IMPORTANT: Captures at the phone frame's native dimensions (e.g. 430x932),
+ * NOT at the expanded content height. This prevents oversized screenshots
+ * when the AI generates content taller than the phone viewport.
  */
 export async function captureScreenAtFullRes(
   screenId: string,
@@ -56,13 +60,10 @@ export async function captureScreenAtFullRes(
   clone.style.boxShadow = 'none'
   document.body.appendChild(clone)
 
-  // Remove canvas scaling and expand clipped containers for full-res capture.
-  // PhoneFrame canvas mode wraps the phone chassis in:
-  //   <div style="width:261px; height:...; overflow:hidden">
-  //     <div style="transform:scale(0.6); transformOrigin:top left">
-  //       <div class="relative" style="width:430; height:932"> ← actual phone
-  // We need to: remove the scale transform, expand overflow, and let the
-  // outer container size to the native phone dimensions.
+  // Find the actual phone chassis element (the one with explicit width/height
+  // matching device dimensions like 430x932). This gives us the native size.
+  let phoneWidth = 430  // Default iPhone 15 Pro Max
+  let phoneHeight = 932
   const allEls = clone.querySelectorAll('*') as NodeListOf<HTMLElement>
   for (const child of allEls) {
     // Remove any CSS scale transforms (the canvas downscale)
@@ -70,26 +71,38 @@ export async function captureScreenAtFullRes(
     if (transform && transform !== 'none' && /scale/.test(transform)) {
       child.style.transform = 'none'
     }
-    // Expand overflow-hidden containers
-    const ov = window.getComputedStyle(child).overflow
-    if (ov === 'hidden' || ov === 'clip') {
-      child.style.overflow = 'visible'
-    }
-    const ovY = window.getComputedStyle(child).overflowY
-    if (ovY === 'hidden' || ovY === 'clip') {
-      child.style.overflowY = 'visible'
-    }
-    // Remove height constraints that prevent full-content capture
-    // (ScreenRenderer wrapper uses height:100% to clip in canvas mode)
-    const h = child.style.height
-    if (h === '100%') {
-      child.style.height = 'auto'
-      child.style.minHeight = '100%'
+
+    // Detect the phone chassis element by its dimensions
+    const w = parseInt(child.style.width)
+    const h = parseInt(child.style.height)
+    if (w >= 375 && w <= 450 && h >= 700 && h <= 1000) {
+      phoneWidth = w
+      phoneHeight = h
     }
   }
-  // Remove fixed canvas dimensions on the outer wrapper so it expands to content
-  clone.style.width = 'auto'
-  clone.style.height = 'auto'
+
+  // Now set the clone to the phone's native dimensions.
+  // DO NOT expand overflow or remove height constraints — we want the
+  // screenshot to match exactly what the user sees in the phone frame.
+  clone.style.width = phoneWidth + 'px'
+  clone.style.height = phoneHeight + 'px'
+  clone.style.overflow = 'hidden'
+
+  // Ensure inner containers respect the phone dimensions
+  for (const child of allEls) {
+    // Only expand overflow on the outermost canvas wrapper (not on screen content)
+    const ov = window.getComputedStyle(child).overflow
+    if (ov === 'hidden' || ov === 'clip') {
+      // Check if this is the canvas scaling wrapper (has transform-related styles)
+      // vs the screen content container (which should stay clipped)
+      const isCanvasWrapper = child.style.transform !== '' ||
+        (window.getComputedStyle(child).transform !== 'none' && window.getComputedStyle(child).transform !== '')
+      if (isCanvasWrapper) {
+        child.style.overflow = 'visible'
+      }
+      // Screen content stays clipped to phone dimensions
+    }
+  }
 
   sanitizeColors(clone)
 
@@ -100,10 +113,10 @@ export async function captureScreenAtFullRes(
       useCORS: true,
       allowTaint: true,
       logging: false,
-      width: clone.scrollWidth,
-      height: clone.scrollHeight,
-      windowWidth: clone.scrollWidth,
-      windowHeight: clone.scrollHeight,
+      width: phoneWidth,
+      height: phoneHeight,
+      windowWidth: phoneWidth,
+      windowHeight: phoneHeight,
     })
 
     return new Promise<Blob>((resolve, reject) => {
