@@ -40,25 +40,33 @@ ScrollView: props showsVerticalScrollIndicator, horizontal. TextInput: props pla
 `
 
 export const VIEWPORT_BUDGET = `
-VIEWPORT: Phone is 375×812pt. Usable ~724px. Content MUST fit one viewport unless scrollable screen type.
+VIEWPORT: Phone is 375×812pt. Usable ~724px. Content MUST fit one viewport unless explicitly scrollable.
+CRITICAL: ALL content must fit within 724px usable height. Do NOT generate screens taller than the phone viewport.
 - Dashboard/Home/Profile: 4-5 sections max, NO ScrollView. header(~50)+content(~530)+nav(~80)=~660px.
-- PDP: SCROLLABLE. hero(~320)+title/price(~80)+colors(~56)+sizes(~60)+features(~180)+desc(~60)+shipping(~50)+CTA(~80). paddingBottom 98 for sticky CTA.
-- Settings/Chat: ScrollView allowed for long lists.
+- AUTH (Login/Signup/Register): MUST fit one viewport, NO ScrollView needed. logo(~80)+title(~48)+subtitle(~24)+form(~180)+CTA(~56)+divider+social(~56)+footer(~40)=~520px. Use compact 12-16px spacing between elements, NOT 24-48px. Keep padding tight.
+- Onboarding/Welcome: MUST fit one viewport. illustration(~200)+title(~48)+subtitle(~40)+dots(~20)+CTA(~56)=~400px. Center content vertically using justifyContent:"center".
+- PDP/Detail: SCROLLABLE with ScrollView. hero(~320)+title/price(~80)+colors(~56)+sizes(~60)+features(~180)+desc(~60)+shipping(~50)+CTA(~80). paddingBottom 98 for sticky CTA.
+- Settings/Chat/List: ScrollView allowed for long lists.
 - Text limits: descriptions max 80 chars, bios max 60, any block max 3 lines.
 - Stat cards: 70-90px tall, horizontal row (2-3 per row), NEVER 120+.
+SPACING RULES: Use 8-16px between form elements, 16-24px between sections. NEVER use 32-64px gaps between elements on auth/onboarding screens. Keep layouts COMPACT.
 `
 
 export const CONTENT_DENSITY = `
 DENSITY RULES:
 Dashboard: ONE hero number (28-34px) + 2-3 horizontal stat cards (80px, gap 12) + 2-3 list items with "See All" + 3-4 quick actions + bottom nav (4-5 tabs).
+Auth (Login/Signup): Logo/icon (56px circle or small icon) + app name (fontSize 28) + subtitle (fontSize 14, max 1 line) + form fields (each input 48px + 8px gap) + primary CTA (48px) + "or continue with" divider + social buttons row (2 buttons, 48px) + "Don't have account?" link + legal text. Use gap:12-16px in form section, NOT 24+. Total form area should be ~300px max.
+Onboarding: Centered illustration/icon (~120px) + headline (fontSize 28-34) + subtitle (fontSize 14-16, max 2 lines) + pagination dots + CTA button. Use justifyContent:"center" on root. Keep spacing 16-24px.
 PDP sections (all required, 16px between, 8px within): image carousel with dot pagination → title/price/rating → color swatches (40px circles, active has accent border) → size chips (48x44, wrap, active=accent bg) → features list (3-5 styled cards: icon container 36x36 + title + subtitle, surface-1 bg, borderRadius 12) → description (2 lines max) → shipping/returns (icon+text rows) → sticky CTA bar.
-Do NOT: stack cards vertically when they fit side-by-side, show >3 list items on dashboards, add extra motivational/tips sections, use >5 sections on single-viewport screens.
+Do NOT: stack cards vertically when they fit side-by-side, show >3 list items on dashboards, add extra motivational/tips sections, use >5 sections on single-viewport screens, use excessive spacing (32-64px) between form fields or small elements.
 `
 
 export const PLATFORM_RULES = `
 iOS LAYOUT: paddingTop 54 (status bar), paddingBottom 34 (home indicator). Tab bar: 49+34=83px. Nav bar: 44px.
 Root: View with flex:1, surface-0 bg. Horizontal padding 16-20px.
-Spacing: Dashboard 12-16px between sections. Detail 20-24px. Settings 24-32px. Onboarding 32-48px.
+Spacing between sections by screen type:
+  Dashboard: 12-16px. Auth/Login: 12-16px (keep compact). Detail: 16-20px. Settings: 20-24px. Onboarding: 20-32px.
+  NEVER use paddingTop/paddingBottom >48px on content sections (except root paddingTop:54 for status bar).
 Cards: borderRadius 12-16, padding 16, surface-1 bg. Buttons: height 48, borderRadius 24, bold text. Inputs: height 48, borderRadius 12, surface-3 bg.
 `
 

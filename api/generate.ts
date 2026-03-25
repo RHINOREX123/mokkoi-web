@@ -284,13 +284,13 @@ ${VIEWPORT_BUDGET}
 ${CONTENT_DENSITY}
 ${PLATFORM_RULES}
 
-SCREEN TYPES:
-- DASHBOARD: greeting + horizontal stat cards + content cards + bottom nav. No ScrollView.
-- PROFILE: avatar + name + stats row + action buttons + content tabs
-- SETTINGS: section headers + grouped list items + toggles/chevrons. ScrollView.
+SCREEN TYPES (follow viewport budget strictly):
+- DASHBOARD: greeting + horizontal stat cards + content cards + bottom nav. No ScrollView. MUST fit one viewport.
+- PROFILE: avatar + name + stats row + action buttons + content tabs. No ScrollView. MUST fit one viewport.
+- SETTINGS: section headers + grouped list items + toggles/chevrons. ScrollView allowed.
 - PDP: SCROLLABLE. hero image carousel → title/price/rating → color swatches → size grid → features list (3-5 icon+label cards) → description → shipping/returns → sticky CTA
-- AUTH: logo + form inputs + CTA + social login + footer link
-- ONBOARDING: centered illustration + headline + dots + CTA
+- AUTH: logo/icon + app name + subtitle + form inputs (compact 12px gaps) + primary CTA + social login row + footer link. NO ScrollView. MUST fit one viewport. Keep spacing TIGHT (12-16px between elements, NOT 24-48px). Total content should be ~500-550px.
+- ONBOARDING: centered illustration + headline + subtitle + dots + CTA. NO ScrollView. MUST fit one viewport. Use justifyContent:"center" to vertically center content.
 
 SCREENSHOT FIDELITY: When recreating from screenshot, preserve ALL data displays, stat cards, navigation, and complexity.
 
