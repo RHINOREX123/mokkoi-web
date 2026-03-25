@@ -46,10 +46,16 @@ CRITICAL: ALL content must fit within 724px usable height. Do NOT generate scree
 - AUTH (Login/Signup/Register): MUST fit one viewport, NO ScrollView needed. logo(~80)+title(~48)+subtitle(~24)+form(~180)+CTA(~56)+divider+social(~56)+footer(~40)=~520px. Use compact 12-16px spacing between elements, NOT 24-48px. Keep padding tight.
 - Onboarding/Welcome: MUST fit one viewport. illustration(~200)+title(~48)+subtitle(~40)+dots(~20)+CTA(~56)=~400px. Center content vertically using justifyContent:"center".
 - PDP/Detail: SCROLLABLE with ScrollView. hero(~320)+title/price(~80)+colors(~56)+sizes(~60)+features(~180)+desc(~60)+shipping(~50)+CTA(~80). paddingBottom 98 for sticky CTA.
-- Settings/Chat/List: ScrollView allowed for long lists.
+- Chat/Messaging: header(~56)+message list(~520, ScrollView)+input bar(~56)=~660px. ScrollView for messages only.
+- Music/Media Player: album art(~280)+track info(~60)+controls(~80)+progress(~40)+extras(~80)=~580px. No ScrollView.
+- Social Feed/Timeline: header(~50)+stories(~90)+feed items(ScrollView)+nav(~80). ScrollView for feed.
+- Calendar/Schedule: header(~50)+month grid(~300)+events list(~200)+nav(~80)=~660px. No ScrollView unless many events.
+- Map/Location: header(~50)+map area(~400)+bottom sheet(~200)=~680px. No ScrollView.
+- Settings/List: ScrollView allowed for long lists.
+- ANY OTHER SCREEN: Default to fitting within one viewport (~660px). Use ScrollView ONLY if content genuinely exceeds one screen (10+ list items, long form). When in doubt, keep it compact.
 - Text limits: descriptions max 80 chars, bios max 60, any block max 3 lines.
 - Stat cards: 70-90px tall, horizontal row (2-3 per row), NEVER 120+.
-SPACING RULES: Use 8-16px between form elements, 16-24px between sections. NEVER use 32-64px gaps between elements on auth/onboarding screens. Keep layouts COMPACT.
+SPACING RULES: Use 8-16px between form elements, 16-24px between sections. NEVER use 32-64px gaps on any screen. Max gap between any two elements: 24px (32px only between major sections on detail pages). Keep layouts COMPACT.
 `
 
 export const CONTENT_DENSITY = `
