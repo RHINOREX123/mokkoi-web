@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
 import type { ChatMessage } from '../components/ChatPanel'
-import { GAP, PAD_X, PAD_Y } from '../components/FlowConnectors'
+import { GAP, PAD_X, PAD_Y, type FlowConnection } from '../components/FlowConnectors'
 import { DEFAULT_DEVICE, getCanvasDimensions } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
 
@@ -64,6 +64,11 @@ export interface ScreenManagement {
   /** Get the active screen's deviceId (or project default) */
   activeDeviceId: DeviceId
 
+  // Flow connections
+  connections: FlowConnection[]
+  setConnections: React.Dispatch<React.SetStateAction<FlowConnection[]>>
+  addConnection: (from: string, to: string) => void
+  removeConnection: (idx: number) => void
 }
 
 export function useScreenManagement(projectId: string | undefined): ScreenManagement {
@@ -74,7 +79,9 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   const [projectMessages, setProjectMessages] = useState<ChatMessage[]>([])
   const [projectName, setProjectName] = useState('Untitled Project')
   const [projectDeviceId, setProjectDeviceIdState] = useState<DeviceId>(DEFAULT_DEVICE)
+  const [connections, setConnections] = useState<FlowConnection[]>([])
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectionsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectLoadedRef = useRef(false)
   const hasTreeRef = useRef(false)
 
@@ -99,6 +106,9 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       if (project) {
         setProjectName(project.name || 'Untitled Project')
         setProjectDeviceIdState((project.device_id as DeviceId) || DEFAULT_DEVICE)
+        if (Array.isArray(project.connections)) {
+          setConnections(project.connections as FlowConnection[])
+        }
       }
 
       const { data: screens } = await supabase
@@ -245,6 +255,29 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     await supabase.from('projects').update({ name, updated_at: new Date().toISOString() }).eq('id', projectId)
   }, [projectId])
 
+  // Auto-save connections (debounced)
+  useEffect(() => {
+    if (!projectId || !supabase || !projectLoadedRef.current) return
+    if (connectionsSaveRef.current) clearTimeout(connectionsSaveRef.current)
+    connectionsSaveRef.current = setTimeout(async () => {
+      await supabase.from('projects').update({ connections }).eq('id', projectId)
+    }, 1000)
+    return () => { if (connectionsSaveRef.current) clearTimeout(connectionsSaveRef.current) }
+  }, [connections, projectId])
+
+  const addConnection = useCallback((from: string, to: string) => {
+    setConnections(prev => {
+      // Don't add duplicate or self-connections
+      if (from === to) return prev
+      if (prev.some(c => c.fromScreenId === from && c.toScreenId === to)) return prev
+      return [...prev, { fromScreenId: from, toScreenId: to }]
+    })
+  }, [])
+
+  const removeConnection = useCallback((idx: number) => {
+    setConnections(prev => prev.filter((_, i) => i !== idx))
+  }, [])
+
   const saveMessage = useCallback(async (msg: ChatMessage) => {
     if (!projectId || !supabase) return
     await supabase.from('messages').insert({
@@ -351,5 +384,9 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     setProjectDeviceId,
     setScreenDeviceId,
     activeDeviceId,
+    connections,
+    setConnections,
+    addConnection,
+    removeConnection,
   }
 }
