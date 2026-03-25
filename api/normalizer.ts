@@ -97,6 +97,21 @@ function normalizeStyle(
     }
   }
 
+  // Clamp explicit height values to prevent screens from being too tall
+  // Max reasonable component height is ~600px (most of a phone screen)
+  // Full-screen components should use flex:1 not explicit height
+  if (typeof normalized.height === 'number' && normalized.height > 600) {
+    // Exception: borderRadius 9999 means it's a pill/circle, don't clamp
+    if (normalized.borderRadius !== 9999) {
+      normalized.height = Math.min(normalized.height, 600)
+    }
+  }
+
+  // Clamp minHeight similarly
+  if (typeof normalized.minHeight === 'number' && normalized.minHeight > 600) {
+    normalized.minHeight = Math.min(normalized.minHeight, 600)
+  }
+
   return normalized
 }
 
