@@ -10,6 +10,7 @@ import {
   generateMultiScreenAppTsx, generateMultiScreenPackageJson,
   generateMultiScreenAppJson, generateMultiScreenReadme,
 } from '../utils/expoScaffold'
+import { detectTabGroup } from '../utils/detectTabBar'
 import { trackEvent } from '../lib/analytics'
 import type { ComponentNode } from '../types/mokkoi'
 
@@ -240,6 +241,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
       // Build screen name list (deduplicate PascalCase names)
       const usedNames = new Set<string>()
       const screenMeta: { name: string; prompt?: string }[] = []
+      const nameToTree: { name: string; tree: ComponentNode }[] = []
 
       for (const screen of allScreens) {
         let name = safeName(screen.screenName)
@@ -251,13 +253,17 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
         }
         usedNames.add(name)
         screenMeta.push({ name, prompt: screen.originalPrompt })
+        nameToTree.push({ name, tree: screen.tree })
 
         // Generate TSX for each screen → screens/ folder
         const tsx = convertTreeToTSX(screen.tree, screen.screenName)
         zip.file(`screens/${name}.tsx`, tsx)
       }
 
-      const multiOpts = { projectName, screens: screenMeta }
+      // Detect tab bar group (screens sharing the same bottom tab bar)
+      const tabGroup = detectTabGroup(nameToTree)
+
+      const multiOpts = { projectName, screens: screenMeta, tabGroup }
 
       // App.tsx with NavigationContainer + Stack
       zip.file('App.tsx', generateMultiScreenAppTsx(multiOpts))

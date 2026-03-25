@@ -12,7 +12,9 @@ export interface ScaffoldOpts {
 /** Multi-screen project scaffold options */
 export interface MultiScreenOpts {
   projectName: string
-  screens: { name: string; prompt?: string }[]  // PascalCase names
+  screens: { name: string; prompt?: string; tabLabels?: string[] }[]  // PascalCase names
+  /** Screens that share tab bars → grouped into a BottomTabNavigator */
+  tabGroup?: { screenNames: string[]; labels: string[] }
 }
 
 function toSlug(name: string): string {
@@ -169,6 +171,64 @@ export function generateMultiScreenAppTsx(opts: MultiScreenOpts): string {
     .join('\n')
 
   const firstScreen = opts.screens[0]?.name || 'Home'
+  const tabGroup = opts.tabGroup
+
+  // If we have a tab group, split screens into tab vs stack
+  if (tabGroup && tabGroup.screenNames.length >= 2) {
+    const tabScreenNames = new Set(tabGroup.screenNames)
+    const stackScreens = opts.screens.filter(s => !tabScreenNames.has(s.name))
+
+    const tabScreenEntries = opts.screens
+      .filter(s => tabScreenNames.has(s.name))
+      .map((s, i) => {
+        const label = tabGroup.labels[i] || s.name
+        return `          <Tab.Screen name="${s.name}" component={${s.name}Screen} options={{ tabBarLabel: '${label}' }} />`
+      })
+      .join('\n')
+
+    const stackEntries = stackScreens
+      .map(s => `          <Stack.Screen name="${s.name}" component={${s.name}Screen} />`)
+      .join('\n')
+
+    const hasStackScreens = stackScreens.length > 0
+
+    return `import { StatusBar } from 'expo-status-bar';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+${hasStackScreens ? "import { createNativeStackNavigator } from '@react-navigation/native-stack';\n" : ''}${imports}
+
+const Tab = createBottomTabNavigator();
+${hasStackScreens ? 'const Stack = createNativeStackNavigator();\n' : ''}
+function TabScreens() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { backgroundColor: '#1A1A1A', borderTopColor: 'rgba(255,255,255,0.08)' },
+        tabBarActiveTintColor: '#818CF8',
+        tabBarInactiveTintColor: '#64748b',
+      }}
+    >
+${tabScreenEntries}
+    </Tab.Navigator>
+  );
+}
+
+export default function App() {
+  return (
+    <NavigationContainer>
+${hasStackScreens ? `      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0A0A1A' }, animation: 'slide_from_right' }}>
+        <Stack.Screen name="Tabs" component={TabScreens} />
+${stackEntries}
+      </Stack.Navigator>` : '      <TabScreens />'}
+      <StatusBar style="light" />
+    </NavigationContainer>
+  );
+}
+`
+  }
+
+  // Default: all stack screens
   const stackScreens = opts.screens
     .map(s => `        <Stack.Screen name="${s.name}" component={${s.name}Screen} />`)
     .join('\n')
@@ -203,6 +263,19 @@ ${stackScreens}
 export function generateMultiScreenPackageJson(opts: MultiScreenOpts): string {
   const displayName = cleanDisplayName(opts.projectName, opts.screens[0]?.name || 'App')
   const slug = toSlug(displayName)
+  const deps: Record<string, string> = {
+    'expo': '~55.0.0',
+    'expo-status-bar': '~3.0.9',
+    'react': '19.2.0',
+    'react-native': '0.83.0',
+    '@react-navigation/native': '^7.1.6',
+    '@react-navigation/native-stack': '^7.3.10',
+    'react-native-screens': '~4.10.0',
+    'react-native-safe-area-context': '~5.4.0',
+  }
+  if (opts.tabGroup) {
+    deps['@react-navigation/bottom-tabs'] = '^7.3.10'
+  }
   return JSON.stringify({
     name: slug,
     version: '1.0.0',
@@ -212,16 +285,7 @@ export function generateMultiScreenPackageJson(opts: MultiScreenOpts): string {
       android: 'expo start --android',
       ios: 'expo start --ios',
     },
-    dependencies: {
-      'expo': '~55.0.0',
-      'expo-status-bar': '~3.0.9',
-      'react': '19.2.0',
-      'react-native': '0.83.0',
-      '@react-navigation/native': '^7.1.6',
-      '@react-navigation/native-stack': '^7.3.10',
-      'react-native-screens': '~4.10.0',
-      'react-native-safe-area-context': '~5.4.0',
-    },
+    dependencies: deps,
     devDependencies: {
       '@babel/core': '^7.25.0',
       'typescript': '~5.8.0',
