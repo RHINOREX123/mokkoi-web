@@ -18,6 +18,7 @@ import { ImportHtmlModal } from './components/ImportHtmlModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { TopNavbar } from './components/TopNavbar'
 import { NoCreditsModal } from './components/PricingPage'
+import { ExportProjectModal } from './components/ExportProjectModal'
 import { useScreenExport } from './hooks/useScreenExport'
 
 import { supabase } from './lib/supabase'
@@ -73,6 +74,7 @@ function App() {
   const [showScreenshotModal, setShowScreenshotModal] = useState(false)
   const [showImportHtmlModal, setShowImportHtmlModal] = useState(false)
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
+  const [showExportProjectModal, setShowExportProjectModal] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -303,6 +305,15 @@ function App() {
       setToastMessage('No screens to export')
       return
     }
+    setShowExportProjectModal(true)
+  }, [getAllExportTargets])
+
+  /** Called by ExportProjectModal with user-selected screen IDs */
+  const handleExportSelected = useCallback((selectedIds: string[]) => {
+    const allTargets = getAllExportTargets()
+    const selectedSet = new Set(selectedIds)
+    const targets = allTargets.filter(t => selectedSet.has(t.screenId))
+    if (targets.length === 0) return
     screenExport.downloadExpoMultiScreen(targets, screens.projectName)
   }, [getAllExportTargets, screenExport, screens.projectName])
 
@@ -663,6 +674,19 @@ function App() {
           onUpgrade={() => { setShowNoCreditsModal(false); navigate('/pricing') }}
         />
       )}
+
+      {/* Export project modal with screen picker */}
+      <ExportProjectModal
+        open={showExportProjectModal}
+        onClose={() => setShowExportProjectModal(false)}
+        screens={screens.generatedScreens.map(s => ({
+          id: s.id,
+          name: s.name,
+          hasTree: !!s.tree,
+        }))}
+        projectName={screens.projectName}
+        onExport={handleExportSelected}
+      />
     </div>
   )
 }
