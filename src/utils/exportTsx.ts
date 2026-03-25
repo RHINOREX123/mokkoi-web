@@ -59,63 +59,6 @@ function fmtVal(_key: string, v: unknown): string {
 
 const RN_SET = new Set(['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar'])
 
-function nodeJSX(node: ComponentNode | string, depth: number, idx: number, ctx: Ctx, indent: string): string {
-  if (typeof node === 'string') return node.trim() ? `${indent}${node.replace(/[{}]/g, c => c === '{' ? '&#123;' : '&#125;')}` : ''
-  if (!node || typeof node !== 'object') return ''
-
-  let type = node.type
-  if (type === 'FlatList') type = 'ScrollView'
-  if (!RN_SET.has(type)) type = 'View'
-  ctx.usedComponents.add(type)
-
-  let sName: string | null = null
-  if (node.style && Object.keys(node.style).length > 0) {
-    sName = styleName(node, depth, idx, ctx)
-    ctx.styles.push({ name: sName, value: node.style })
-  }
-
-  const props: string[] = []
-  if (sName) props.push(`style={styles.${sName}}`)
-
-  if (node.props) {
-    const p = node.props
-    if (type === 'TextInput') {
-      if (p.placeholder) props.push(`placeholder="${p.placeholder}"`)
-      if (p.placeholderTextColor) props.push(`placeholderTextColor="${p.placeholderTextColor}"`)
-      if (p.secureTextEntry) props.push('secureTextEntry')
-      if (p.keyboardType) props.push(`keyboardType="${p.keyboardType}"`)
-    }
-    if (type === 'Image' && p.source) {
-      const src = p.source as Record<string, string>
-      if (src.uri) props.push(`source={{ uri: '${src.uri}' }}`)
-    }
-    if (type === 'Switch') {
-      props.push(`value={${p.value ?? false}}`)
-      if (p.trackColor) {
-        const tc = p.trackColor as Record<string, string>
-        props.push(`trackColor={{ true: '${tc.true || '#34D399'}', false: '${tc.false || '#3F3F46'}' }}`)
-      }
-      if (p.thumbColor) props.push(`thumbColor="${p.thumbColor}"`)
-    }
-    if (type === 'ScrollView') {
-      if (p.horizontal) props.push('horizontal')
-      if (p.showsVerticalScrollIndicator === false) props.push('showsVerticalScrollIndicator={false}')
-    }
-    if (type === 'Text' && p.numberOfLines) props.push(`numberOfLines={${p.numberOfLines}}`)
-  }
-
-  const propsStr = props.length > 0 ? ' ' + props.join(' ') : ''
-  const children = (node.children ?? []).filter(c => typeof c === 'string' ? c.trim().length > 0 : c != null)
-  if (children.length === 0) return `${indent}<${type}${propsStr} />`
-
-  if (type === 'Text' && children.every(c => typeof c === 'string')) {
-    return `${indent}<${type}${propsStr}>${children.join('').trim()}</${type}>`
-  }
-
-  const ci = indent + '  '
-  const cJSX = children.map((c, i) => nodeJSX(c, depth + 1, i, ctx, ci)).filter(Boolean).join('\n')
-  return `${indent}<${type}${propsStr}>\n${cJSX}\n${indent}</${type}>`
-}
 
 export interface TSXExportOpts {
   /** Map of button text (lowercase) → target screen PascalCase name for navigation.navigate() */
