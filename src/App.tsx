@@ -314,8 +314,8 @@ function App() {
     const selectedSet = new Set(selectedIds)
     const targets = allTargets.filter(t => selectedSet.has(t.screenId))
     if (targets.length === 0) return
-    screenExport.downloadExpoMultiScreen(targets, screens.projectName)
-  }, [getAllExportTargets, screenExport, screens.projectName])
+    screenExport.downloadExpoMultiScreen(targets, screens.projectName, screens.connections)
+  }, [getAllExportTargets, screenExport, screens.projectName, screens.connections])
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return

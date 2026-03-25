@@ -223,6 +223,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
   const downloadExpoMultiScreen = useCallback(async (
     allScreens: ExportTarget[],
     projectName: string,
+    connections?: { fromScreenId: string; toScreenId: string }[],
   ) => {
     if (allScreens.length === 0) {
       onToast('No screens to export')
@@ -243,20 +244,48 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
       const screenMeta: { name: string; prompt?: string }[] = []
       const nameToTree: { name: string; tree: ComponentNode }[] = []
 
+      // First pass: assign PascalCase names
+      const screenIdToName = new Map<string, string>()
       for (const screen of allScreens) {
         let name = safeName(screen.screenName)
-        // Deduplicate
         if (usedNames.has(name)) {
           let i = 2
           while (usedNames.has(`${name}${i}`)) i++
           name = `${name}${i}`
         }
         usedNames.add(name)
+        screenIdToName.set(screen.screenId, name)
         screenMeta.push({ name, prompt: screen.originalPrompt })
         nameToTree.push({ name, tree: screen.tree })
+      }
 
-        // Generate TSX for each screen → screens/ folder
-        const tsx = convertTreeToTSX(screen.tree, screen.screenName)
+      // Build per-screen navigation targets from connections
+      // Key: source screen ID → Map of target screen name (used in navigate())
+      const screenNavTargets = new Map<string, Map<string, string>>()
+      if (connections && connections.length > 0) {
+        for (const conn of connections) {
+          const targetName = screenIdToName.get(conn.toScreenId)
+          if (!targetName) continue
+          if (!screenNavTargets.has(conn.fromScreenId)) {
+            screenNavTargets.set(conn.fromScreenId, new Map())
+          }
+          // Use the target screen's display name as a fuzzy match trigger
+          const targetScreen = allScreens.find(s => s.screenId === conn.toScreenId)
+          if (targetScreen) {
+            // Match buttons containing the target screen name words
+            const words = targetScreen.screenName.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+            for (const word of words) {
+              screenNavTargets.get(conn.fromScreenId)!.set(word, targetName)
+            }
+          }
+        }
+      }
+
+      // Second pass: generate TSX with navigation targets
+      for (const screen of allScreens) {
+        const name = screenIdToName.get(screen.screenId)!
+        const navTargets = screenNavTargets.get(screen.screenId)
+        const tsx = convertTreeToTSX(screen.tree, screen.screenName, { navigationTargets: navTargets })
         zip.file(`screens/${name}.tsx`, tsx)
       }
 

@@ -117,16 +117,26 @@ function nodeJSX(node: ComponentNode | string, depth: number, idx: number, ctx: 
   return `${indent}<${type}${propsStr}>\n${cJSX}\n${indent}</${type}>`
 }
 
-export function convertTreeToTSX(tree: ComponentNode, screenName?: string): string {
+export interface TSXExportOpts {
+  /** Map of button text (lowercase) → target screen PascalCase name for navigation.navigate() */
+  navigationTargets?: Map<string, string>
+}
+
+export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?: TSXExportOpts): string {
   const name = screenName ? screenName.replace(/[^a-zA-Z0-9]/g, '') + 'Screen' : 'GeneratedScreen'
   const compName = name.charAt(0).toUpperCase() + name.slice(1)
 
   const ctx: Ctx = { styles: [], usedComponents: new Set(), nameCount: new Map() }
-  const jsx = nodeJSX(tree, 0, 0, ctx, '    ')
+  const navTargets = opts?.navigationTargets
+  const usesNavigation = { value: false }
+  const jsx = nodeJSXWithNav(tree, 0, 0, ctx, '    ', navTargets, usesNavigation)
 
   const rnOrder = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar', 'StyleSheet']
   ctx.usedComponents.add('StyleSheet')
   const imports = rnOrder.filter(c => ctx.usedComponents.has(c))
+
+  const navImport = usesNavigation.value ? "\nimport { useNavigation } from '@react-navigation/native';" : ''
+  const navHook = usesNavigation.value ? '\n  const navigation = useNavigation();\n' : ''
 
   const styleLines = ctx.styles.map(({ name: n, value }) => {
     const entries = Object.entries(value).map(([k, v]) => `    ${k}: ${fmtVal(k, v)},`).join('\n')
@@ -134,9 +144,9 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string): stri
   }).join('\n')
 
   return `import React from 'react';
-import { ${imports.join(', ')} } from 'react-native';
+import { ${imports.join(', ')} } from 'react-native';${navImport}
 
-export default function ${compName}() {
+export default function ${compName}() {${navHook}
   return (
 ${jsx}
   );
@@ -146,4 +156,94 @@ const styles = StyleSheet.create({
 ${styleLines}
 });
 `
+}
+
+/** Extended nodeJSX that can inject navigation.navigate() on TouchableOpacity */
+function nodeJSXWithNav(
+  node: ComponentNode | string, depth: number, idx: number, ctx: Ctx, indent: string,
+  navTargets: Map<string, string> | undefined,
+  usesNavigation: { value: boolean },
+): string {
+  if (typeof node === 'string') return node.trim() ? `${indent}${node.replace(/[{}]/g, c => c === '{' ? '&#123;' : '&#125;')}` : ''
+  if (!node || typeof node !== 'object') return ''
+
+  let type = node.type
+  if (type === 'FlatList') type = 'ScrollView'
+  if (!RN_SET.has(type)) type = 'View'
+  ctx.usedComponents.add(type)
+
+  let sName: string | null = null
+  if (node.style && Object.keys(node.style).length > 0) {
+    sName = styleName(node, depth, idx, ctx)
+    ctx.styles.push({ name: sName, value: node.style })
+  }
+
+  const props: string[] = []
+  if (sName) props.push(`style={styles.${sName}}`)
+
+  // Check if this TouchableOpacity should navigate
+  if (type === 'TouchableOpacity' && navTargets && navTargets.size > 0) {
+    const btnText = collectAllText(node).toLowerCase()
+    for (const [trigger, target] of navTargets) {
+      if (btnText.includes(trigger)) {
+        props.push(`onPress={() => navigation.navigate('${target}')}`)
+        usesNavigation.value = true
+        break
+      }
+    }
+  }
+
+  if (node.props) {
+    const p = node.props
+    if (type === 'TextInput') {
+      if (p.placeholder) props.push(`placeholder="${p.placeholder}"`)
+      if (p.placeholderTextColor) props.push(`placeholderTextColor="${p.placeholderTextColor}"`)
+      if (p.secureTextEntry) props.push('secureTextEntry')
+      if (p.keyboardType) props.push(`keyboardType="${p.keyboardType}"`)
+    }
+    if (type === 'Image' && p.source) {
+      const src = p.source as Record<string, string>
+      if (src.uri) props.push(`source={{ uri: '${src.uri}' }}`)
+    }
+    if (type === 'Switch') {
+      props.push(`value={${p.value ?? false}}`)
+      if (p.trackColor) {
+        const tc = p.trackColor as Record<string, string>
+        props.push(`trackColor={{ true: '${tc.true || '#34D399'}', false: '${tc.false || '#3F3F46'}' }}`)
+      }
+      if (p.thumbColor) props.push(`thumbColor="${p.thumbColor}"`)
+    }
+    if (type === 'ScrollView') {
+      if (p.horizontal) props.push('horizontal')
+      if (p.showsVerticalScrollIndicator === false) props.push('showsVerticalScrollIndicator={false}')
+    }
+    if (type === 'Text' && p.numberOfLines) props.push(`numberOfLines={${p.numberOfLines}}`)
+  }
+
+  const propsStr = props.length > 0 ? ' ' + props.join(' ') : ''
+  const children = (node.children ?? []).filter(c => typeof c === 'string' ? c.trim().length > 0 : c != null)
+  if (children.length === 0) return `${indent}<${type}${propsStr} />`
+
+  if (type === 'Text' && children.every(c => typeof c === 'string')) {
+    return `${indent}<${type}${propsStr}>${children.join('').trim()}</${type}>`
+  }
+
+  const ci = indent + '  '
+  const cJSX = children.map((c, i) => nodeJSXWithNav(c, depth + 1, i, ctx, ci, navTargets, usesNavigation)).filter(Boolean).join('\n')
+  return `${indent}<${type}${propsStr}>\n${cJSX}\n${indent}</${type}>`
+}
+
+/** Collect all text content from a node tree (for button label matching) */
+function collectAllText(node: ComponentNode): string {
+  const parts: string[] = []
+  if (node.children) {
+    for (const child of node.children) {
+      if (typeof child === 'string') parts.push(child.trim())
+      else parts.push(collectAllText(child))
+    }
+  }
+  if (node.props?.children && typeof node.props.children === 'string') {
+    parts.push(node.props.children)
+  }
+  return parts.join(' ')
 }
