@@ -459,8 +459,14 @@ const TEXT_BASE: React.CSSProperties = {
   padding: 0,
 }
 
+// Filter out prop-like junk strings the AI sometimes puts as children
+// (e.g. "_HORIZONTAL", "true", "false", prop names starting with _)
+const JUNK_CHILD_RE = /^[_A-Z][_A-Z0-9]+$|^(true|false|null|undefined|horizontal|vertical)$/i
+
 function renderNode(node: ComponentNode | string, key: number): React.ReactNode {
   if (typeof node === 'string') {
+    // Filter junk strings at every level, not just direct children
+    if (!node.trim() || JUNK_CHILD_RE.test(node.trim())) return null
     return node
   }
 
@@ -469,9 +475,6 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
   }
 
   const style = rnStyleToCSS(node.style)
-  // Filter out prop-like junk strings the AI sometimes puts as children
-  // (e.g. "_HORIZONTAL", "true", "false", prop names starting with _)
-  const JUNK_CHILD_RE = /^[_A-Z]{2,}$|^(true|false|null|undefined|horizontal|vertical)$/i
   const filteredChildren = node.children?.filter(c =>
     typeof c !== 'string' || (c.trim().length > 0 && !JUNK_CHILD_RE.test(c.trim()))
   )
@@ -544,8 +547,14 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
               appearance: 'none',
               WebkitAppearance: 'none',
               background: 'transparent',
+              color: 'inherit',
               ...style,
-              borderStyle: style.borderWidth ? 'solid' : undefined,
+              // Only show border if AI explicitly set both width and color
+              borderStyle: (style.borderWidth && style.borderColor) ? 'solid' : undefined,
+              // Prevent white rectangle: if AI set borderWidth without color, suppress it
+              borderWidth: style.borderColor ? style.borderWidth : undefined,
+              // Never let backgroundColor default to white
+              backgroundColor: style.backgroundColor || 'transparent',
             }}
           />
         </span>

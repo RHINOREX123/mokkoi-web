@@ -107,7 +107,12 @@ function nodeJSXWithNav(
   navTargets: Map<string, string> | undefined,
   usesNavigation: { value: boolean },
 ): string {
-  if (typeof node === 'string') return node.trim() ? `${indent}${node.replace(/[{}]/g, c => c === '{' ? '&#123;' : '&#125;')}` : ''
+  if (typeof node === 'string') {
+    const trimmed = node.trim()
+    // Filter AI junk strings: _HORIZONTAL, TRUE, VERTICAL, etc.
+    if (!trimmed || /^[_A-Z][_A-Z0-9]+$|^(true|false|null|undefined|horizontal|vertical)$/i.test(trimmed)) return ''
+    return `${indent}${trimmed.replace(/[{}]/g, c => c === '{' ? '&#123;' : '&#125;')}`
+  }
   if (!node || typeof node !== 'object') return ''
 
   let type = node.type
