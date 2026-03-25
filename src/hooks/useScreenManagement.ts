@@ -259,8 +259,10 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   useEffect(() => {
     if (!projectId || !supabase || !projectLoadedRef.current) return
     if (connectionsSaveRef.current) clearTimeout(connectionsSaveRef.current)
+    const sb = supabase
     connectionsSaveRef.current = setTimeout(async () => {
-      await supabase.from('projects').update({ connections }).eq('id', projectId)
+      if (!sb) return
+      await sb.from('projects').update({ connections }).eq('id', projectId)
     }, 1000)
     return () => { if (connectionsSaveRef.current) clearTimeout(connectionsSaveRef.current) }
   }, [connections, projectId])
