@@ -588,13 +588,13 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const searchQuery = node.props?.searchQuery as string | undefined
       const source = node.props?.source as { uri: string } | undefined
       const avatar = node.props?.avatar as string | undefined
-      const w = typeof style.width === 'number' ? Math.min(style.width, 400) : style.width === '100%' ? '100%' as unknown as number : 200
-      const h = typeof style.height === 'number' ? Math.min(style.height, 400) : 180
+      const hasContent = !!(avatar || searchQuery || source?.uri)
 
       if (avatar) {
-        // Clean initial-letter avatar — professional look, no cartoon faces
+        // Clean initial-letter avatar — use style dimensions (should be small circles)
+        const avatarSize = typeof style.width === 'number' ? style.width : typeof style.height === 'number' ? style.height : 40
         const avatarStyle = (node.props?.avatarStyle as string) ?? 'initials'
-        const src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w as number, h)}&fontWeight=600&fontSize=40`
+        const src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${avatarSize}&fontWeight=600&fontSize=40`
         return (
           <img key={key} src={src} alt={avatar} loading="lazy"
             style={{ objectFit: 'cover', backgroundColor: '#2A2A3E', ...style }} />
@@ -603,6 +603,8 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
 
       if (searchQuery) {
         // Use backend proxy: FLUX AI → Pexels → LoremFlickr fallback
+        const w = typeof style.width === 'number' ? Math.min(style.width, 400) : 200
+        const h = typeof style.height === 'number' ? Math.min(style.height, 280) : 160
         return (
           <ProxyImage
             key={key}
@@ -615,26 +617,33 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         )
       }
 
-      // Direct URI source — skip broken/empty images
-      if (!source?.uri) {
+      if (source?.uri) {
         return (
-          <div key={key} style={{
-            ...style,
-            backgroundColor: '#2A2A3E',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: style.borderRadius ?? 8,
-          }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <circle cx="8.5" cy="8.5" r="1.5" fill="rgba(255,255,255,0.2)" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-          </div>
+          <img key={key} src={source.uri} alt="" loading="lazy"
+            style={{ objectFit: 'cover', backgroundColor: '#2A2A3E', ...style }} />
         )
       }
+
+      // No content source at all — render minimal placeholder, NOT a giant dark block
+      // Cap at 48px to prevent layout damage from empty AI-generated Images
+      const placeholderH = typeof style.height === 'number' ? Math.min(style.height, 48) : 48
+      const placeholderW = typeof style.width === 'number' ? Math.min(style.width, 48) : 48
+      const isCircle = style.borderRadius === 9999 || style.borderRadius === '50%'
       return (
-        <img key={key} src={source.uri} alt="" loading="lazy"
-          style={{ objectFit: 'cover', backgroundColor: '#2A2A3E', ...style }} />
+        <div key={key} style={{
+          ...style,
+          width: isCircle ? placeholderH : placeholderW,
+          height: placeholderH,
+          backgroundColor: '#2A2A3E',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: style.borderRadius ?? 8,
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <circle cx="8.5" cy="8.5" r="1.5" fill="rgba(255,255,255,0.15)" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+        </div>
       )
     }
 

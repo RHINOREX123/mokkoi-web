@@ -167,17 +167,48 @@ function normalizeNode(
     if (!normalized.style.flex) normalized.style.flex = 1
   }
 
-  // Fix: Image nodes should have tighter height constraints than general components
-  // A phone screen is ~844px; images taller than 300px dominate the viewport
+  // Fix: Image node constraints — prevent oversized images from dominating viewport
   if (normalized.type === 'Image') {
-    if (normalized.style) {
+    if (!normalized.style) normalized.style = {}
+    const hasAvatar = !!normalized.props?.avatar
+    const hasSearchQuery = !!normalized.props?.searchQuery
+    const hasSource = !!normalized.props?.source?.uri
+
+    // Avatar images: cap at 100px (they're profile circles, not hero images)
+    if (hasAvatar) {
+      if (typeof normalized.style.height === 'number' && normalized.style.height > 100) {
+        normalized.style.height = 100
+        normalized.style.width = 100
+      }
+    }
+    // Content images with searchQuery: cap at 280px
+    else if (hasSearchQuery) {
+      if (typeof normalized.style.height === 'number' && normalized.style.height > 280) {
+        normalized.style.height = 280
+      }
+    }
+    // Images without ANY content source: collapse to 48px (just a placeholder icon)
+    // These are the main cause of giant dark blocks
+    else if (!hasSource) {
+      if (typeof normalized.style.height === 'number' && normalized.style.height > 48) {
+        normalized.style.height = 48
+      }
+      if (typeof normalized.style.width === 'number' && normalized.style.width > 48) {
+        // unless width is explicitly small (icon-like), keep it
+        if (normalized.style.width > 100) normalized.style.width = 48
+      }
+    }
+    // Direct URI source: cap at 300px
+    else {
       if (typeof normalized.style.height === 'number' && normalized.style.height > 300) {
         normalized.style.height = 300
       }
-      if (typeof normalized.style.minHeight === 'number' && normalized.style.minHeight > 300) {
-        normalized.style.minHeight = 300
-      }
     }
+
+    if (typeof normalized.style.minHeight === 'number' && normalized.style.minHeight > 300) {
+      normalized.style.minHeight = 300
+    }
+
     // Strip cartoon avatar styles — force professional "initials" style
     if (normalized.props?.avatarStyle && /avataaars|adventurer|fun-emoji|lorelei|notionists|pixel-art|thumbs/i.test(normalized.props.avatarStyle)) {
       normalized.props = { ...normalized.props }
