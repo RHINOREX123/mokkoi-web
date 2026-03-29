@@ -18,7 +18,7 @@ COLORS (Light Theme): surface-0 "#F5F5FA", surface-1 "#FFFFFF", surface-2 "#F0F0
 `
 
 export const CONTENT_LIBRARY = `
-CONTENT: Use realistic, category-appropriate content. NEVER use "Lorem ipsum", "John Doe", or generic placeholders. Match names, stats, prices, and labels to the app domain. Use specific numbers, real-sounding brand names, and contextual actions.
+CONTENT: Use realistic, category-appropriate content. NEVER use "Lorem ipsum", "John Doe", or generic placeholders. Match names, stats, prices, and labels to the app domain. Use specific numbers, real-sounding brand names, and contextual actions. Default currency: USD ($). Default locale: US English. Only use other currencies/locales if the user explicitly requests them.
 `
 
 export const COMPONENT_TYPES = `

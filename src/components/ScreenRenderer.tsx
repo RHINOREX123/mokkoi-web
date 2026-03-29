@@ -72,9 +72,9 @@ function ProxyImage({ searchQuery, width, height, alt, style }: {
   return (
     <img
       src={src}
-      alt={alt}
+      alt=""
       loading="lazy"
-      style={{ objectFit: 'cover', backgroundColor: '#1E293B', ...style }}
+      style={{ objectFit: 'cover', backgroundColor: '#1E293B', color: 'transparent', fontSize: 0, ...style }}
       onError={() => {
         // If the proxy URL also fails to render, fall back to LoremFlickr
         const keywords = searchQuery.split(/\s+/).slice(0, 3).join(',')
