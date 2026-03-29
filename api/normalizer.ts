@@ -231,15 +231,25 @@ function normalizeNode(
         normalized.style.height = maxH
       }
     }
-    // Images without ANY content source: collapse to 48px (just a placeholder icon)
-    // These are the main cause of giant dark blocks
+    // Images without ANY content source — try to auto-fix
     else if (!hasSource) {
-      if (typeof normalized.style.height === 'number' && normalized.style.height > 48) {
-        normalized.style.height = 48
+      const isCircle = normalized.style.borderRadius === 9999 || normalized.style.borderRadius === '50%'
+      const isSmall = (typeof normalized.style.width === 'number' && normalized.style.width <= 100) ||
+                      (typeof normalized.style.height === 'number' && normalized.style.height <= 100)
+      // Circular small Images are clearly meant to be avatars — auto-add avatar prop
+      // so they render as initial-letter circles instead of dark blocks
+      if (isCircle && isSmall) {
+        if (!normalized.props) normalized.props = {}
+        normalized.props.avatar = normalized.props.avatar || 'User'
       }
-      if (typeof normalized.style.width === 'number' && normalized.style.width > 48) {
-        // unless width is explicitly small (icon-like), keep it
-        if (normalized.style.width > 100) normalized.style.width = 48
+      // Non-avatar empty images: collapse to 48px placeholder
+      else {
+        if (typeof normalized.style.height === 'number' && normalized.style.height > 48) {
+          normalized.style.height = 48
+        }
+        if (typeof normalized.style.width === 'number' && normalized.style.width > 48) {
+          if (normalized.style.width > 100) normalized.style.width = 48
+        }
       }
     }
     // Direct URI source: cap at 300px
@@ -268,6 +278,21 @@ function normalizeNode(
     }
     if (!normalized.style.height && !normalized.style.minHeight) {
       normalized.style.minHeight = MIN_TOUCH_TARGET
+    }
+  }
+
+  // Fix: Empty TouchableOpacity buttons — replace empty View child with a circle icon placeholder
+  // AI generates <TouchableOpacity><View /></TouchableOpacity> for icon buttons without actual icons
+  if (normalized.type === 'TouchableOpacity' && Array.isArray(normalized.children)) {
+    const hasOnlyEmptyView = normalized.children.length === 1 &&
+      normalized.children[0]?.type === 'View' &&
+      (!normalized.children[0].children || normalized.children[0].children.length === 0)
+    if (hasOnlyEmptyView) {
+      // Replace empty View with a subtle dot indicator so button isn't invisible
+      normalized.children = [{
+        type: 'View',
+        style: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)' },
+      }]
     }
   }
 
@@ -311,6 +336,37 @@ function normalizeNode(
         if (typeof child === 'string') return child
         return normalizeNode(child, depth + 1, spacingScale, fontSizeScale, borderRadiusScale)
       })
+  }
+
+  // Auto-infer avatar names from sibling Text nodes
+  // If an Image got auto-fixed with avatar="User", look for a nearby Text child with a name
+  if (Array.isArray(normalized.children)) {
+    const avatarImages = normalized.children.filter((c: any) =>
+      c?.type === 'Image' && c?.props?.avatar === 'User'
+    )
+    if (avatarImages.length > 0) {
+      // Find the first Text child (or nested Text) that looks like a name
+      const findName = (node: any): string | null => {
+        if (!node || typeof node !== 'object') return null
+        if (node.type === 'Text' && Array.isArray(node.children)) {
+          const text = node.children.find((c: any) => typeof c === 'string')
+          if (text && text.length >= 2 && text.length <= 30 && /^[A-Z]/.test(text)) return text
+        }
+        if (Array.isArray(node.children)) {
+          for (const child of node.children) {
+            const name = findName(child)
+            if (name) return name
+          }
+        }
+        return null
+      }
+      const inferredName = findName(normalized)
+      if (inferredName) {
+        for (const img of avatarImages) {
+          img.props.avatar = inferredName
+        }
+      }
+    }
   }
 
   // Color contrast enforcement: fix dark text on dark backgrounds
