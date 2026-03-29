@@ -5,8 +5,8 @@ import type { ComponentNode } from '../types/mokkoi'
 // Client-side cache so we don't re-fetch the same query on every re-render
 const imageCache = new Map<string, string>()
 
-function ProxyImage({ searchQuery, width, height, alt, style }: {
-  searchQuery: string; width: number; height: number; alt: string; style: React.CSSProperties
+function ProxyImage({ searchQuery, width, height, style }: {
+  searchQuery: string; width: number; height: number; style: React.CSSProperties
 }) {
   const cacheKey = `${searchQuery}:${width}x${height}`
   const [src, setSrc] = useState(() => imageCache.get(cacheKey) || '')
@@ -611,7 +611,6 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
             searchQuery={searchQuery}
             width={w}
             height={h}
-            alt={searchQuery}
             style={style}
           />
         )
