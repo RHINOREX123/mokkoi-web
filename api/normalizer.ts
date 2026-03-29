@@ -181,10 +181,12 @@ function normalizeNode(
         normalized.style.width = 100
       }
     }
-    // Content images with searchQuery: cap at 280px
+    // Content images with searchQuery: cap based on depth
+    // depth 0-2 = hero/top-level → max 200px, depth 3+ = inside cards/bubbles → max 120px
     else if (hasSearchQuery) {
-      if (typeof normalized.style.height === 'number' && normalized.style.height > 280) {
-        normalized.style.height = 280
+      const maxH = depth <= 2 ? 200 : 120
+      if (typeof normalized.style.height === 'number' && normalized.style.height > maxH) {
+        normalized.style.height = maxH
       }
     }
     // Images without ANY content source: collapse to 48px (just a placeholder icon)
@@ -239,6 +241,23 @@ function normalizeNode(
         return { ...child, type: 'View' }
       }
       return child
+    })
+  }
+
+  // Strip Image children from message-bubble-like containers
+  // Chat bubbles typically have: maxWidth "75%"/"80%", borderRadius >= 12, and contain Text + Image
+  // Images inside these are the main source of oversized blocks in chat screens
+  const looksLikeBubble = normalized.type === 'View' && normalized.style &&
+    (typeof normalized.style.maxWidth === 'string' && /^\d{1,2}%$/.test(normalized.style.maxWidth)) &&
+    (typeof normalized.style.borderRadius === 'number' && normalized.style.borderRadius >= 12)
+  if (looksLikeBubble && Array.isArray(normalized.children)) {
+    normalized.children = normalized.children.filter((child: any) => {
+      if (child && typeof child === 'object' && child.type === 'Image') {
+        // Keep tiny avatar-like images (≤48px), strip larger ones
+        const h = child.style?.height
+        return typeof h === 'number' && h <= 48
+      }
+      return true
     })
   }
 

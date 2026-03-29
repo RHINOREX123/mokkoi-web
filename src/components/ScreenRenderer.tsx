@@ -604,7 +604,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       if (searchQuery) {
         // Use backend proxy: FLUX AI → Pexels → LoremFlickr fallback
         const w = typeof style.width === 'number' ? Math.min(style.width, 400) : 200
-        const h = typeof style.height === 'number' ? Math.min(style.height, 280) : 160
+        const h = typeof style.height === 'number' ? Math.min(style.height, 200) : 140
         return (
           <ProxyImage
             key={key}
