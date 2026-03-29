@@ -2,6 +2,33 @@ const DEFAULT_SPACING_SCALE = [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]
 const DEFAULT_FONT_SIZE_SCALE = [11, 12, 13, 14, 16, 17, 20, 24, 28, 34, 40, 48]
 const DEFAULT_BORDER_RADIUS_SCALE = [0, 4, 8, 12, 16, 24, 9999]
 
+// --- Color contrast helpers ---
+function parseHexColor(hex: string): [number, number, number] | null {
+  if (typeof hex !== 'string') return null
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i)
+  if (!m) return null
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
+}
+
+function relativeLuminance(r: number, g: number, b: number): number {
+  const [rs, gs, bs] = [r / 255, g / 255, b / 255].map(c =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  )
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs
+}
+
+function isDark(hex: string): boolean {
+  const rgb = parseHexColor(hex)
+  if (!rgb) return false
+  return relativeLuminance(...rgb) < 0.15
+}
+
+function isLight(hex: string): boolean {
+  const rgb = parseHexColor(hex)
+  if (!rgb) return false
+  return relativeLuminance(...rgb) > 0.6
+}
+
 export interface NormalizerOptions {
   customSpacing?: number[]
   customFontSizes?: number[]
@@ -284,6 +311,27 @@ function normalizeNode(
         if (typeof child === 'string') return child
         return normalizeNode(child, depth + 1, spacingScale, fontSizeScale, borderRadiusScale)
       })
+  }
+
+  // Color contrast enforcement: fix dark text on dark backgrounds
+  // Check Text children against this container's background color
+  const bg = normalized.style?.backgroundColor as string | undefined
+  if (bg && Array.isArray(normalized.children)) {
+    const bgIsDark = isDark(bg)
+    const bgIsLight = isLight(bg)
+    for (const child of normalized.children) {
+      if (child && typeof child === 'object' && child.type === 'Text' && child.style?.color) {
+        const textColor = child.style.color as string
+        // Dark text on dark bg → fix to white
+        if (bgIsDark && isDark(textColor)) {
+          child.style = { ...child.style, color: '#F1F5F9' }
+        }
+        // Light text on light bg → fix to dark
+        else if (bgIsLight && isLight(textColor)) {
+          child.style = { ...child.style, color: '#1A1A2E' }
+        }
+      }
+    }
   }
 
   return normalized
