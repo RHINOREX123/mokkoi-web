@@ -457,6 +457,10 @@ const VIEW_BASE: React.CSSProperties = {
 
 const TEXT_BASE: React.CSSProperties = {
   padding: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  maxWidth: '100%',
+  wordBreak: 'break-word',
 }
 
 // Filter out prop-like junk strings the AI sometimes puts as children
@@ -583,8 +587,8 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const searchQuery = node.props?.searchQuery as string | undefined
       const source = node.props?.source as { uri: string } | undefined
       const avatar = node.props?.avatar as string | undefined
-      const w = typeof style.width === 'number' ? Math.min(style.width, 800) : 400
-      const h = typeof style.height === 'number' ? Math.min(style.height, 800) : 300
+      const w = typeof style.width === 'number' ? Math.min(style.width, 400) : style.width === '100%' ? '100%' as unknown as number : 200
+      const h = typeof style.height === 'number' ? Math.min(style.height, 400) : 180
 
       if (avatar) {
         // DiceBear avatar: consistent illustrated avatars from a seed name

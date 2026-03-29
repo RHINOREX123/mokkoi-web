@@ -167,6 +167,17 @@ function normalizeNode(
     if (!normalized.style.flex) normalized.style.flex = 1
   }
 
+  // Fix: Image nodes should have tighter height constraints than general components
+  // A phone screen is ~844px; images taller than 300px dominate the viewport
+  if (normalized.type === 'Image' && normalized.style) {
+    if (typeof normalized.style.height === 'number' && normalized.style.height > 300) {
+      normalized.style.height = 300
+    }
+    if (typeof normalized.style.minHeight === 'number' && normalized.style.minHeight > 300) {
+      normalized.style.minHeight = 300
+    }
+  }
+
   // Fix: TouchableOpacity minimum touch target
   if (normalized.type === 'TouchableOpacity') {
     if (!normalized.style) normalized.style = {}
