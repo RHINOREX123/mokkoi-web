@@ -588,7 +588,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const searchQuery = node.props?.searchQuery as string | undefined
       const source = node.props?.source as { uri: string } | undefined
       const avatar = node.props?.avatar as string | undefined
-      const hasContent = !!(avatar || searchQuery || source?.uri)
+
 
       if (avatar) {
         // Clean initial-letter avatar — use style dimensions (should be small circles)
