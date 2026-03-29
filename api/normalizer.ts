@@ -169,12 +169,19 @@ function normalizeNode(
 
   // Fix: Image nodes should have tighter height constraints than general components
   // A phone screen is ~844px; images taller than 300px dominate the viewport
-  if (normalized.type === 'Image' && normalized.style) {
-    if (typeof normalized.style.height === 'number' && normalized.style.height > 300) {
-      normalized.style.height = 300
+  if (normalized.type === 'Image') {
+    if (normalized.style) {
+      if (typeof normalized.style.height === 'number' && normalized.style.height > 300) {
+        normalized.style.height = 300
+      }
+      if (typeof normalized.style.minHeight === 'number' && normalized.style.minHeight > 300) {
+        normalized.style.minHeight = 300
+      }
     }
-    if (typeof normalized.style.minHeight === 'number' && normalized.style.minHeight > 300) {
-      normalized.style.minHeight = 300
+    // Strip cartoon avatar styles — force professional "initials" style
+    if (normalized.props?.avatarStyle && /avataaars|adventurer|fun-emoji|lorelei|notionists|pixel-art|thumbs/i.test(normalized.props.avatarStyle)) {
+      normalized.props = { ...normalized.props }
+      delete normalized.props.avatarStyle // defaults to "initials" in renderer
     }
   }
 

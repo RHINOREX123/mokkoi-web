@@ -51,17 +51,18 @@ function ProxyImage({ searchQuery, width, height, alt, style }: {
       <div
         style={{
           ...style,
-          backgroundColor: '#1A1A2E',
+          backgroundColor: '#1E293B',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
+          borderRadius: style.borderRadius ?? 8,
         }}
       >
         <div style={{
-          width: 32, height: 32, borderRadius: '50%',
-          border: '3px solid rgba(255,255,255,0.1)',
-          borderTopColor: 'rgba(255,255,255,0.4)',
+          width: 24, height: 24, borderRadius: '50%',
+          border: '2px solid rgba(255,255,255,0.08)',
+          borderTopColor: 'rgba(129,140,248,0.5)',
           animation: 'spin 0.8s linear infinite',
         }} />
       </div>
@@ -73,7 +74,7 @@ function ProxyImage({ searchQuery, width, height, alt, style }: {
       src={src}
       alt={alt}
       loading="lazy"
-      style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }}
+      style={{ objectFit: 'cover', backgroundColor: '#1E293B', ...style }}
       onError={() => {
         // If the proxy URL also fails to render, fall back to LoremFlickr
         const keywords = searchQuery.split(/\s+/).slice(0, 3).join(',')
@@ -591,12 +592,12 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const h = typeof style.height === 'number' ? Math.min(style.height, 400) : 180
 
       if (avatar) {
-        // DiceBear avatar: consistent illustrated avatars from a seed name
-        const avatarStyle = (node.props?.avatarStyle as string) ?? 'avataaars-neutral'
-        const src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w, h)}`
+        // Clean initial-letter avatar — professional look, no cartoon faces
+        const avatarStyle = (node.props?.avatarStyle as string) ?? 'initials'
+        const src = `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatar)}&size=${Math.max(w as number, h)}&fontWeight=600&fontSize=40`
         return (
           <img key={key} src={src} alt={avatar} loading="lazy"
-            style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }} />
+            style={{ objectFit: 'cover', backgroundColor: '#2A2A3E', ...style }} />
         )
       }
 
@@ -614,10 +615,26 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         )
       }
 
-      // Direct URI source
+      // Direct URI source — skip broken/empty images
+      if (!source?.uri) {
+        return (
+          <div key={key} style={{
+            ...style,
+            backgroundColor: '#2A2A3E',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: style.borderRadius ?? 8,
+          }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <circle cx="8.5" cy="8.5" r="1.5" fill="rgba(255,255,255,0.2)" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          </div>
+        )
+      }
       return (
-        <img key={key} src={source?.uri ?? ''} alt="" loading="lazy"
-          style={{ objectFit: 'cover', backgroundColor: '#1A1A2E', ...style }} />
+        <img key={key} src={source.uri} alt="" loading="lazy"
+          style={{ objectFit: 'cover', backgroundColor: '#2A2A3E', ...style }} />
       )
     }
 

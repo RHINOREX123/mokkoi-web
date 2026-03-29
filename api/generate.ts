@@ -270,11 +270,12 @@ Image Strategy: [searchQuery and avatar usage]
 
 PHASE 2: Generate the JSON component tree following your design brief EXACTLY.
 
-For user avatars, use Image with avatar prop: {"type":"Image","style":{"width":40,"height":40,"borderRadius":9999},"props":{"avatar":"Sarah"}}
+For user avatars, use Image with avatar prop (renders clean initial-letter circles, NOT cartoon faces): {"type":"Image","style":{"width":40,"height":40,"borderRadius":9999},"props":{"avatar":"Sarah"}}
+NEVER use avatarStyle="avataaars" or any cartoon avatar style. The default "initials" style is professional.
 
 After the design brief, return a single JSON object. No markdown fences, no explanation.
 
-ICONS: Use Icon component with Google Material Symbols names only (lowercase, underscores). NEVER use emoji for icons.
+ICONS: Use Icon component with Google Material Symbols names only (lowercase, underscores). NEVER use emoji for icons. NEVER use emoji characters as avatars or profile pictures.
 Common: home, search, menu, arrow_back, chevron_right, close, favorite, star, bookmark, share, send, person, notifications, play_arrow, pause, skip_next, shopping_cart, credit_card, trending_up, monitoring, bolt, location_on, fitness_center, settings, lock, calendar_today
 
 ${DESIGN_TOKENS}
@@ -291,10 +292,13 @@ SCREEN TYPES (follow viewport budget strictly):
 - PDP: SCROLLABLE. hero image carousel → title/price/rating → color swatches → size grid → features list (3-5 icon+label cards) → description → shipping/returns → sticky CTA
 - AUTH: logo/icon + app name + subtitle + form inputs (compact 12px gaps) + primary CTA + social login row + footer link. NO ScrollView. MUST fit one viewport. Keep spacing TIGHT (12-16px between elements, NOT 24-48px). Total content should be ~500-550px.
 - ONBOARDING: centered illustration + headline + subtitle + dots + CTA. NO ScrollView. MUST fit one viewport. Use justifyContent:"center" to vertically center content.
+- CHAT/MESSAGING: header(avatar+name+status, ~56px) + message list(ScrollView, ~520px) + input bar(~56px). Message bubbles are View+Text ONLY — NO Image nodes inside bubbles. Use avatar prop for contact photo in header only (40x40, borderRadius:9999). Bubble style: borderRadius 16, padding 12, maxWidth "75%". Sent=accent bg aligned right, received=surface-2 aligned left. Add timestamps (fontSize 11, dim color) below bubbles. Include typing indicator and input bar with send button.
+- MUSIC/PLAYER: album art Image(searchQuery, ~280px square, borderRadius 16) + track title + artist + progress bar + playback controls. No ScrollView. MUST fit one viewport.
+- SOCIAL FEED: header + stories row(horizontal ScrollView, avatar circles 56px) + feed cards(ScrollView) + bottom nav. Feed cards: avatar(36px)+name+Image(searchQuery)+likes/comments.
 
 SCREENSHOT FIDELITY: When recreating from screenshot, preserve ALL data displays, stat cards, navigation, and complexity.
 
-IMAGE RULES: Every Image MUST have searchQuery (5-10 descriptive words) or avatar prop.
+IMAGE RULES: Every Image MUST have searchQuery (5-10 descriptive words) or avatar prop. NEVER use Image without one of these — empty Images render as broken placeholders. For user photos/avatars, ALWAYS use avatar prop (renders clean initial-letter circles). Do NOT put Image nodes inside chat/message bubbles — text messages are View+Text only.
 
 DESIGN BRIEF: The App Name from <design_brief> MUST appear in the screen.
 
