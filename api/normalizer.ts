@@ -167,6 +167,21 @@ function normalizeNode(
     if (!normalized.style.flex) normalized.style.flex = 1
   }
 
+  // Strip flex:1 from non-root section Views (depth 1-3) that have children.
+  // When the AI gives flex:1 to multiple sibling sections, they split the remaining
+  // viewport space evenly, creating massive empty gaps between content.
+  // Only root (depth 0) and ScrollView should use flex:1 to fill space.
+  if (depth >= 1 && depth <= 3 &&
+      (normalized.type === 'View' || normalized.type === 'SafeAreaView') &&
+      normalized.type !== 'ScrollView' &&
+      normalized.style?.flex === 1 &&
+      Array.isArray(normalized.children) && normalized.children.length > 0) {
+    normalized.style = { ...normalized.style }
+    delete normalized.style.flex
+    // Use flexShrink:0 so they don't collapse, but size naturally to content
+    normalized.style.flexShrink = 0
+  }
+
   // Fix: Image node constraints — prevent oversized images from dominating viewport
   if (normalized.type === 'Image') {
     if (!normalized.style) normalized.style = {}
