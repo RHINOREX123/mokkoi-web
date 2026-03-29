@@ -194,11 +194,12 @@ function normalizeNode(
     if (!normalized.style.flex) normalized.style.flex = 1
   }
 
-  // Strip flex:1 from non-root section Views (depth 1-3) that have children.
+  // Strip flex:1 from deeper section Views (depth 2-3) that have children.
   // When the AI gives flex:1 to multiple sibling sections, they split the remaining
   // viewport space evenly, creating massive empty gaps between content.
-  // Only root (depth 0) and ScrollView should use flex:1 to fill space.
-  if (depth >= 1 && depth <= 3 &&
+  // Depth 0 (root) and depth 1 (main content wrapper) keep flex:1 — they need it
+  // to fill space between header and bottom nav. Only deeper sections get stripped.
+  if (depth >= 2 && depth <= 3 &&
       (normalized.type === 'View' || normalized.type === 'SafeAreaView') &&
       normalized.type !== 'ScrollView' &&
       normalized.style?.flex === 1 &&
