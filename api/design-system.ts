@@ -100,6 +100,13 @@ CRITICAL: ALL content must fit within 724px usable height. Do NOT generate scree
 - Text limits: descriptions max 80 chars, bios max 60, any block max 3 lines.
 - Stat cards: 70-90px tall, horizontal row (2-3 per row), NEVER 120+.
 SPACING RULES: Use 8-16px between form elements, 16-24px between sections. NEVER use 32-64px gaps on any screen. Max gap between any two elements: 24px (32px only between major sections on detail pages). Keep layouts COMPACT.
+
+FILL THE VIEWPORT: If a screen does NOT use ScrollView, content MUST fill the full ~660px usable area. NEVER leave visible empty dark space between the last content section and the bottom nav. If your planned sections total less than ~600px, ADD MORE contextually relevant sections to fill the gap. Examples:
+- Music player (~540px) → add "Recently Played" list or "Similar Artists" row
+- Banking dashboard (~550px) → add "Spending Insights" chart or "Quick Actions" grid
+- Fitness dashboard (~560px) → add "Weekly Summary" bar chart or "Recommended Workouts"
+- Profile (~500px) → add more content rows, highlights stories, or recent activity
+The screen should feel FULL and COMPLETE — like a real shipped app, not a wireframe with empty space.
 `
 
 export const CONTENT_DENSITY = `
