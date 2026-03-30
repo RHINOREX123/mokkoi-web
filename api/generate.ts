@@ -1299,9 +1299,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // --- Pre-flight validation: fail fast without hitting the API ---
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
+  }
+  if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+    return res.status(400).json({ error: 'Prompt is empty' })
+  }
+  if (prompt.trim().length > 10000) {
+    return res.status(400).json({ error: 'Prompt too long (max 10,000 characters)' })
   }
 
   // Model routing: Sonnet for all generation, Haiku for edits only
@@ -1320,6 +1327,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Edits use Haiku (simpler task, cost-effective)
     model = 'claude-haiku-4-5-20251001'
     maxTokens = 4000
+  }
+
+  // Validate model string against whitelist — prevent paying for guaranteed 400 errors
+  const VALID_MODELS = new Set(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-haiku-4-5'])
+  if (!VALID_MODELS.has(model)) {
+    console.error(`Invalid model string: ${model}`)
+    return res.status(500).json({ error: 'Internal configuration error' })
   }
 
   // Determine generation type for usage logging
