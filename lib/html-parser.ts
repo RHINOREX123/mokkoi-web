@@ -754,6 +754,64 @@ export function shouldUseDomParser(code: string, detected: { type: string; hasTa
   return true
 }
 
+/**
+ * Post-process the tree to fix layout issues:
+ * 1. Convert position:absolute to normal flex flow (absolute positioning
+ *    in phone frames causes content to overlap and disappear)
+ * 2. Remove empty Views (no children, no meaningful style)
+ * 3. Flatten unnecessary single-child wrappers
+ */
+function postProcess(node: ComponentNode): ComponentNode {
+  if (!node || typeof node === 'string') return node
+
+  // Process children first (bottom-up)
+  if (Array.isArray(node.children)) {
+    node.children = node.children
+      .map(child => typeof child === 'string' ? child : postProcess(child))
+      .filter(child => {
+        if (typeof child === 'string') return child.trim().length > 0
+        // Remove empty Views with no children and no visual style
+        if (child.type === 'View' && (!child.children || child.children.length === 0)) {
+          const s = child.style || {}
+          const hasVisual = s.backgroundColor || s.borderWidth || s.borderColor ||
+            s.width || s.height || s.borderRadius
+          return !!hasVisual
+        }
+        return true
+      })
+  }
+
+  // Convert position:absolute to normal flow
+  // In web, absolute positioning is common for overlays/headers/footers
+  // In mobile phone frames, everything should be in normal flex flow
+  if (node.style?.position === 'absolute') {
+    delete node.style.position
+    delete node.style.top
+    delete node.style.right
+    delete node.style.bottom
+    delete node.style.left
+    delete node.style.inset
+    // Keep zIndex for visual layering context but remove it too (flex handles order)
+    delete node.style.zIndex
+  }
+
+  // Remove overflow:hidden on containers (causes clipping in phone frames)
+  if (node.style?.overflow === 'hidden' && node.type === 'View') {
+    delete node.style.overflow
+  }
+
+  // Flatten single-child View wrappers that add no style
+  if (node.type === 'View' && node.children?.length === 1 && typeof node.children[0] !== 'string') {
+    const child = node.children[0] as ComponentNode
+    const styleKeys = Object.keys(node.style || {})
+    if (styleKeys.length === 0 || (styleKeys.length === 1 && styleKeys[0] === 'display')) {
+      return child
+    }
+  }
+
+  return node
+}
+
 export function parseHtmlToComponentTree(html: string): ComponentNode {
   // Tokenize
   const tokens = tokenize(html)
@@ -766,21 +824,26 @@ export function parseHtmlToComponentTree(html: string): ComponentNode {
     if (converted !== null) children.push(converted)
   }
 
-  // If we got a single root element, use it
+  // Build root
+  let root: ComponentNode
   if (children.length === 1 && typeof children[0] !== 'string') {
-    const root = children[0] as ComponentNode
-    // Ensure root has flex:1 and backgroundColor
-    if (!root.style) root.style = {}
-    if (!root.style.flex) root.style.flex = 1
-    if (!root.style.backgroundColor) root.style.backgroundColor = '#0F172A'
-    if (!root.style.paddingTop) root.style.paddingTop = 54
-    return root
+    root = children[0] as ComponentNode
+  } else {
+    root = {
+      type: 'View',
+      style: {},
+      children: children as ComponentNode[],
+    }
   }
 
-  // Wrap multiple children in a root View
-  return {
-    type: 'View',
-    style: { flex: 1, backgroundColor: '#0F172A', paddingTop: 54, paddingBottom: 34 },
-    children: children as ComponentNode[],
-  }
+  // Post-process: fix absolute positioning, remove empties, flatten wrappers
+  root = postProcess(root)
+
+  // Ensure root has proper mobile screen defaults
+  if (!root.style) root.style = {}
+  if (!root.style.flex) root.style.flex = 1
+  if (!root.style.backgroundColor) root.style.backgroundColor = '#0F172A'
+  if (!root.style.paddingTop) root.style.paddingTop = 54
+
+  return root
 }
