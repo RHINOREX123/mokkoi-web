@@ -166,6 +166,8 @@ function expandMessageBubble(props: { text?: string; sent?: boolean; time?: stri
       marginBottom: 8,
       flexDirection: 'row',
       justifyContent: isSent ? 'flex-end' : 'flex-start',
+      alignItems: 'flex-start', // Prevent bubble from stretching to parent height
+      flexShrink: 0, // Don't collapse in ScrollView
     },
     children: [
       {
@@ -176,6 +178,8 @@ function expandMessageBubble(props: { text?: string; sent?: boolean; time?: stri
           borderRadius: 16,
           paddingHorizontal: 12,
           paddingVertical: 8,
+          alignSelf: 'flex-start', // Size to content, don't stretch
+          flexShrink: 0, // Don't collapse
         },
         children: bubbleChildren,
       },
