@@ -82,10 +82,14 @@ function getUserFriendlyError(error: unknown): string {
     return 'AI is experiencing high demand. Please try again in a moment.'
   if (message.includes('payment') || message.includes('stripe') || message.includes('checkout'))
     return 'Payment processing error. Please try again or contact support.'
-  if (message.includes('invalid') || message.includes('Invalid'))
-    return 'Please provide a more detailed screen description and try again.'
+  if (message.includes('Missing or invalid prompt'))
+    return 'Please provide a screen description and try again.'
   if (message.includes('abort') || message.includes('cancel'))
     return 'Generation cancelled.'
+
+  // Show the actual error for debugging — don't hide behind generic messages
+  if (message.length > 10 && message.length < 200)
+    return `Error: ${message}`
 
   return 'Something went wrong. Please try again.'
 }
