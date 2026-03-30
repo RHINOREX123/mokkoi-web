@@ -103,7 +103,7 @@ async function classifyComplexity(prompt: string, apiKey: string): Promise<boole
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 5,
         temperature: 0,
-        system: [{ type: 'text', text: COMPLEXITY_CLASSIFIER_SYSTEM, cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: COMPLEXITY_CLASSIFIER_SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
         messages: [{ role: 'user', content: prompt }],
       }),
     })
@@ -972,7 +972,7 @@ async function callAnthropicImport(
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
     body: JSON.stringify({
       model, max_tokens: maxTokens,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral', ttl: '1h' } }],
       messages,
     }),
   })
@@ -994,7 +994,7 @@ async function streamAnthropicImport(
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
     body: JSON.stringify({
       model, max_tokens: maxTokens, stream: true,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral', ttl: '1h' } }],
       messages,
     }),
   })
@@ -1631,7 +1631,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       {
         type: 'text',
         text: systemPromptText,
-        cache_control: { type: 'ephemeral' },
+        cache_control: { type: 'ephemeral', ttl: '1h' },
       },
     ],
     messages: buildMessages(conversationHistory, userContent),
