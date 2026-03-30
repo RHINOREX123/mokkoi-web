@@ -1962,6 +1962,310 @@ Rules:
     }
   }
 
+  // --- Helper: call Haiku for template content + assemble + return ---
+  async function runTemplate(
+    templateName: string, systemPrompt: string, maxTok: number,
+    buildTree: (content: any) => any
+  ): Promise<boolean> {
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTok, system: [{ type: 'text', text: systemPrompt }], messages: [{ role: 'user', content: cleanPrompt }] }),
+      })
+      if (!resp.ok) return false
+      const data = await resp.json() as any
+      const text = data.content?.[0]?.text || ''
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      const content = JSON.parse(jsonMatch ? jsonMatch[0] : text)
+      const tree = buildTree(content)
+      const expanded = expandComponents(tree)
+      const normalized = normalizeComponentTree(expanded, normalizerOpts)
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-haiku-4-5-20251001', tokensIn: data.usage?.input_tokens || 0, tokensOut: data.usage?.output_tokens || 0, generationType, promptPreview: prompt, success: true })
+      if (!user.isMCP) await deductCredits(user.id, creditType)
+      const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
+      if (wantsStream) {
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Connection', 'keep-alive')
+        res.setHeader('X-Accel-Buffering', 'no')
+        res.write(`data: ${JSON.stringify({ type: 'complete', tree: normalized, modelUsed: `Haiku (${templateName} template)` })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        res.end()
+        return true
+      }
+      res.status(200).json({ tree: normalized, modelUsed: `Haiku (${templateName} template)` })
+      return true
+    } catch { return false }
+  }
+
+  // --- PROFILE TEMPLATE ---
+  const isProfileTemplate = screenType === 'profile' && !isEditMode && !hasImage && !isRegenerate
+  if (isProfileTemplate) {
+    const sent = await runTemplate('profile',
+      `You generate content for a mobile social media profile screen. Return ONLY a JSON object:
+{"username":"alex.design","displayName":"Alex Chen","bio":"Photographer & Designer. Creating visual stories through light and color.","link":"linktr.ee/alexdesign","posts":"284","followers":"12.5K","following":"891","photos":["urban architecture photography","portrait studio lighting","sunset landscape ocean","street photography black white","minimal interior design","nature macro flower"]}
+
+Rules:
+- username: lowercase with dots/underscores, match user request
+- displayName: realistic full name
+- bio: 1-2 lines max, match the persona
+- link: realistic link
+- posts/followers/following: realistic numbers (use K for thousands)
+- photos: exactly 6 searchQuery strings (5-7 words each) for the photo grid
+- Return ONLY JSON, no markdown`, 500,
+      (c: any) => ({
+        type: 'View',
+        style: { flex: 1, backgroundColor: '#0F172A', paddingTop: 54 },
+        children: [
+          // Header
+          { type: 'View', style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 44 }, children: [
+            { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'lock', size: 18, color: '#FFFFFF' } }] },
+            { type: 'Text', style: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' }, children: [c.username || 'user'] },
+            { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'menu', size: 20, color: '#FFFFFF' } }] },
+          ]},
+          // Avatar + stats
+          { type: 'View', style: { paddingHorizontal: 16, paddingTop: 12 }, children: [
+            { type: 'View', style: { flexDirection: 'row', alignItems: 'center' }, children: [
+              { type: 'AvatarCircle', props: { name: c.displayName || 'User', size: 80 } },
+              { type: 'View', style: { flex: 1, marginLeft: 24 }, children: [
+                { type: 'ProfileStats', props: { stats: [{ value: c.posts || '0', label: 'Posts' }, { value: c.followers || '0', label: 'Followers' }, { value: c.following || '0', label: 'Following' }] } },
+              ]},
+            ]},
+            // Name + bio
+            { type: 'Text', style: { fontSize: 16, fontWeight: '600', color: '#FFFFFF', marginTop: 12 }, children: [c.displayName || 'User'] },
+            { type: 'Text', style: { fontSize: 14, color: '#CBD5E1', marginTop: 4, lineHeight: 20 }, children: [c.bio || ''] },
+            ...(c.link ? [{ type: 'Text', style: { fontSize: 14, color: '#818CF8', marginTop: 2 }, children: [c.link] }] : []),
+            // Action buttons
+            { type: 'View', style: { flexDirection: 'row', gap: 8, marginTop: 12 }, children: [
+              { type: 'View', style: { flex: 1 }, children: [{ type: 'Button', props: { text: 'Follow', variant: 'primary', size: 'sm' } }] },
+              { type: 'View', style: { flex: 1 }, children: [{ type: 'Button', props: { text: 'Message', variant: 'secondary', size: 'sm' } }] },
+              { type: 'TouchableOpacity', style: { width: 36, height: 36, backgroundColor: '#1E293B', borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'person_add', size: 16, color: '#FFFFFF' } }] },
+            ]},
+          ]},
+          // Tab bar
+          { type: 'TabBar', props: { tabs: [{ label: 'Posts', active: true }, { label: 'Reels' }, { label: 'Tagged' }] } },
+          // Photo grid
+          { type: 'View', style: { flexDirection: 'row', flexWrap: 'wrap' }, children: (Array.isArray(c.photos) ? c.photos : []).slice(0, 6).map((q: string) => ({
+            type: 'Image', style: { width: '33.33%', aspectRatio: 1 }, props: { searchQuery: q },
+          }))},
+        ],
+      })
+    )
+    if (sent) return
+  }
+
+  // --- ONBOARDING TEMPLATE ---
+  const isOnboardingTemplate = screenType === 'onboarding' && !isEditMode && !hasImage && !isRegenerate
+  if (isOnboardingTemplate) {
+    const sent = await runTemplate('onboarding',
+      `You generate content for a mobile onboarding/welcome screen. Return ONLY a JSON object:
+{"appName":"AppName","icon":"rocket_launch","title":"Welcome to AppName","subtitle":"Discover amazing features and get started in seconds.","ctaText":"Get Started","footerText":"Already have an account?","footerAction":"Sign In","features":[{"icon":"bolt","title":"Fast & Easy"},{"icon":"lock","title":"Secure"},{"icon":"favorite","title":"Personalized"}]}
+
+Rules:
+- appName: match user request or generate realistic name
+- icon: Material Symbols icon name for the hero icon
+- title: bold welcome headline (max 6 words)
+- subtitle: 1-2 lines explaining the app value (max 80 chars)
+- ctaText: action button text
+- features: 3 feature highlights with icon + short title (2-3 words)
+- Return ONLY JSON, no markdown`, 400,
+      (c: any) => ({
+        type: 'View',
+        style: { flex: 1, backgroundColor: '#0F172A', paddingTop: 54, paddingBottom: 34, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center' },
+        children: [
+          { type: 'View', style: { flex: 1 } },
+          // Hero icon
+          { type: 'View', style: { width: 80, height: 80, borderRadius: 24, backgroundColor: 'rgba(108,92,231,0.15)', alignItems: 'center', justifyContent: 'center' }, children: [
+            { type: 'Icon', props: { name: c.icon || 'rocket_launch', size: 36, color: '#6C5CE7' } },
+          ]},
+          // Title
+          { type: 'Text', style: { fontSize: 28, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginTop: 24 }, children: [c.title || 'Welcome'] },
+          // Subtitle
+          { type: 'Text', style: { fontSize: 16, color: '#94A3B8', textAlign: 'center', marginTop: 8, lineHeight: 24, paddingHorizontal: 16 }, children: [c.subtitle || 'Get started with our app'] },
+          // Feature highlights
+          ...(Array.isArray(c.features) ? [{
+            type: 'View', style: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginTop: 32 }, children: c.features.slice(0, 3).map((f: any) => ({
+              type: 'View', style: { alignItems: 'center', gap: 8 }, children: [
+                { type: 'View', style: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' }, children: [
+                  { type: 'Icon', props: { name: f.icon || 'star', size: 22, color: '#6C5CE7' } },
+                ]},
+                { type: 'Text', style: { fontSize: 12, fontWeight: '500', color: '#94A3B8' }, children: [f.title || 'Feature'] },
+              ],
+            })),
+          }] : []),
+          // Pagination dots
+          { type: 'View', style: { flexDirection: 'row', gap: 6, marginTop: 32 }, children: [
+            { type: 'View', style: { width: 24, height: 6, borderRadius: 4, backgroundColor: '#6C5CE7' } },
+            { type: 'View', style: { width: 6, height: 6, borderRadius: 4, backgroundColor: '#2A2A3E' } },
+            { type: 'View', style: { width: 6, height: 6, borderRadius: 4, backgroundColor: '#2A2A3E' } },
+          ]},
+          { type: 'View', style: { flex: 1 } },
+          // CTA button
+          { type: 'View', style: { width: '100%' }, children: [{ type: 'Button', props: { text: c.ctaText || 'Get Started', variant: 'primary', size: 'lg' } }] },
+          // Footer
+          { type: 'View', style: { flexDirection: 'row', justifyContent: 'center', gap: 4, marginTop: 16 }, children: [
+            { type: 'Text', style: { fontSize: 14, color: '#6B6B80' }, children: [c.footerText || 'Already have an account?'] },
+            { type: 'TouchableOpacity', children: [{ type: 'Text', style: { fontSize: 14, fontWeight: '600', color: '#6C5CE7' }, children: [c.footerAction || 'Sign In'] }] },
+          ]},
+        ],
+      })
+    )
+    if (sent) return
+  }
+
+  // --- MUSIC PLAYER TEMPLATE ---
+  const isMusicTemplate = screenType === 'music' && !isEditMode && !hasImage && !isRegenerate
+  if (isMusicTemplate) {
+    const sent = await runTemplate('music',
+      `You generate content for a mobile music player screen. Return ONLY a JSON object:
+{"title":"Midnight Dreams","artist":"Luna Echo","albumArt":"album cover dark moody neon aesthetic","currentTime":"2:34","totalTime":"4:18","isPlaying":true,"upNext":[{"title":"Neon Lights","artist":"The Weeknd","duration":"3:42"},{"title":"Blinding Lights","artist":"The Weeknd","duration":"3:20"},{"title":"After Hours","artist":"The Weeknd","duration":"6:01"}],"playlist":"Chill Vibes 2024"}
+
+Rules:
+- title/artist: realistic song and artist names matching user request
+- albumArt: searchQuery string (5-7 words) for album artwork image
+- currentTime/totalTime: realistic timestamps
+- upNext: 3 songs with title, artist, duration
+- playlist: name of the current playlist/album
+- Return ONLY JSON, no markdown`, 500,
+      (c: any) => {
+        const progress = (() => { try { const [cm, cs] = (c.currentTime||'2:00').split(':').map(Number); const [tm, ts] = (c.totalTime||'4:00').split(':').map(Number); return (cm*60+cs)/(tm*60+ts) } catch { return 0.4 } })()
+        return {
+          type: 'View',
+          style: { flex: 1, backgroundColor: '#0A0A1A', paddingTop: 54, paddingBottom: 34 },
+          children: [
+            // Header
+            { type: 'View', style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 44 }, children: [
+              { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'keyboard_arrow_down', size: 24, color: '#FFFFFF' } }] },
+              { type: 'View', style: { alignItems: 'center' }, children: [
+                { type: 'Text', style: { fontSize: 11, fontWeight: '500', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1 }, children: ['NOW PLAYING'] },
+                { type: 'Text', style: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' }, children: [c.playlist || 'Playlist'] },
+              ]},
+              { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'more_vert', size: 20, color: '#FFFFFF' } }] },
+            ]},
+            // Album art
+            { type: 'View', style: { paddingHorizontal: 32, marginTop: 16 }, children: [
+              { type: 'Image', style: { width: '100%', aspectRatio: 1, borderRadius: 16 }, props: { searchQuery: c.albumArt || 'album cover dark aesthetic music' } },
+            ]},
+            // Track info
+            { type: 'View', style: { paddingHorizontal: 32, marginTop: 20 }, children: [
+              { type: 'View', style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, children: [
+                { type: 'View', style: { flex: 1 }, children: [
+                  { type: 'Text', style: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' }, children: [c.title || 'Song Title'] },
+                  { type: 'Text', style: { fontSize: 14, color: '#94A3B8', marginTop: 2 }, children: [c.artist || 'Artist'] },
+                ]},
+                { type: 'TouchableOpacity', children: [{ type: 'Icon', props: { name: 'favorite', size: 22, color: '#EF4444' } }] },
+              ]},
+            ]},
+            // Progress bar
+            { type: 'View', style: { paddingHorizontal: 32, marginTop: 16 }, children: [
+              { type: 'ProgressBar', props: { progress, color: '#6C5CE7' } },
+              { type: 'View', style: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }, children: [
+                { type: 'Text', style: { fontSize: 11, color: '#6B6B80' }, children: [c.currentTime || '0:00'] },
+                { type: 'Text', style: { fontSize: 11, color: '#6B6B80' }, children: [c.totalTime || '0:00'] },
+              ]},
+            ]},
+            // Controls
+            { type: 'View', style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 32, marginTop: 16 }, children: [
+              { type: 'TouchableOpacity', children: [{ type: 'Icon', props: { name: 'shuffle', size: 22, color: '#6B6B80' } }] },
+              { type: 'TouchableOpacity', children: [{ type: 'Icon', props: { name: 'skip_previous', size: 32, color: '#FFFFFF' } }] },
+              { type: 'TouchableOpacity', style: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#6C5CE7', alignItems: 'center', justifyContent: 'center' }, children: [
+                { type: 'Icon', props: { name: c.isPlaying ? 'pause' : 'play_arrow', size: 28, color: '#FFFFFF' } },
+              ]},
+              { type: 'TouchableOpacity', children: [{ type: 'Icon', props: { name: 'skip_next', size: 32, color: '#FFFFFF' } }] },
+              { type: 'TouchableOpacity', children: [{ type: 'Icon', props: { name: 'repeat', size: 22, color: '#6B6B80' } }] },
+            ]},
+            // Up Next
+            { type: 'View', style: { marginTop: 20, paddingHorizontal: 24 }, children: [
+              { type: 'SectionHeader', props: { title: 'Up Next', actionText: 'See All' } },
+              ...(Array.isArray(c.upNext) ? c.upNext.slice(0, 3).map((song: any) => ({
+                type: 'View', style: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }, children: [
+                  { type: 'View', style: { width: 40, height: 40, borderRadius: 8, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', marginRight: 12 }, children: [
+                    { type: 'Icon', props: { name: 'music_note', size: 18, color: '#6B6B80' } },
+                  ]},
+                  { type: 'View', style: { flex: 1 }, children: [
+                    { type: 'Text', style: { fontSize: 14, fontWeight: '500', color: '#FFFFFF' }, children: [song.title || 'Song'] },
+                    { type: 'Text', style: { fontSize: 12, color: '#6B6B80' }, children: [song.artist || 'Artist'] },
+                  ]},
+                  { type: 'Text', style: { fontSize: 12, color: '#6B6B80' }, children: [song.duration || '0:00'] },
+                ],
+              })) : []),
+            ]},
+          ],
+        }
+      }
+    )
+    if (sent) return
+  }
+
+  // --- FOOD DELIVERY TEMPLATE ---
+  const isFoodTemplate = screenType === 'food' && !isEditMode && !hasImage && !isRegenerate
+  if (isFoodTemplate) {
+    const sent = await runTemplate('food',
+      `You generate content for a mobile food delivery app screen. Return ONLY a JSON object:
+{"appName":"FoodExpress","location":"New York, NY","promoTitle":"50% Off Pizza","promoSubtitle":"On orders above $30","categories":[{"label":"Pizza","icon":"local_pizza"},{"label":"Burgers","icon":"lunch_dining"},{"label":"Sushi","icon":"set_meal"},{"label":"Desserts","icon":"cake"},{"label":"Drinks","icon":"local_cafe"}],"featured":[{"title":"Margherita Supreme","image":"margherita pizza fresh basil mozzarella","price":"$18.90","rating":"4.8"},{"title":"Classic Burger","image":"gourmet cheeseburger brioche bun","price":"$14.50","rating":"4.6"}],"popular":[{"title":"Pad Thai","image":"thai pad thai noodles shrimp","price":"$16.90","rating":"4.7"},{"title":"Caesar Salad","image":"caesar salad croutons parmesan","price":"$12.50","rating":"4.5"}]}
+
+Rules:
+- appName/location: match user request, default to US city
+- promoTitle/promoSubtitle: realistic promo, USD prices
+- categories: 5 food categories with Material Symbols icons
+- featured: 2 items with searchQuery for image (5-7 words), USD price, rating
+- popular: 2 more items, same format
+- ALL prices in USD ($)
+- Return ONLY JSON, no markdown`, 800,
+      (c: any) => ({
+        type: 'View',
+        style: { flex: 1, backgroundColor: '#0F172A', paddingTop: 54 },
+        children: [
+          // Header
+          { type: 'View', style: { paddingHorizontal: 16, paddingTop: 8 }, children: [
+            { type: 'View', style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, children: [
+              { type: 'View', children: [
+                { type: 'Text', style: { fontSize: 12, color: '#94A3B8' }, children: ['Deliver to'] },
+                { type: 'View', style: { flexDirection: 'row', alignItems: 'center', gap: 4 }, children: [
+                  { type: 'Icon', props: { name: 'location_on', size: 16, color: '#EF4444' } },
+                  { type: 'Text', style: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' }, children: [c.location || 'New York, NY'] },
+                ]},
+              ]},
+              { type: 'AvatarCircle', props: { name: 'User', size: 36 } },
+            ]},
+            // Search
+            { type: 'SearchBar', props: { placeholder: `Search ${c.appName || 'restaurants'}...` } },
+          ]},
+          // Scrollable content
+          { type: 'ScrollView', style: { flex: 1 }, props: { showsVerticalScrollIndicator: false }, children: [
+            // Promo
+            { type: 'View', style: { paddingHorizontal: 16, marginTop: 16 }, children: [
+              { type: 'PromoCard', props: { title: c.promoTitle || '50% Off', subtitle: c.promoSubtitle || 'On orders above $30', buttonText: 'Order Now', color: '#EF4444' } },
+            ]},
+            // Categories
+            ...(Array.isArray(c.categories) ? [{ type: 'View', style: { paddingHorizontal: 16, marginTop: 20 }, children: [
+              { type: 'ChipSelector', props: { chips: c.categories.slice(0, 5).map((cat: any, i: number) => ({ label: cat.label || 'Category', active: i === 0 })) } },
+            ]}] : []),
+            // Featured
+            { type: 'View', style: { paddingHorizontal: 16, marginTop: 20 }, children: [
+              { type: 'SectionHeader', props: { title: 'Featured', actionText: 'See All' } },
+              { type: 'View', style: { flexDirection: 'row', gap: 12 }, children: (Array.isArray(c.featured) ? c.featured : []).slice(0, 2).map((item: any) => ({
+                type: 'ProductCard', props: { image: item.image || 'food photography', title: item.title || 'Dish', price: item.price || '$0', rating: item.rating || '4.5' },
+              }))},
+            ]},
+            // Popular
+            { type: 'View', style: { paddingHorizontal: 16, marginTop: 20 }, children: [
+              { type: 'SectionHeader', props: { title: 'Popular Right Now', actionText: 'See All' } },
+              { type: 'View', style: { flexDirection: 'row', gap: 12 }, children: (Array.isArray(c.popular) ? c.popular : []).slice(0, 2).map((item: any) => ({
+                type: 'ProductCard', props: { image: item.image || 'food photography', title: item.title || 'Dish', price: item.price || '$0', rating: item.rating || '4.5' },
+              }))},
+            ]},
+            { type: 'View', style: { height: 16 } },
+          ]},
+          // Bottom nav
+          { type: 'BottomNav', props: { items: [{ icon: 'home', label: 'Home', active: true }, { icon: 'search', label: 'Browse' }, { icon: 'shopping_cart', label: 'Cart' }, { icon: 'person', label: 'Account' }] } },
+        ],
+      })
+    )
+    if (sent) return
+  }
+
   const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
   const apiPayload = {
     model,
