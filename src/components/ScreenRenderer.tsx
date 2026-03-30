@@ -499,8 +499,14 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const rootOverrides: React.CSSProperties = isRoot
         ? { flex: 1, minHeight: 0, overflow: 'hidden' }
         : {}
+      // Chat bubble fix: Views with borderRadius + backgroundColor inside scroll containers
+      // must not stretch via CSS flexbox. Force them to size to content.
+      const isBubbleLike = !isRoot && typeof style.borderRadius === 'number' && style.borderRadius >= 12 && style.backgroundColor
+      const bubbleOverrides: React.CSSProperties = isBubbleLike
+        ? { flexShrink: 0, flexGrow: 0, height: 'auto', alignSelf: 'flex-start' }
+        : {}
       return (
-        <div key={key} style={{ ...VIEW_BASE, ...style, ...rootOverrides }}>
+        <div key={key} style={{ ...VIEW_BASE, ...style, ...rootOverrides, ...bubbleOverrides }}>
           {children}
         </div>
       )
