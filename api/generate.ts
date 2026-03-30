@@ -1182,7 +1182,7 @@ Requirements:
       const result = buildSuccessResponse(normalizedTree, modelUsed)
 
       if (!user.isMCP) await deductCredits(user.id, 'new_screen')
-      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: haikuResult!.inputTokens, tokensOut: haikuResult!.outputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: importResult!.inputTokens, tokensOut: importResult!.outputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
 
       res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
       res.write('data: [DONE]\n\n')
