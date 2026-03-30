@@ -251,10 +251,10 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       try {
         const authHeaders = await getAuthHeaders()
         const conversationHistory = buildConversationHistory(projectMessages)
-        const res = await fetch('/api/generate-app', {
+        const res = await fetch('/api/generate-flow', {
           method: 'POST',
           headers: { ...authHeaders, 'Accept': 'text/event-stream' },
-          body: JSON.stringify({ prompt, projectId, conversationHistory, deviceId }),
+          body: JSON.stringify({ mode: 'app', prompt, projectId, conversationHistory, deviceId }),
         })
 
         if (!res.ok) {
