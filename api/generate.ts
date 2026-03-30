@@ -3,6 +3,7 @@ import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits
 import { createClient } from '@supabase/supabase-js'
 import { normalizeComponentTree, type NormalizerOptions } from './normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
+import { parseHtmlToComponentTree, shouldUseDomParser } from '../lib/html-parser.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './color-themes.js'
 
@@ -1113,6 +1114,7 @@ async function handleImportHtml(req: VercelRequest, res: VercelResponse, user: {
   // Cost tracking
   console.log(`[import-html] Input: ${trimmedCode.length} chars → ${cleanedCode.length} chars after preprocessing (${Math.round((1 - cleanedCode.length / trimmedCode.length) * 100)}% reduction)`)
 
+
   // Build color context if we extracted custom colors/gradients
   let colorContext = ''
   const colorEntries = Object.entries(preColors)
@@ -1158,7 +1160,39 @@ Requirements:
     return { success: true, screen: { name: screenName, tree: normalizedTree, detectedColors, detectedSource: source, conversionNotes }, modelUsed }
   }
 
-  // --- Streaming path ---
+  // --- DOM PARSER FAST PATH: deterministic, zero-cost, 100% text preservation ---
+  if (shouldUseDomParser(cleanedCode, detected)) {
+    try {
+      console.log(`[import-html] Attempting DOM parser (zero-cost, deterministic)...`)
+      let tree = parseHtmlToComponentTree(cleanedCode)
+      tree = expandComponents(tree)
+      tree = normalizeComponentTree(tree)
+
+      if (isImportTreeGoodEnough(tree)) {
+        console.log(`[import-html] DOM parser succeeded — $0 cost`)
+        const result = buildSuccessResponse(tree, 'dom-parser')
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'dom-parser', tokensIn: 0, tokensOut: 0, generationType: 'new_screen', promptPreview: `[import-html] DOM parser: ${detected.type} from ${source}`, success: true })
+        if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+
+        if (wantsStream) {
+          res.setHeader('Content-Type', 'text/event-stream')
+          res.setHeader('Cache-Control', 'no-cache')
+          res.setHeader('Connection', 'keep-alive')
+          res.setHeader('X-Accel-Buffering', 'no')
+          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Parsing HTML directly...', model: 'dom-parser' })}\n\n`)
+          res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
+          res.write('data: [DONE]\n\n')
+          return res.end()
+        }
+        return res.status(200).json(result)
+      }
+      console.log(`[import-html] DOM parser tree too simple, falling through to AI...`)
+    } catch (parseErr) {
+      console.log(`[import-html] DOM parser failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}, falling through to AI...`)
+    }
+  }
+
+  // --- Streaming path (AI fallback) ---
   if (wantsStream) {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
