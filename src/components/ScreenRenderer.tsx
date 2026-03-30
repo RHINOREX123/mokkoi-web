@@ -499,14 +499,8 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const rootOverrides: React.CSSProperties = isRoot
         ? { flex: 1, minHeight: 0, overflow: 'hidden' }
         : {}
-      // Chat bubble fix: Views with borderRadius + backgroundColor inside scroll containers
-      // must not stretch via CSS flexbox. Force them to size to content.
-      const isBubbleLike = !isRoot && typeof style.borderRadius === 'number' && style.borderRadius >= 12 && style.backgroundColor
-      const bubbleOverrides: React.CSSProperties = isBubbleLike
-        ? { flexShrink: 0, flexGrow: 0, height: 'auto', alignSelf: 'flex-start' }
-        : {}
       return (
-        <div key={key} style={{ ...VIEW_BASE, ...style, ...rootOverrides, ...bubbleOverrides }}>
+        <div key={key} style={{ ...VIEW_BASE, ...style, ...rootOverrides }}>
           {children}
         </div>
       )
@@ -517,21 +511,42 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         node.props?.contentContainerStyle as Record<string, unknown> | undefined
       )
       const isHorizontal = !!node.props?.horizontal
+      // CRITICAL FIX for the "stretchy children" bug that has plagued Mokkoi:
+      //
+      // The outer div is a flex item (flex:1) that fills remaining screen height.
+      // It uses overflow:auto to scroll when content exceeds that height.
+      // It must NOT use display:flex — that makes the inner container a flex child
+      // which stretches to fill the outer's height, then distributes that height
+      // among its children (bubbles, cards, list items), creating giant blocks.
+      //
+      // Solution: outer uses display:flex only for sizing (flex:1), but the inner
+      // container uses display:block so it sizes to its children naturally.
+      // When content < scroll area: children stay at natural size, empty space below.
+      // When content > scroll area: outer scrolls, children still at natural size.
       return (
         <div key={key} style={{
-          ...VIEW_BASE, ...style,
-          overflow: 'auto',
+          ...style,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: isHorizontal ? 'hidden' : 'auto',
+          overflowX: isHorizontal ? 'auto' : 'hidden',
+          overflowY: isHorizontal ? 'hidden' : 'auto',
           flex: style.flex ?? 1,
-          minHeight: 0, // Prevent flex item from growing beyond parent in web CSS
-          ...(isHorizontal ? { overflowX: 'auto', overflowY: 'hidden' } : {}),
+          minHeight: 0,
+          position: 'relative',
+          boxSizing: 'border-box',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
         }}>
           <div style={{
-            ...VIEW_BASE, ...containerStyle,
-            // CRITICAL: inner content container must NOT stretch to fill the scroll area.
-            // Without this, flex layout makes it fill the parent height, which then
-            // stretches all children (chat bubbles, cards) to share that space.
-            minHeight: 'min-content',
-            ...(isHorizontal ? { flexDirection: 'row', flexWrap: 'nowrap' } : {}),
+            ...containerStyle,
+            display: 'flex',
+            flexDirection: isHorizontal ? 'row' : 'column',
+            ...(isHorizontal ? { flexWrap: 'nowrap' } : {}),
+            // KEY: These prevent the inner container from stretching to fill the
+            // scroll area. It sizes to its children instead.
+            flexGrow: 0,
+            flexShrink: 0,
           }}>
             {children}
           </div>
@@ -721,8 +736,8 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         node.props?.contentContainerStyle as Record<string, unknown> | undefined
       )
       return (
-        <div key={key} style={{ ...VIEW_BASE, ...style, overflow: 'auto', flex: style.flex ?? 1, minHeight: 0 }}>
-          <div style={{ ...VIEW_BASE, ...containerStyle }}>
+        <div key={key} style={{ ...style, display: 'flex', flexDirection: 'column', overflow: 'auto', flex: style.flex ?? 1, minHeight: 0, position: 'relative', boxSizing: 'border-box' }}>
+          <div style={{ ...containerStyle, display: 'flex', flexDirection: 'column', flexGrow: 0, flexShrink: 0 }}>
             {children}
           </div>
         </div>
