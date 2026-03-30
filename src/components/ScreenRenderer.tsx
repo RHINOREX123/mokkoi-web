@@ -435,6 +435,12 @@ function rnStyleToCSS(style?: Record<string, unknown>): React.CSSProperties {
         css.marginTop = value
         css.marginBottom = value
         break
+      case 'lineHeight':
+        // React Native lineHeight is in px. CSS unitless lineHeight is a multiplier.
+        // lineHeight: 20 in RN = 20px. In CSS, 20 = 20x font-size = 280px with 14px font.
+        // THIS WAS THE ROOT CAUSE OF ALL STRETCHED CHAT BUBBLES.
+        css.lineHeight = typeof value === 'number' ? `${value}px` : value
+        break
       default:
         css[key] = value
     }
