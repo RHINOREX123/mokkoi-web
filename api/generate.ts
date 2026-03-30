@@ -1154,22 +1154,24 @@ Requirements:
     res.setHeader('X-Accel-Buffering', 'no')
 
     try {
-      // Streaming: Haiku only (no Sonnet fallback — avoids 120s timeout)
-      // The improved repairImportJSON handles truncated output from max_tokens
-      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Converting to mobile...', model: 'haiku' })}\n\n`)
-      const haikuResult = await streamAnthropicImport(HAIKU, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'haiku')
+      // Streaming: Use Sonnet for better HTML-to-RN conversion quality
+      // Haiku was too weak for complex HTML — produced malformed JSON frequently
+      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Converting to mobile...', model: 'sonnet' })}\n\n`)
+      const importResult = await streamAnthropicImport(SONNET, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey, res, 'sonnet')
 
       let tree: any = null
-      const modelUsed = 'haiku'
+      const modelUsed = 'sonnet'
 
-      if (haikuResult) {
-        try { tree = repairImportJSON(haikuResult.text) } catch { tree = null }
-        console.log(`[import-html] Haiku (${haikuResult.inputTokens} in, ${haikuResult.outputTokens} out, tree=${!!tree}, ~$${((haikuResult.inputTokens * 0.8 + haikuResult.outputTokens * 4) / 1000000).toFixed(4)})`)
+      if (importResult) {
+        try { tree = repairImportJSON(importResult.text) } catch { tree = null }
+        console.log(`[import-html] Sonnet (${importResult.inputTokens} in, ${importResult.outputTokens} out, tree=${!!tree}, ~$${((importResult.inputTokens * 3 + importResult.outputTokens * 15) / 1000000).toFixed(4)})`)
       }
 
       if (!tree || !isImportTreeGoodEnough(tree)) {
         console.log(`[import-html] Tree rejected: type=${tree?.type} children=${tree?.children?.length} firstChild=${JSON.stringify(tree?.children?.[0])?.substring(0, 200)}`)
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Could not convert the HTML. Try simplifying the code.' })}\n\n`)
+        // Give more helpful error message
+        const detail = !importResult ? 'AI service did not respond' : !tree ? 'Failed to parse AI response as valid JSON' : 'Generated screen was too simple — try pasting more complete code'
+        res.write(`data: ${JSON.stringify({ type: 'error', message: `Import failed: ${detail}` })}\n\n`)
         res.write('data: [DONE]\n\n')
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: false })
         return res.end()
@@ -1196,32 +1198,19 @@ Requirements:
 
   // --- Non-streaming path (MCP clients, simple requests) ---
   try {
-    // Try Haiku first
-    console.log(`[import-html] Non-streaming, trying Haiku...`)
-    let modelUsed = 'haiku'
+    // Use Sonnet directly for better conversion quality
+    console.log(`[import-html] Non-streaming, using Sonnet...`)
+    const modelUsed = 'sonnet'
     let tree: any = null
     let totalInputTokens = 0
     let totalOutputTokens = 0
 
-    const haikuResult = await callAnthropicImport(HAIKU, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey)
-    if (haikuResult) {
-      totalInputTokens += haikuResult.inputTokens
-      totalOutputTokens += haikuResult.outputTokens
-      try { tree = repairImportJSON(haikuResult.text) } catch { tree = null }
-      console.log(`[import-html] Haiku: ${haikuResult.inputTokens} in, ${haikuResult.outputTokens} out, ~$${((haikuResult.inputTokens * 0.8 + haikuResult.outputTokens * 4) / 1000000).toFixed(4)}`)
-    }
-
-    // Fallback to Sonnet if Haiku failed
-    if (!tree || !isImportTreeGoodEnough(tree)) {
-      console.log(`[import-html] Haiku insufficient, falling back to Sonnet...`)
-      modelUsed = 'sonnet'
-      const sonnetResult = await callAnthropicImport(SONNET, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey)
-      if (sonnetResult) {
-        totalInputTokens += sonnetResult.inputTokens
-        totalOutputTokens += sonnetResult.outputTokens
-        try { tree = repairImportJSON(sonnetResult.text) } catch { tree = null }
-        console.log(`[import-html] Sonnet: ${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)}`)
-      }
+    const sonnetResult = await callAnthropicImport(SONNET, importMaxTokens, HTML_IMPORT_SYSTEM_PROMPT, messages, apiKey)
+    if (sonnetResult) {
+      totalInputTokens += sonnetResult.inputTokens
+      totalOutputTokens += sonnetResult.outputTokens
+      try { tree = repairImportJSON(sonnetResult.text) } catch { tree = null }
+      console.log(`[import-html] Sonnet: ${sonnetResult.inputTokens} in, ${sonnetResult.outputTokens} out, ~$${((sonnetResult.inputTokens * 3 + sonnetResult.outputTokens * 15) / 1000000).toFixed(4)}`)
     }
 
     if (!tree) return res.status(502).json({ error: 'Failed to generate component tree from HTML' })
