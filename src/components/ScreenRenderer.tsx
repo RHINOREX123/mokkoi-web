@@ -503,7 +503,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       // Root View (key=0): constrain to parent height to prevent unbounded flex growth in web CSS
       const isRoot = key === 0 && style.flex === 1
       const rootOverrides: React.CSSProperties = isRoot
-        ? { flex: 1, minHeight: 0, overflow: 'hidden' }
+        ? { flex: 1, minHeight: '100%', overflow: 'hidden' }
         : {}
       return (
         <div key={key} style={{ ...VIEW_BASE, ...style, ...rootOverrides }}>
