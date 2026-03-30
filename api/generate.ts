@@ -1304,32 +1304,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
   }
 
-  // Plan-based model routing with Haiku pre-classifier
+  // Model routing: Sonnet for all generation, Haiku for edits only
+  // Sonnet produces significantly better quality screens (~$0.04/screen with caching)
+  // Haiku is fine for edits which are simpler structural changes (~$0.02/edit)
   const userPlan = await getUserPlan(user.id)
-  // Track if free-tier user got upgraded to Sonnet for credit adjustment
-  let freeTierSonnetUpgrade = false
-
-  // Classify complexity using Haiku (~$0.0001, ~200ms) — only for new screens
-  const needsClassification = !hasImage && (isNewScreen || isVariation || isRegenerate)
-  const complex = needsClassification ? await classifyComplexity(prompt, apiKey) : false
+  const freeTierSonnetUpgrade = false // no longer relevant — all generation uses Sonnet
 
   let model: string
   let maxTokens: number
-  if (hasImage) {
-    // Images always use Sonnet (vision capability required)
+  if (isNewScreen || isVariation || isRegenerate || hasImage) {
+    // All new screen generation uses Sonnet for consistent quality
     model = 'claude-sonnet-4-6'
-    maxTokens = 8000
-  } else if (complex && (isNewScreen || isVariation || isRegenerate)) {
-    // Haiku classifier said "complex" → use Sonnet
-    model = 'claude-sonnet-4-6'
-    maxTokens = 8000
-    if (userPlan === 'free') freeTierSonnetUpgrade = true
-  } else if (isNewScreen || isVariation || isRegenerate) {
-    // Haiku classifier said "simple" → use Haiku (big cost saver)
-    model = 'claude-haiku-4-5-20251001'
     maxTokens = 8000
   } else {
-    // Edits always use Haiku
+    // Edits use Haiku (simpler task, cost-effective)
     model = 'claude-haiku-4-5-20251001'
     maxTokens = 4000
   }
