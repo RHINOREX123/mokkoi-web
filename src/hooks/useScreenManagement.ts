@@ -29,6 +29,8 @@ export interface ScreenManagement {
   activeGenerated: GeneratedScreen | undefined
   generatedTree: ComponentNode | undefined
   hasScreens: boolean
+  /** True once screens have been fetched from Supabase (even if result is empty) */
+  screensLoaded: boolean
   editingScreenLabel: string | null
   editingScreenLabelValue: string
 
@@ -80,6 +82,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   const [projectName, setProjectName] = useState('Untitled Project')
   const [projectDeviceId, setProjectDeviceIdState] = useState<DeviceId>(DEFAULT_DEVICE)
   const [connections, setConnections] = useState<FlowConnection[]>([])
+  const [screensLoaded, setScreensLoaded] = useState(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const connectionsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectLoadedRef = useRef(false)
@@ -148,6 +151,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       }
 
       projectLoadedRef.current = true
+      setScreensLoaded(true)
     }
     loadProject()
   }, [projectId])
@@ -363,6 +367,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     activeGenerated,
     generatedTree,
     hasScreens,
+    screensLoaded,
     editingScreenLabel,
     editingScreenLabelValue,
     setGeneratedScreens,

@@ -28,6 +28,8 @@ interface ChatPanelProps {
   onFlowScreenClick?: (screenName: string) => void
   /** Whether any screens have been generated (hides example cards) */
   hasScreens?: boolean
+  /** Whether screens have been fetched from Supabase (guards initial prompt) */
+  screensLoaded?: boolean
   /** Name of the currently selected screen on canvas */
   selectedScreenName?: string
   /** Component tree of the currently selected screen (for thumbnail) */
@@ -72,7 +74,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, onFlowScreenClick, hasScreens, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -132,15 +134,17 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   }, [])
 
   // Handle initial prompt from URL — only for NEW projects (no existing screens)
-  // Using a ref for onSend to avoid re-triggering when the callback identity changes
+  // MUST wait for screensLoaded to avoid race condition: hasScreens is false before
+  // Supabase fetch completes, which would incorrectly trigger generation on existing projects.
   const onSendRef = useRef(onSend)
   onSendRef.current = onSend
   useEffect(() => {
+    if (!screensLoaded) return // Wait for Supabase fetch to complete
     if (initialPrompt && !initialPromptHandled.current && !hasScreens) {
       initialPromptHandled.current = true
       onSendRef.current(initialPrompt)
     }
-  }, [initialPrompt, hasScreens])
+  }, [initialPrompt, hasScreens, screensLoaded])
 
   const handleSend = () => {
     const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')

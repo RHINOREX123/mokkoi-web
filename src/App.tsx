@@ -434,7 +434,7 @@ function App() {
               messages={screens.projectMessages} onSend={ai.handleSend}
               onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
               isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt}
-              onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens}
+              onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens} screensLoaded={screens.screensLoaded}
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
               onDeselectScreen={() => screens.setActiveGeneratedId(null)} focusTrigger={focusTrigger}
