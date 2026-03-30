@@ -306,7 +306,8 @@ export function logUsage(params: {
 
   const { url, key } = getSupabaseConfig()
   if (!url || !key) return
-  const supabase = createClient(url, key)
+  // Use service role key to bypass RLS (logUsage has no auth session context)
+  const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY || key)
 
   // Calculate estimated cost based on model pricing
   let costUsd: number | null = null
@@ -371,7 +372,7 @@ export function logEditDiff(params: {
 
   const { url, key } = getSupabaseConfig()
   if (!url || !key) return
-  const supabase = createClient(url, key)
+  const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY || key)
 
   supabase
     .from('edit_diffs')
