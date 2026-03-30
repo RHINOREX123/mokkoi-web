@@ -1623,6 +1623,130 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     }
   }
 
+  // --- CHAT TEMPLATE: Fixed layout, AI only provides content ---
+  // When screen type is "chat" and it's a new generation (not edit/screenshot),
+  // use a hardcoded template structure. The AI only returns contact name + messages.
+  // This guarantees zero colored blocks — the layout is never AI-generated.
+  const isChatTemplate = screenType === 'chat' && !isEditMode && !hasImage && !isRegenerate
+  if (isChatTemplate) {
+    const chatSystemPrompt = `You generate chat message content for a mobile chat screen. Return ONLY a JSON object with this exact structure:
+{"contact":"Name","status":"Active now","messages":[{"text":"message text","sent":false,"time":"10:30 AM"},{"text":"reply text","sent":true,"time":"10:31 AM"}]}
+
+Rules:
+- contact: the chat partner's name (realistic, match the user's request)
+- status: "Active now", "Last seen 2h ago", etc.
+- messages: 5-7 messages, alternating sent/received, with realistic timestamps
+- sent: false = received from contact, true = sent by user
+- Text should be natural, casual conversation matching the user's topic
+- Use realistic timestamps (ascending order, 1-5 min gaps)
+- Keep messages short (1-2 sentences max)
+- Return ONLY the JSON object, no markdown, no explanation`
+
+    const chatResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001', // Haiku is fine for just generating text content
+        max_tokens: 1000,
+        system: [{ type: 'text', text: chatSystemPrompt }],
+        messages: [{ role: 'user', content: cleanPrompt }],
+      }),
+    })
+
+    if (chatResponse.ok) {
+      const chatData = await chatResponse.json() as any
+      const chatText = chatData.content?.[0]?.text || ''
+      try {
+        // Parse the AI's content response
+        const jsonMatch = chatText.match(/\{[\s\S]*\}/)
+        const chatContent = JSON.parse(jsonMatch ? jsonMatch[0] : chatText)
+        const contact = chatContent.contact || 'Friend'
+        const status = chatContent.status || 'Active now'
+        const messages = Array.isArray(chatContent.messages) ? chatContent.messages : []
+
+        // Assemble the chat screen from the fixed template
+        const tree = {
+          type: 'View',
+          style: { flex: 1, backgroundColor: '#0F172A', paddingTop: 54 },
+          children: [
+            // Header
+            {
+              type: 'View',
+              style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 56, backgroundColor: '#1A2236', borderBottomWidth: 1, borderColor: '#2A3352' },
+              children: [
+                { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'arrow_back', size: 20, color: '#FFFFFF' } }] },
+                { type: 'View', style: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }, children: [
+                  { type: 'AvatarCircle', props: { name: contact, size: 40 } },
+                  { type: 'View', children: [
+                    { type: 'Text', style: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' }, children: [contact] },
+                    { type: 'View', style: { flexDirection: 'row', alignItems: 'center', gap: 4 }, children: [
+                      { type: 'View', style: { width: 6, height: 6, borderRadius: 4, backgroundColor: '#22C55E' } },
+                      { type: 'Text', style: { fontSize: 12, color: '#94A3B8' }, children: [status] },
+                    ]},
+                  ]},
+                ]},
+                { type: 'View', style: { flexDirection: 'row', gap: 8 }, children: [
+                  { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'call', size: 20, color: '#FFFFFF' } }] },
+                  { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [{ type: 'Icon', props: { name: 'info', size: 20, color: '#FFFFFF' } }] },
+                ]},
+              ],
+            },
+            // Messages
+            {
+              type: 'ScrollView',
+              style: { flex: 1, paddingHorizontal: 16, paddingVertical: 12 },
+              props: { showsVerticalScrollIndicator: false },
+              children: messages.map((msg: any) => ({
+                type: 'MessageBubble',
+                props: { text: msg.text || '', sent: !!msg.sent, time: msg.time },
+              })),
+            },
+            // Input bar
+            { type: 'ChatInputBar', props: { placeholder: `Message ${contact}...` } },
+            // Home indicator spacing
+            { type: 'View', style: { height: 34 } },
+          ],
+        }
+
+        // Expand macros (MessageBubble, ChatInputBar, AvatarCircle)
+        const expandedTree = expandComponents(tree)
+        const normalizedTree = normalizeComponentTree(expandedTree, normalizerOpts)
+
+        // Log usage
+        const chatTokensIn = chatData.usage?.input_tokens || 0
+        const chatTokensOut = chatData.usage?.output_tokens || 0
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-haiku-4-5-20251001', tokensIn: chatTokensIn, tokensOut: chatTokensOut, generationType, promptPreview: prompt, success: true })
+
+        // Deduct credits
+        if (!user.isMCP) {
+          await deductCredits(user.id, creditType)
+        }
+
+        // Return via streaming or direct based on client preference
+        const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
+        if (wantsStream) {
+          res.setHeader('Content-Type', 'text/event-stream')
+          res.setHeader('Cache-Control', 'no-cache')
+          res.setHeader('Connection', 'keep-alive')
+          res.setHeader('X-Accel-Buffering', 'no')
+          res.write(`data: ${JSON.stringify({ type: 'complete', tree: normalizedTree, modelUsed: 'Haiku (chat template)' })}\n\n`)
+          res.write('data: [DONE]\n\n')
+          return res.end()
+        }
+        return res.status(200).json({ tree: normalizedTree, modelUsed: 'Haiku (chat template)' })
+      } catch (parseErr) {
+        console.error('Chat template content parse failed:', chatText.slice(0, 200))
+        // Fall through to normal generation
+      }
+    }
+    // If chat template fails, fall through to normal AI generation
+  }
+
   const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
   const apiPayload = {
     model,
