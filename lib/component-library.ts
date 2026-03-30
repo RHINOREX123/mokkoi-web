@@ -634,24 +634,31 @@ function expandNode(node: any): any {
 // =============================================
 
 /**
- * Detect if a View looks like a chat message bubble:
- * - Has maxWidth (percentage string like "75%" or "80%")
- * - Has borderRadius >= 12
- * - Has backgroundColor set
+ * Detect if a View looks like a chat message bubble.
+ * Broad detection — catches all common AI patterns:
+ * - Has backgroundColor set (any non-transparent color)
+ * - Has borderRadius >= 8 (rounded corners)
  * - Contains at least one Text child with actual content
+ * - NOT a full-width card (must have maxWidth OR padding suggesting a bubble)
  */
 function looksLikeBubble(node: any): boolean {
   if (!node || node.type !== 'View' || !node.style) return false
   const s = node.style
-  const hasMaxWidth = typeof s.maxWidth === 'string' && /^\d{1,2}%$/.test(s.maxWidth)
-  const hasBorderRadius = typeof s.borderRadius === 'number' && s.borderRadius >= 12
+  const hasBorderRadius = typeof s.borderRadius === 'number' && s.borderRadius >= 8
   const hasBg = typeof s.backgroundColor === 'string' && s.backgroundColor !== 'transparent'
-  if (!hasMaxWidth || !hasBorderRadius || !hasBg) return false
+  if (!hasBorderRadius || !hasBg) return false
   // Must contain at least one Text child with text content
   if (!Array.isArray(node.children)) return false
-  return node.children.some((c: any) =>
+  const hasTextChild = node.children.some((c: any) =>
     c?.type === 'Text' && Array.isArray(c.children) && c.children.some((t: any) => typeof t === 'string' && t.length > 0)
   )
+  if (!hasTextChild) return false
+  // Exclude full-screen containers (surface-0 background, flex:1)
+  const bg = (s.backgroundColor || '').toLowerCase()
+  if (bg === '#0a0a1a' || bg === '#0f172a' || bg === '#000000' || s.flex === 1) return false
+  // Exclude nav bars, headers (flexDirection: row with multiple non-text children)
+  if (s.flexDirection === 'row' && Array.isArray(node.children) && node.children.filter((c: any) => c?.type !== 'Text').length > 1) return false
+  return true
 }
 
 /** Extract text and determine if sent/received from a raw bubble View */
@@ -676,12 +683,11 @@ function extractBubbleData(node: any): { text: string; sent: boolean } | null {
 function convertRawBubbles(node: any): any {
   if (!node || typeof node !== 'object') return node
 
-  // Check if this node is a wrapper row containing a bubble (flexDirection:row + justifyContent:flex-start/end)
-  if (node.type === 'View' && node.style?.flexDirection === 'row' &&
-      (node.style?.justifyContent === 'flex-start' || node.style?.justifyContent === 'flex-end') &&
-      Array.isArray(node.children) && node.children.length === 1) {
+  // Check if this node is a wrapper containing a bubble
+  // Pattern 1: View wrapper with 1 child that's a bubble
+  if (node.type === 'View' && Array.isArray(node.children) && node.children.length === 1) {
     const inner = node.children[0]
-    if (looksLikeBubble(inner)) {
+    if (inner && typeof inner === 'object' && looksLikeBubble(inner)) {
       const data = extractBubbleData(inner)
       if (data) {
         return { type: 'MessageBubble', props: { text: data.text, sent: data.sent } }
@@ -689,7 +695,19 @@ function convertRawBubbles(node: any): any {
     }
   }
 
-  // Also check direct bubble (without row wrapper)
+  // Pattern 2: View wrapper with 1 bubble + 1 timestamp Text
+  if (node.type === 'View' && Array.isArray(node.children) && node.children.length === 2) {
+    const [first, second] = node.children
+    if (first && typeof first === 'object' && looksLikeBubble(first) && second?.type === 'Text') {
+      const data = extractBubbleData(first)
+      const time = second.children?.find((t: any) => typeof t === 'string')
+      if (data) {
+        return { type: 'MessageBubble', props: { text: data.text, sent: data.sent, ...(time ? { time } : {}) } }
+      }
+    }
+  }
+
+  // Pattern 3: Direct bubble (no wrapper)
   if (looksLikeBubble(node)) {
     const data = extractBubbleData(node)
     if (data) {
