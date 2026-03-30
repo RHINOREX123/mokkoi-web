@@ -1644,7 +1644,10 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       if (!response.ok) {
         const errorBody = await response.text()
         console.error('Anthropic streaming API error:', response.status, errorBody)
-        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, generationType, promptPreview: prompt, success: false })
+        // Try to extract token usage from error response (Anthropic charges for input even on errors)
+        let errorUsage: any = null
+        try { errorUsage = JSON.parse(errorBody)?.usage } catch {}
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: errorUsage?.input_tokens, tokensOut: errorUsage?.output_tokens, cacheReadTokens: errorUsage?.cache_read_input_tokens, cacheCreationTokens: errorUsage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: false })
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to generate screen' })}\n\n`)
         return res.end()
       }
@@ -1747,6 +1750,8 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
         }
       } catch (jsonErr) {
         console.error('JSON repair failed on stream. Raw start:', fullText.slice(0, 500))
+        // Log the cost even though generation failed — tokens were consumed
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: inputTokens, tokensOut: outputTokens, cacheReadTokens, cacheCreationTokens, generationType, promptPreview: prompt, success: false })
         res.write(`data: ${JSON.stringify({ type: 'error', message: `AI returned invalid JSON. Raw start: ${fullText.slice(0, 100)}` })}\n\n`)
       }
 
@@ -1755,6 +1760,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     } catch (err) {
       console.error('Streaming generate error:', err)
       const message = err instanceof Error ? err.message : String(err)
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, generationType, promptPreview: prompt, success: false })
       res.write(`data: ${JSON.stringify({ type: 'error', message: `Failed to generate screen: ${message}` })}\n\n`)
       return res.end()
     }
@@ -1776,7 +1782,9 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
     if (!response.ok) {
       const errorBody = await response.text()
       console.error('Anthropic API error:', response.status, errorBody)
-      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, generationType, promptPreview: prompt, success: false })
+      let errorUsage: any = null
+      try { errorUsage = JSON.parse(errorBody)?.usage } catch {}
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: errorUsage?.input_tokens, tokensOut: errorUsage?.output_tokens, cacheReadTokens: errorUsage?.cache_read_input_tokens, cacheCreationTokens: errorUsage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: false })
       return res.status(502).json({ error: 'Failed to generate screen' })
     }
 
@@ -1785,11 +1793,13 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       data = await response.json()
     } catch (parseErr) {
       console.error('Failed to parse Anthropic response as JSON')
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, generationType, promptPreview: prompt, success: false })
       return res.status(502).json({ error: 'Invalid response from AI service' })
     }
 
     const text: string = data.content?.[0]?.text ?? ''
     if (!text) {
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, cacheReadTokens: data.usage?.cache_read_input_tokens, cacheCreationTokens: data.usage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: false })
       return res.status(502).json({ error: 'Empty response from AI service' })
     }
 
@@ -1801,6 +1811,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       tree = repairJSON(jsonText || text)
     } catch (jsonErr) {
       console.error('JSON repair failed. Raw start:', text.slice(0, 500))
+      logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, cacheReadTokens: data.usage?.cache_read_input_tokens, cacheCreationTokens: data.usage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: false })
       return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
     }
 
