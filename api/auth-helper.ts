@@ -296,6 +296,8 @@ export function logUsage(params: {
   modelUsed: string
   tokensIn?: number
   tokensOut?: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
   generationType: 'new_screen' | 'edit' | 'flow' | 'variation' | 'regenerate'
   promptPreview?: string
   success: boolean
@@ -306,6 +308,32 @@ export function logUsage(params: {
   if (!url || !key) return
   const supabase = createClient(url, key)
 
+  // Calculate estimated cost based on model pricing
+  let costUsd: number | null = null
+  if (params.tokensIn || params.tokensOut) {
+    const isSonnet = params.modelUsed.includes('sonnet')
+    const inputPrice = isSonnet ? 3.0 : 0.8       // per 1M tokens
+    const outputPrice = isSonnet ? 15.0 : 4.0      // per 1M tokens
+    const cacheReadPrice = isSonnet ? 0.3 : 0.08   // per 1M tokens
+    const cacheWritePrice = isSonnet ? 3.75 : 1.0  // per 1M tokens
+
+    const cacheRead = params.cacheReadTokens || 0
+    const cacheWrite = params.cacheCreationTokens || 0
+    const uncachedInput = (params.tokensIn || 0) - cacheRead - cacheWrite
+
+    costUsd = (
+      (uncachedInput * inputPrice / 1_000_000) +
+      (cacheRead * cacheReadPrice / 1_000_000) +
+      (cacheWrite * cacheWritePrice / 1_000_000) +
+      ((params.tokensOut || 0) * outputPrice / 1_000_000)
+    )
+  }
+
+  // Log cache hit status to console for debugging
+  if (params.cacheReadTokens || params.cacheCreationTokens) {
+    console.log(`[token-usage] model=${params.modelUsed} in=${params.tokensIn} out=${params.tokensOut} cache_read=${params.cacheReadTokens || 0} cache_write=${params.cacheCreationTokens || 0} cost=$${costUsd?.toFixed(4)}`)
+  }
+
   supabase
     .from('usage_logs')
     .insert({
@@ -314,6 +342,9 @@ export function logUsage(params: {
       model_used: params.modelUsed,
       tokens_in: params.tokensIn || null,
       tokens_out: params.tokensOut || null,
+      cache_read_tokens: params.cacheReadTokens || null,
+      cache_creation_tokens: params.cacheCreationTokens || null,
+      cost_usd: costUsd,
       generation_type: params.generationType,
       prompt_preview: params.promptPreview?.slice(0, 100) || null,
       success: params.success,

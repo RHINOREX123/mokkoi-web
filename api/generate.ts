@@ -1129,7 +1129,7 @@ Requirements:
 
   const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
   const HAIKU = 'claude-haiku-4-5-20251001'
-  const SONNET = 'claude-sonnet-4-20250514'
+  const SONNET = 'claude-sonnet-4-6-20250514'
   const importMaxTokens = 8192
   const messages = [{ role: 'user', content: userMessage }]
 
@@ -1317,21 +1317,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let maxTokens: number
   if (hasImage) {
     // Images always use Sonnet (vision capability required)
-    model = 'claude-sonnet-4-20250514'
-    maxTokens = 16000
+    model = 'claude-sonnet-4-6-20250514'
+    maxTokens = 8000
   } else if (complex && (isNewScreen || isVariation || isRegenerate)) {
     // Haiku classifier said "complex" → use Sonnet
-    model = 'claude-sonnet-4-20250514'
-    maxTokens = 12000
+    model = 'claude-sonnet-4-6-20250514'
+    maxTokens = 8000
     if (userPlan === 'free') freeTierSonnetUpgrade = true
   } else if (isNewScreen || isVariation || isRegenerate) {
     // Haiku classifier said "simple" → use Haiku (big cost saver)
     model = 'claude-haiku-4-5-20251001'
-    maxTokens = 12000
+    maxTokens = 8000
   } else {
     // Edits always use Haiku
     model = 'claude-haiku-4-5-20251001'
-    maxTokens = 8000
+    maxTokens = 4000
   }
 
   // Determine generation type for usage logging
@@ -1672,6 +1672,8 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       let fullText = ''
       let inputTokens = 0
       let outputTokens = 0
+      let cacheReadTokens = 0
+      let cacheCreationTokens = 0
       const decoder = new TextDecoder()
       let sseBuffer = ''
       let lastPartialTreeLen = 0
@@ -1710,6 +1712,8 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
               outputTokens = event.usage.output_tokens || 0
             } else if (event.type === 'message_start' && event.message?.usage) {
               inputTokens = event.message.usage.input_tokens || 0
+              cacheReadTokens = event.message.usage.cache_read_input_tokens || 0
+              cacheCreationTokens = event.message.usage.cache_creation_input_tokens || 0
             }
           } catch {
             // Skip unparseable SSE lines
@@ -1745,8 +1749,8 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
 
         res.write(`data: ${JSON.stringify({ type: 'complete', tree, modelUsed: modelLabel, ...(designBrief ? { designBrief } : {}), ...(validation.issues.length > 0 ? { structuralWarnings: validation.issues } : {}) })}\n\n`)
 
-        // Usage logging
-        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: inputTokens, tokensOut: outputTokens, generationType, promptPreview: prompt, success: true })
+        // Usage logging with cache metrics
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: inputTokens, tokensOut: outputTokens, cacheReadTokens, cacheCreationTokens, generationType, promptPreview: prompt, success: true })
 
         // Edit diff capture
         if (currentScreen && (generationType === 'edit' || generationType === 'variation' || generationType === 'regenerate')) {
@@ -1827,7 +1831,7 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       }
     }
 
-    logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, generationType, promptPreview: prompt, success: true })
+    logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, cacheReadTokens: data.usage?.cache_read_input_tokens, cacheCreationTokens: data.usage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: true })
 
     if (currentScreen && (generationType === 'edit' || generationType === 'variation' || generationType === 'regenerate')) {
       const editType = generationType === 'edit' ? 'ai_edit' : generationType
