@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(unzip -l \"/c/Users/SAHIL/Downloads/Mokkoi_Create_a_travel_app_Expo.zip\")"
+    ]
+  }
+}

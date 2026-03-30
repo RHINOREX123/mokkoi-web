@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan, getSupabaseConfig } from './auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
 import { normalizeComponentTree, type NormalizerOptions } from './normalizer.js'
-import { expandComponents } from './component-library.js'
+import { expandComponents } from '../lib/component-library.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './color-themes.js'
 
