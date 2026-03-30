@@ -1747,6 +1747,221 @@ Rules:
     // If chat template fails, fall through to normal AI generation
   }
 
+  // --- AUTH/LOGIN TEMPLATE: Fixed layout, AI only provides content ---
+  const isAuthTemplate = screenType === 'auth' && !isEditMode && !hasImage && !isRegenerate
+  if (isAuthTemplate) {
+    const authSystemPrompt = `You generate content for a mobile login/signup screen. Return ONLY a JSON object with this exact structure:
+{"appName":"App Name","tagline":"Short tagline","mode":"login","fields":[{"label":"Email","placeholder":"you@example.com","icon":"mail","secure":false},{"label":"Password","placeholder":"Enter password","icon":"lock","secure":true}],"forgotText":"Forgot password?","ctaText":"Sign In","socialButtons":["google","apple"],"footerText":"Don't have an account?","footerAction":"Sign Up"}
+
+Rules:
+- appName: match the user's request or generate a realistic app name
+- tagline: 1 short line (max 40 chars)
+- mode: "login" or "signup" based on user's request
+- fields: 2-4 form fields appropriate for login or signup
+- For signup: add name field, confirm password, etc.
+- ctaText: "Sign In", "Create Account", "Get Started" etc.
+- Return ONLY the JSON object, no markdown, no explanation`
+
+    const authResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: [{ type: 'text', text: authSystemPrompt }], messages: [{ role: 'user', content: cleanPrompt }] }),
+    })
+
+    if (authResponse.ok) {
+      const authData = await authResponse.json() as any
+      const authText = authData.content?.[0]?.text || ''
+      try {
+        const jsonMatch = authText.match(/\{[\s\S]*\}/)
+        const c = JSON.parse(jsonMatch ? jsonMatch[0] : authText)
+        const appName = c.appName || 'MyApp'
+        const tagline = c.tagline || 'Welcome back'
+        const fields = Array.isArray(c.fields) ? c.fields : [{ label: 'Email', placeholder: 'you@example.com', icon: 'mail' }, { label: 'Password', placeholder: 'Enter password', icon: 'lock', secure: true }]
+        const ctaText = c.ctaText || 'Sign In'
+        const socialButtons = Array.isArray(c.socialButtons) ? c.socialButtons : ['google', 'apple']
+        const footerText = c.footerText || "Don't have an account?"
+        const footerAction = c.footerAction || 'Sign Up'
+
+        const tree = {
+          type: 'View',
+          style: { flex: 1, backgroundColor: '#0F172A', paddingTop: 54, paddingBottom: 34, paddingHorizontal: 24 },
+          children: [
+            // Spacer top
+            { type: 'View', style: { height: 60 } },
+            // Logo icon
+            { type: 'View', style: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#6C5CE7', alignItems: 'center', justifyContent: 'center', alignSelf: 'center' }, children: [
+              { type: 'Text', style: { fontSize: 24, fontWeight: '700', color: '#FFFFFF' }, children: [appName.charAt(0)] },
+            ]},
+            // App name
+            { type: 'Text', style: { fontSize: 28, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginTop: 16 }, children: [appName] },
+            // Tagline
+            { type: 'Text', style: { fontSize: 14, color: '#94A3B8', textAlign: 'center', marginTop: 4 }, children: [tagline] },
+            // Spacer
+            { type: 'View', style: { height: 32 } },
+            // Form fields
+            ...fields.map((f: any) => ({
+              type: 'FormInput',
+              props: { label: f.label, placeholder: f.placeholder, icon: f.icon, secureTextEntry: !!f.secure },
+            })),
+            // Forgot password
+            ...(c.forgotText ? [{ type: 'TouchableOpacity', style: { alignSelf: 'flex-end', marginBottom: 16 }, children: [
+              { type: 'Text', style: { fontSize: 13, color: '#6C5CE7' }, children: [c.forgotText] },
+            ]}] : []),
+            // CTA button
+            { type: 'Button', props: { text: ctaText, variant: 'primary', size: 'lg' } },
+            // Divider
+            { type: 'View', style: { flexDirection: 'row', alignItems: 'center', marginVertical: 20, gap: 12 }, children: [
+              { type: 'View', style: { flex: 1, height: 1, backgroundColor: '#2A2A3E' } },
+              { type: 'Text', style: { fontSize: 13, color: '#6B6B80' }, children: ['or continue with'] },
+              { type: 'View', style: { flex: 1, height: 1, backgroundColor: '#2A2A3E' } },
+            ]},
+            // Social buttons
+            { type: 'View', style: { flexDirection: 'row', gap: 12 }, children: socialButtons.map((provider: string) => ({
+              type: 'View', style: { flex: 1 }, children: [{ type: 'SocialButton', props: { provider } }],
+            }))},
+            // Footer
+            { type: 'View', style: { flex: 1 } },
+            { type: 'View', style: { flexDirection: 'row', justifyContent: 'center', gap: 4, paddingBottom: 8 }, children: [
+              { type: 'Text', style: { fontSize: 14, color: '#6B6B80' }, children: [footerText] },
+              { type: 'TouchableOpacity', children: [{ type: 'Text', style: { fontSize: 14, fontWeight: '600', color: '#6C5CE7' }, children: [footerAction] }] },
+            ]},
+          ],
+        }
+
+        const expandedTree = expandComponents(tree)
+        const normalizedTree = normalizeComponentTree(expandedTree, normalizerOpts)
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-haiku-4-5-20251001', tokensIn: authData.usage?.input_tokens || 0, tokensOut: authData.usage?.output_tokens || 0, generationType, promptPreview: prompt, success: true })
+        if (!user.isMCP) await deductCredits(user.id, creditType)
+
+        const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
+        if (wantsStream) {
+          res.setHeader('Content-Type', 'text/event-stream')
+          res.setHeader('Cache-Control', 'no-cache')
+          res.setHeader('Connection', 'keep-alive')
+          res.setHeader('X-Accel-Buffering', 'no')
+          res.write(`data: ${JSON.stringify({ type: 'complete', tree: normalizedTree, modelUsed: 'Haiku (auth template)' })}\n\n`)
+          res.write('data: [DONE]\n\n')
+          return res.end()
+        }
+        return res.status(200).json({ tree: normalizedTree, modelUsed: 'Haiku (auth template)' })
+      } catch { /* Fall through */ }
+    }
+  }
+
+  // --- SETTINGS TEMPLATE: Fixed layout, AI only provides content ---
+  const isSettingsTemplate = screenType === 'settings' && !isEditMode && !hasImage && !isRegenerate
+  if (isSettingsTemplate) {
+    const settingsSystemPrompt = `You generate content for a mobile settings screen. Return ONLY a JSON object with this exact structure:
+{"userName":"Alex Chen","userEmail":"alex@example.com","sections":[{"title":"ACCOUNT","items":[{"icon":"notifications","title":"Notifications","subtitle":"Push and email","type":"toggle","value":true},{"icon":"lock","title":"Privacy & Security","type":"chevron"}]},{"title":"PREFERENCES","items":[{"icon":"dark_mode","title":"Dark Mode","subtitle":"Always on dark theme","type":"toggle","value":true},{"icon":"language","title":"Language","trailing":"English","type":"chevron"}]}]}
+
+Rules:
+- userName and userEmail: realistic, match user's request if specified
+- sections: 2-4 grouped sections with uppercase titles
+- Each item has: icon (Material Symbols name), title, optional subtitle, type (toggle/chevron/text)
+- For toggle type: include value (true/false)
+- For chevron type: optional trailing text
+- Include at least one "Appearance/Dark Mode" toggle and one "Notifications" toggle
+- Last section should have a destructive "Log Out" or "Delete Account" option
+- Return ONLY the JSON object, no markdown, no explanation`
+
+    const settingsResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 800, system: [{ type: 'text', text: settingsSystemPrompt }], messages: [{ role: 'user', content: cleanPrompt }] }),
+    })
+
+    if (settingsResponse.ok) {
+      const settingsData = await settingsResponse.json() as any
+      const settingsText = settingsData.content?.[0]?.text || ''
+      try {
+        const jsonMatch = settingsText.match(/\{[\s\S]*\}/)
+        const c = JSON.parse(jsonMatch ? jsonMatch[0] : settingsText)
+        const userName = c.userName || 'User'
+        const userEmail = c.userEmail || 'user@example.com'
+        const sections = Array.isArray(c.sections) ? c.sections : []
+
+        // Build settings rows from AI content
+        const sectionChildren: any[] = []
+        for (const section of sections) {
+          // Section header
+          sectionChildren.push({ type: 'Text', style: { fontSize: 13, fontWeight: '500', color: '#6B6B80', textTransform: 'uppercase', letterSpacing: 1, marginTop: 24, marginBottom: 8, paddingHorizontal: 20 }, children: [section.title || 'SECTION'] })
+          // Grouped card
+          const items: any[] = (section.items || []).map((item: any, idx: number) => {
+            const isLast = idx === (section.items || []).length - 1
+            const isDestructive = /log\s*out|delete|sign\s*out/i.test(item.title || '')
+            const row: any = {
+              type: 'View',
+              style: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 48, ...(!isLast ? { borderBottomWidth: 1, borderColor: '#2A2A3E' } : {}) },
+              children: [
+                { type: 'Icon', props: { name: item.icon || 'settings', size: 20, color: isDestructive ? '#E17055' : '#A0A0B8' } },
+                { type: 'View', style: { flex: 1, marginLeft: 12 }, children: [
+                  { type: 'Text', style: { fontSize: 16, color: isDestructive ? '#E17055' : '#FFFFFF' }, children: [item.title || 'Setting'] },
+                  ...(item.subtitle ? [{ type: 'Text', style: { fontSize: 12, color: '#6B6B80', marginTop: 1 }, children: [item.subtitle] }] : []),
+                ]},
+                ...(item.type === 'toggle' ? [{ type: 'Switch', props: { value: !!item.value, trackColor: { true: '#00B894', false: '#222236' }, thumbColor: '#FFFFFF' } }] : []),
+                ...(item.trailing ? [{ type: 'Text', style: { fontSize: 14, color: '#6B6B80', marginRight: 4 }, children: [item.trailing] }] : []),
+                ...(item.type === 'chevron' ? [{ type: 'Icon', props: { name: 'chevron_right', size: 18, color: '#6B6B80' } }] : []),
+              ],
+            }
+            return row
+          })
+          sectionChildren.push({
+            type: 'View',
+            style: { backgroundColor: '#12121F', borderRadius: 12, overflow: 'hidden', marginHorizontal: 20 },
+            children: items,
+          })
+        }
+
+        const tree = {
+          type: 'View',
+          style: { flex: 1, backgroundColor: '#0A0A1A', paddingTop: 54 },
+          children: [
+            // Header
+            { type: 'View', style: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: 44 }, children: [
+              { type: 'TouchableOpacity', style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, children: [
+                { type: 'Icon', props: { name: 'arrow_back', size: 20, color: '#FFFFFF' } },
+              ]},
+              { type: 'Text', style: { fontSize: 28, fontWeight: '700', color: '#FFFFFF', marginLeft: 8 }, children: ['Settings'] },
+            ]},
+            // Profile section
+            { type: 'View', style: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 12 }, children: [
+              { type: 'AvatarCircle', props: { name: userName, size: 56 } },
+              { type: 'View', style: { flex: 1 }, children: [
+                { type: 'Text', style: { fontSize: 18, fontWeight: '600', color: '#FFFFFF' }, children: [userName] },
+                { type: 'Text', style: { fontSize: 14, color: '#6B6B80', marginTop: 2 }, children: [userEmail] },
+              ]},
+              { type: 'TouchableOpacity', style: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#12121F', alignItems: 'center', justifyContent: 'center' }, children: [
+                { type: 'Icon', props: { name: 'edit', size: 16, color: '#6C5CE7' } },
+              ]},
+            ]},
+            // Settings sections (scrollable)
+            { type: 'ScrollView', style: { flex: 1 }, props: { showsVerticalScrollIndicator: false }, children: [
+              ...sectionChildren,
+              { type: 'View', style: { height: 34 } },
+            ]},
+          ],
+        }
+
+        const expandedTree = expandComponents(tree)
+        const normalizedTree = normalizeComponentTree(expandedTree, normalizerOpts)
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-haiku-4-5-20251001', tokensIn: settingsData.usage?.input_tokens || 0, tokensOut: settingsData.usage?.output_tokens || 0, generationType, promptPreview: prompt, success: true })
+        if (!user.isMCP) await deductCredits(user.id, creditType)
+
+        const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
+        if (wantsStream) {
+          res.setHeader('Content-Type', 'text/event-stream')
+          res.setHeader('Cache-Control', 'no-cache')
+          res.setHeader('Connection', 'keep-alive')
+          res.setHeader('X-Accel-Buffering', 'no')
+          res.write(`data: ${JSON.stringify({ type: 'complete', tree: normalizedTree, modelUsed: 'Haiku (settings template)' })}\n\n`)
+          res.write('data: [DONE]\n\n')
+          return res.end()
+        }
+        return res.status(200).json({ tree: normalizedTree, modelUsed: 'Haiku (settings template)' })
+      } catch { /* Fall through */ }
+    }
+  }
+
   const modelLabel = model.includes('sonnet') ? 'Sonnet' : 'Haiku'
   const apiPayload = {
     model,
