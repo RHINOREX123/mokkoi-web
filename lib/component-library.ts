@@ -629,11 +629,96 @@ function expandNode(node: any): any {
   return node
 }
 
+// =============================================
+// AUTO-CONVERSION: Raw bubble Views → MessageBubble
+// =============================================
+
+/**
+ * Detect if a View looks like a chat message bubble:
+ * - Has maxWidth (percentage string like "75%" or "80%")
+ * - Has borderRadius >= 12
+ * - Has backgroundColor set
+ * - Contains at least one Text child with actual content
+ */
+function looksLikeBubble(node: any): boolean {
+  if (!node || node.type !== 'View' || !node.style) return false
+  const s = node.style
+  const hasMaxWidth = typeof s.maxWidth === 'string' && /^\d{1,2}%$/.test(s.maxWidth)
+  const hasBorderRadius = typeof s.borderRadius === 'number' && s.borderRadius >= 12
+  const hasBg = typeof s.backgroundColor === 'string' && s.backgroundColor !== 'transparent'
+  if (!hasMaxWidth || !hasBorderRadius || !hasBg) return false
+  // Must contain at least one Text child with text content
+  if (!Array.isArray(node.children)) return false
+  return node.children.some((c: any) =>
+    c?.type === 'Text' && Array.isArray(c.children) && c.children.some((t: any) => typeof t === 'string' && t.length > 0)
+  )
+}
+
+/** Extract text and determine if sent/received from a raw bubble View */
+function extractBubbleData(node: any): { text: string; sent: boolean } | null {
+  if (!Array.isArray(node.children)) return null
+  const textNode = node.children.find((c: any) =>
+    c?.type === 'Text' && Array.isArray(c.children) && c.children.some((t: any) => typeof t === 'string')
+  )
+  if (!textNode) return null
+  const text = textNode.children.filter((t: any) => typeof t === 'string').join('')
+  if (!text) return null
+  // Heuristic: accent/bright colors = sent, dark/muted = received
+  const bg = (node.style?.backgroundColor || '').toLowerCase()
+  const sent = !bg.includes('1e') && !bg.includes('2a') && !bg.includes('1a') && !bg.includes('33') && bg !== '#0f172a'
+  return { text, sent }
+}
+
+/**
+ * Walk the tree and convert raw bubble Views into MessageBubble macros.
+ * This catches cases where the AI ignores the macro instruction and generates raw nodes.
+ */
+function convertRawBubbles(node: any): any {
+  if (!node || typeof node !== 'object') return node
+
+  // Check if this node is a wrapper row containing a bubble (flexDirection:row + justifyContent:flex-start/end)
+  if (node.type === 'View' && node.style?.flexDirection === 'row' &&
+      (node.style?.justifyContent === 'flex-start' || node.style?.justifyContent === 'flex-end') &&
+      Array.isArray(node.children) && node.children.length === 1) {
+    const inner = node.children[0]
+    if (looksLikeBubble(inner)) {
+      const data = extractBubbleData(inner)
+      if (data) {
+        return { type: 'MessageBubble', props: { text: data.text, sent: data.sent } }
+      }
+    }
+  }
+
+  // Also check direct bubble (without row wrapper)
+  if (looksLikeBubble(node)) {
+    const data = extractBubbleData(node)
+    if (data) {
+      return { type: 'MessageBubble', props: { text: data.text, sent: data.sent } }
+    }
+  }
+
+  // Recurse children
+  if (Array.isArray(node.children)) {
+    node.children = node.children
+      .filter((child: any) => child != null)
+      .map((child: any) => {
+        if (typeof child === 'string') return child
+        return convertRawBubbles(child)
+      })
+  }
+
+  return node
+}
+
 /**
  * Expand high-level macro components into full ComponentNode subtrees.
+ * Also auto-converts raw bubble Views into MessageBubble macros.
  * Call this BEFORE normalizeComponentTree() in the generation pipeline.
  */
 export function expandComponents(tree: any): any {
   if (!tree) return tree
+  // First: convert any raw bubble Views to MessageBubble macros
+  tree = convertRawBubbles(tree)
+  // Then: expand all macros (including the newly converted ones)
   return expandNode(tree)
 }
