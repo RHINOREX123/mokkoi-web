@@ -45,9 +45,15 @@ const SUPPORTED_TYPES = new Set([
   'Svg', 'Circle', 'Path', 'Rect', 'Line', 'Defs', 'SvgLinearGradient', 'Stop',
   // Enhanced components
   'Icon', 'LinearGradient',
-  // Macro components (should be expanded by component-library.ts before normalization,
-  // but if expansion fails, these fallback to safe defaults below)
-  'BottomNav', 'HeaderBar', 'StatCard', 'AvatarCircle', 'MessageBubble',
+  // Macro components (expanded by component-library.ts before normalization;
+  // if expansion fails, these fallback to safe defaults in the type map below)
+  'BottomNav', 'HeaderBar', 'TabBar', 'SectionHeader', 'Divider', 'SearchBar',
+  'StatCard', 'ListRow', 'ProductCard', 'TransactionRow', 'FeatureCard', 'PriceBreakdown', 'RatingStars', 'StatusBadge',
+  'AvatarCircle', 'ProfileStats',
+  'FormInput', 'Button', 'SocialButton', 'ChipSelector',
+  'MessageBubble', 'ChatInputBar',
+  'ProgressRing', 'ProgressBar', 'ImageCarousel',
+  'PromoCard',
 ])
 
 // SVG types that should skip spacing/font normalization
@@ -166,11 +172,15 @@ function normalizeNode(
       'StatusBar': 'View',
       'Animated.View': 'View',
       // Macro component fallbacks (if expansion failed to run)
-      'BottomNav': 'View',
-      'HeaderBar': 'View',
-      'StatCard': 'View',
-      'AvatarCircle': 'Image',
-      'MessageBubble': 'View',
+      'BottomNav': 'View', 'HeaderBar': 'View', 'TabBar': 'View', 'SectionHeader': 'View',
+      'Divider': 'View', 'SearchBar': 'View', 'StatCard': 'View', 'ListRow': 'View',
+      'ProductCard': 'View', 'TransactionRow': 'View', 'FeatureCard': 'View',
+      'PriceBreakdown': 'View', 'RatingStars': 'View', 'StatusBadge': 'View',
+      'AvatarCircle': 'Image', 'ProfileStats': 'View', 'FormInput': 'View',
+      'Button': 'TouchableOpacity', 'SocialButton': 'TouchableOpacity',
+      'ChipSelector': 'View', 'MessageBubble': 'View', 'ChatInputBar': 'View',
+      'ProgressRing': 'View', 'ProgressBar': 'View', 'ImageCarousel': 'View',
+      'PromoCard': 'View',
     }
     normalized.type = typeMap[normalized.type] || 'View'
   }

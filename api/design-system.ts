@@ -38,14 +38,49 @@ SVG ring: {"type":"Svg","style":{"width":56,"height":56},"props":{"viewBox":"0 0
   Formula: strokeDasharray=2*pi*r, strokeDashoffset=dasharray*(1-fraction)
 ScrollView: props showsVerticalScrollIndicator, horizontal. TextInput: props placeholder, placeholderTextColor, secureTextEntry. Switch: props value, trackColor, thumbColor.
 
-MACRO COMPONENTS (use these instead of building from raw nodes — they auto-expand to full subtrees):
+MACRO COMPONENTS — use these instead of raw nodes. They auto-expand to production-quality subtrees:
+
+NAVIGATION & LAYOUT:
 BottomNav: {"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Browse"},{"icon":"shopping_cart","label":"Cart"},{"icon":"person","label":"Account"}]}}
 HeaderBar: {"type":"HeaderBar","props":{"title":"Settings","showBack":true,"rightIcons":["notifications","more_vert"]}}
-StatCard: {"type":"StatCard","props":{"icon":"monitoring","iconColor":"#A78BFA","value":"8,450","label":"steps"}}
-AvatarCircle: {"type":"AvatarCircle","props":{"name":"Sarah","size":40}}
-MessageBubble: {"type":"MessageBubble","props":{"text":"Hey! How are you?","sent":false,"time":"10:30 AM"}}
+TabBar: {"type":"TabBar","props":{"tabs":[{"label":"Posts","active":true},{"label":"Reels"},{"label":"Tagged"}]}}
+SectionHeader: {"type":"SectionHeader","props":{"title":"Recent Activity","actionText":"See All"}}
+SearchBar: {"type":"SearchBar","props":{"placeholder":"Search restaurants, food..."}}
+Divider: {"type":"Divider"}
 
-WHEN TO USE MACROS: ALWAYS use BottomNav for bottom navigation, HeaderBar for screen headers, StatCard for dashboard metrics, AvatarCircle for user photos, MessageBubble for chat messages. These guarantee correct spacing, icons, and styling.
+DATA DISPLAY:
+StatCard: {"type":"StatCard","props":{"icon":"monitoring","iconColor":"#A78BFA","value":"8,450","label":"steps"}}
+ListRow: {"type":"ListRow","props":{"icon":"notifications","title":"Notifications","subtitle":"Push and email","trailing":"On","showChevron":true}}
+ProductCard: {"type":"ProductCard","props":{"image":"margherita pizza fresh basil","title":"Margherita Supreme","price":"$18.90","rating":"4.8","badge":"20% Off"}}
+TransactionRow: {"type":"TransactionRow","props":{"icon":"shopping_bag","iconColor":"#818CF8","merchant":"Amazon","date":"Today","amount":"-$42.99"}}
+FeatureCard: {"type":"FeatureCard","props":{"icon":"local_shipping","iconColor":"#22C55E","title":"Free Shipping","subtitle":"On orders over $50"}}
+PriceBreakdown: {"type":"PriceBreakdown","props":{"items":[{"label":"Subtotal","value":"$24.99"},{"label":"Shipping","value":"Free"},{"label":"Total","value":"$24.99","bold":true}]}}
+RatingStars: {"type":"RatingStars","props":{"rating":4.5,"count":"(128 reviews)"}}
+StatusBadge: {"type":"StatusBadge","props":{"text":"Active","color":"#22C55E"}}
+
+USER IDENTITY:
+AvatarCircle: {"type":"AvatarCircle","props":{"name":"Sarah","size":40}}
+ProfileStats: {"type":"ProfileStats","props":{"stats":[{"value":"284","label":"Posts"},{"value":"12.5K","label":"Followers"},{"value":"891","label":"Following"}]}}
+
+FORM & INPUT:
+FormInput: {"type":"FormInput","props":{"label":"Email","placeholder":"you@example.com","icon":"mail"}}
+Button: {"type":"Button","props":{"text":"Sign In","variant":"primary","size":"md"}} (variants: primary/secondary/outline, sizes: sm/md/lg)
+SocialButton: {"type":"SocialButton","props":{"provider":"google"}} (providers: google/apple)
+ChipSelector: {"type":"ChipSelector","props":{"chips":[{"label":"All","active":true},{"label":"Pizza"},{"label":"Burgers"},{"label":"Sushi"}]}}
+
+CHAT:
+MessageBubble: {"type":"MessageBubble","props":{"text":"Hey! How are you?","sent":false,"time":"10:30 AM"}}
+ChatInputBar: {"type":"ChatInputBar","props":{"placeholder":"Type a message..."}}
+
+MEDIA & VISUALIZATION:
+ProgressRing: {"type":"ProgressRing","props":{"progress":0.82,"size":56,"color":"#6C5CE7","label":"Daily Goal"}}
+ProgressBar: {"type":"ProgressBar","props":{"progress":0.65,"label":"Storage","value":"6.5 GB / 10 GB"}}
+ImageCarousel: {"type":"ImageCarousel","props":{"images":["red running shoes side view","running shoes top view","shoes on runner feet"],"height":200}}
+
+CONTENT:
+PromoCard: {"type":"PromoCard","props":{"title":"50% Off Pizza","subtitle":"On orders above $30","buttonText":"Order Now","color":"#EF4444"}}
+
+RULES: ALWAYS use macros when available. Use BottomNav for ALL bottom navigation, HeaderBar for ALL screen headers, FormInput for ALL form fields, ListRow for ALL settings/list items, ProductCard for ALL product listings, MessageBubble for ALL chat messages.
 `
 
 export const VIEWPORT_BUDGET = `
