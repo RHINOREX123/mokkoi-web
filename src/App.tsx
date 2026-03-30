@@ -39,11 +39,15 @@ function App() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const initialPrompt = searchParams.get('prompt') || undefined
 
-  // Clean ?prompt= from URL after consuming it (prevents re-generation on refresh)
+  // Capture initial prompt from URL ONCE on mount, before cleanup removes it.
+  // useRef persists across re-renders so the value survives URL cleanup.
+  const initialPromptRef = useRef(searchParams.get('prompt') || undefined)
+  const initialPrompt = initialPromptRef.current
+
+  // Clean ?prompt= from URL after capturing it (prevents re-generation on refresh)
   useEffect(() => {
-    if (initialPrompt) {
+    if (searchParams.get('prompt')) {
       const newParams = new URLSearchParams(searchParams)
       newParams.delete('prompt')
       setSearchParams(newParams, { replace: true })
