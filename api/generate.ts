@@ -1129,7 +1129,7 @@ Requirements:
 
   const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
   const HAIKU = 'claude-haiku-4-5-20251001'
-  const SONNET = 'claude-sonnet-4-6-20250514'
+  const SONNET = 'claude-sonnet-4-6'
   const importMaxTokens = 8192
   const messages = [{ role: 'user', content: userMessage }]
 
@@ -1317,11 +1317,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let maxTokens: number
   if (hasImage) {
     // Images always use Sonnet (vision capability required)
-    model = 'claude-sonnet-4-6-20250514'
+    model = 'claude-sonnet-4-6'
     maxTokens = 8000
   } else if (complex && (isNewScreen || isVariation || isRegenerate)) {
     // Haiku classifier said "complex" → use Sonnet
-    model = 'claude-sonnet-4-6-20250514'
+    model = 'claude-sonnet-4-6'
     maxTokens = 8000
     if (userPlan === 'free') freeTierSonnetUpgrade = true
   } else if (isNewScreen || isVariation || isRegenerate) {
