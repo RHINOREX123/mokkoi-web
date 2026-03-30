@@ -1160,35 +1160,102 @@ Requirements:
     return { success: true, screen: { name: screenName, tree: normalizedTree, detectedColors, detectedSource: source, conversionNotes }, modelUsed }
   }
 
-  // --- DOM PARSER FAST PATH: deterministic, zero-cost, 100% text preservation ---
+  // --- HYBRID IMPORT: DOM parser for structure + Sonnet polish for visuals ---
+  // Step 1: DOM parser extracts 100% of text/structure (free, <500ms)
+  // Step 2: Sonnet refines styling to match original HTML (~$0.02, 2-4s)
   if (shouldUseDomParser(cleanedCode, detected)) {
     try {
-      console.log(`[import-html] Attempting DOM parser (zero-cost, deterministic)...`)
-      let tree = parseHtmlToComponentTree(cleanedCode)
-      tree = expandComponents(tree)
-      tree = normalizeComponentTree(tree)
+      console.log(`[import-html] Hybrid mode: DOM parser + Sonnet polish...`)
+      let parsedTree = parseHtmlToComponentTree(cleanedCode)
+      parsedTree = expandComponents(parsedTree)
+      parsedTree = normalizeComponentTree(parsedTree)
 
-      if (isImportTreeGoodEnough(tree)) {
-        console.log(`[import-html] DOM parser succeeded — $0 cost`)
-        const result = buildSuccessResponse(tree, 'dom-parser')
-        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'dom-parser', tokensIn: 0, tokensOut: 0, generationType: 'new_screen', promptPreview: `[import-html] DOM parser: ${detected.type} from ${source}`, success: true })
-        if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+      if (isImportTreeGoodEnough(parsedTree)) {
+        // DOM parse succeeded — now send to Sonnet for visual polish
+        const polishPrompt = `You are refining a React Native component tree that was parsed from HTML. The parsed tree has correct text content and structure but needs visual styling improvements.
+
+ORIGINAL HTML (for visual reference):
+\`\`\`
+${cleanedCode.slice(0, 8000)}
+\`\`\`
+
+PARSED COMPONENT TREE (structure is correct, DO NOT change text content):
+${JSON.stringify(parsedTree).slice(0, 6000)}
+
+INSTRUCTIONS:
+1. KEEP ALL text content EXACTLY as-is — do not change any labels, prices, names, or button text
+2. KEEP the component tree structure — do not add or remove components
+3. IMPROVE these visual properties to match the original HTML:
+   - Fix colors: match backgrounds, text colors, borders, accents from the HTML
+   - Fix spacing: padding, margins, gaps should match the original layout
+   - Fix borders: borderRadius, borderWidth, borderColor from HTML
+   - Add missing gradients as LinearGradient or solid accent colors
+   - Fix font styling: fontSize, fontWeight, fontStyle, textTransform
+   - Images: convert broken URLs to searchQuery props with descriptive text
+   - Map backgrounds: replace with Image using searchQuery "dark city map aerial view night"
+4. Ensure root has: flex:1, dark backgroundColor, paddingTop:54
+5. Ensure bottom nav has proper styling with icon colors
+
+Return ONLY the complete refined JSON component tree. No markdown, no explanation.`
+
+        const polishMessages = [{ role: 'user', content: polishPrompt }]
 
         if (wantsStream) {
           res.setHeader('Content-Type', 'text/event-stream')
           res.setHeader('Cache-Control', 'no-cache')
           res.setHeader('Connection', 'keep-alive')
           res.setHeader('X-Accel-Buffering', 'no')
-          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Parsing HTML directly...', model: 'dom-parser' })}\n\n`)
+          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Parsing HTML structure...', model: 'dom-parser' })}\n\n`)
+          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Polishing visual design...', model: 'sonnet' })}\n\n`)
+
+          const polishResult = await streamAnthropicImport(SONNET, 8192, 'You are a React Native styling expert. Refine the component tree to match the original HTML design. Return ONLY valid minified JSON.', polishMessages, apiKey, res, 'polish')
+
+          let finalTree: any = null
+          if (polishResult) {
+            try { finalTree = repairImportJSON(polishResult.text) } catch { finalTree = null }
+          }
+
+          // If polish succeeded, use it. If failed, use DOM-parsed tree (still good).
+          if (!finalTree || !isImportTreeGoodEnough(finalTree)) {
+            console.log(`[import-html] Sonnet polish failed, using DOM-parsed tree`)
+            finalTree = parsedTree
+          } else {
+            finalTree = expandComponents(finalTree)
+            finalTree = normalizeComponentTree(finalTree)
+          }
+
+          const result = buildSuccessResponse(finalTree, polishResult ? 'hybrid (dom+sonnet)' : 'dom-parser')
+          const tokIn = polishResult?.inputTokens || 0
+          const tokOut = polishResult?.outputTokens || 0
+          logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: polishResult ? 'claude-sonnet-4-6' : 'dom-parser', tokensIn: tokIn, tokensOut: tokOut, generationType: 'new_screen', promptPreview: `[import-html] Hybrid: ${detected.type} from ${source}`, success: true })
+          if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+
           res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
           res.write('data: [DONE]\n\n')
           return res.end()
         }
+
+        // Non-streaming hybrid path
+        const polishResult = await callAnthropicImport(SONNET, 8192, 'You are a React Native styling expert. Refine the component tree to match the original HTML design. Return ONLY valid minified JSON.', polishMessages, apiKey)
+        let finalTree: any = null
+        if (polishResult) {
+          try { finalTree = repairImportJSON(polishResult.text) } catch { finalTree = null }
+        }
+        if (!finalTree || !isImportTreeGoodEnough(finalTree)) {
+          finalTree = parsedTree
+        } else {
+          finalTree = expandComponents(finalTree)
+          finalTree = normalizeComponentTree(finalTree)
+        }
+
+        const result = buildSuccessResponse(finalTree, polishResult ? 'hybrid (dom+sonnet)' : 'dom-parser')
+        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: polishResult ? 'claude-sonnet-4-6' : 'dom-parser', tokensIn: polishResult?.inputTokens || 0, tokensOut: polishResult?.outputTokens || 0, generationType: 'new_screen', promptPreview: `[import-html] Hybrid: ${detected.type} from ${source}`, success: true })
+        if (!user.isMCP) await deductCredits(user.id, 'new_screen')
         return res.status(200).json(result)
       }
-      console.log(`[import-html] DOM parser tree too simple, falling through to AI...`)
+      console.log(`[import-html] DOM parser tree too simple, falling through to full AI...`)
     } catch (parseErr) {
-      console.log(`[import-html] DOM parser failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}, falling through to AI...`)
+      console.log(`[import-html] Hybrid import failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}, falling through to full AI...`)
     }
   }
 
