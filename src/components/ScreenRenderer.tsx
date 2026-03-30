@@ -448,12 +448,18 @@ function rnStyleToCSS(style?: Record<string, unknown>): React.CSSProperties {
   return css as React.CSSProperties
 }
 
-// Base styles that mimic React Native defaults
+// Base styles that mimic React Native defaults.
+// In React Native, Views are flex containers but children size to their content.
+// In web CSS, flex children can stretch to fill their parent — we prevent this
+// with alignItems: 'stretch' (horizontal fill, same as RN) and let vertical
+// stacking happen naturally via justify-content: flex-start (CSS default).
 const VIEW_BASE: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   position: 'relative',
   boxSizing: 'border-box',
+  minHeight: 0, // Prevents flex items from overflowing their parent
+  minWidth: 0,  // Same for width
 }
 
 const TEXT_BASE: React.CSSProperties = {
