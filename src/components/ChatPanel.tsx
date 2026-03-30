@@ -131,13 +131,16 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     return () => window.removeEventListener('mokkoi-set-chat-input', handler)
   }, [])
 
-  // Handle initial prompt from URL
+  // Handle initial prompt from URL — only for NEW projects (no existing screens)
+  // Using a ref for onSend to avoid re-triggering when the callback identity changes
+  const onSendRef = useRef(onSend)
+  onSendRef.current = onSend
   useEffect(() => {
-    if (initialPrompt && !initialPromptHandled.current) {
+    if (initialPrompt && !initialPromptHandled.current && !hasScreens) {
       initialPromptHandled.current = true
-      onSend(initialPrompt)
+      onSendRef.current(initialPrompt)
     }
-  }, [initialPrompt, onSend])
+  }, [initialPrompt, hasScreens])
 
   const handleSend = () => {
     const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')

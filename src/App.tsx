@@ -36,10 +36,19 @@ interface CanvasRefImage {
 }
 
 function App() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const initialPrompt = searchParams.get('prompt') || undefined
+
+  // Clean ?prompt= from URL after consuming it (prevents re-generation on refresh)
+  useEffect(() => {
+    if (initialPrompt) {
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('prompt')
+      setSearchParams(newParams, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Core hooks ---
   const canvas = useCanvasState()
