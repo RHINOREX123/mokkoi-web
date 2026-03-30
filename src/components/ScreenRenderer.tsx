@@ -527,6 +527,10 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         }}>
           <div style={{
             ...VIEW_BASE, ...containerStyle,
+            // CRITICAL: inner content container must NOT stretch to fill the scroll area.
+            // Without this, flex layout makes it fill the parent height, which then
+            // stretches all children (chat bubbles, cards) to share that space.
+            minHeight: 'min-content',
             ...(isHorizontal ? { flexDirection: 'row', flexWrap: 'nowrap' } : {}),
           }}>
             {children}
