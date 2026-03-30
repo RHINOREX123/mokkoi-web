@@ -834,13 +834,18 @@ bg-black/#000000, bg-white/#FFFFFF
 - Keep spacing proportional but adjust for mobile: if web uses 32px padding, RN should use 16-20px
 - iOS safe areas: paddingTop: 54 (status bar), paddingBottom: 34 (home indicator)
 
-### Content Preservation
-- Keep ALL text content exactly as it appears
+### Content Preservation (HIGHEST PRIORITY — preserve EVERYTHING)
+- Keep ALL text content EXACTLY as it appears — every label, every number, every title
 - Keep ALL image URLs exactly as they appear
 - Keep icon references — use Icon component with closest Google Material Symbols name
   Common: home, search, menu, arrow_back, chevron_right, close, favorite, star, bookmark, share, send, person, notifications, play_arrow, pause, skip_next, shopping_cart, credit_card, trending_up, monitoring, bolt, location_on, fitness_center, settings, lock, calendar_today
 - Keep placeholder text in inputs
-- Keep button labels
+- Keep button labels EXACTLY (including arrows like →, icons, and text)
+- NEVER drop text from bottom nav tabs — every tab MUST have its Icon + Text label (e.g. "Home", "Activity", "Wallet", "Profile")
+- NEVER simplify cards by removing text — if a card shows "Gym & Fitness Hub" + "2 DAYS AGO", keep BOTH texts
+- Preserve ALL prices, ratings, ETAs, counts, percentages — every number matters
+- If a section has a title like "RECENT JOURNEYS" or "CHOOSE RIDE", keep the EXACT title text
+- Selected/active states: if an element has a highlighted border or different background, preserve that visual distinction
 
 ### What to Skip
 - Script tags and JavaScript logic
@@ -860,6 +865,13 @@ These web patterns MUST be converted, not ignored:
 6. Tab bars, segmented controls → View with flexDirection: "row", children as TouchableOpacity buttons.
 
 Remember: position: fixed → position: "absolute" (do NOT skip fixed-position elements, convert them).
+
+### MACRO COMPONENTS — Use these for common patterns detected in the HTML:
+- Bottom nav bar → use BottomNav: {"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Browse"}]}}
+- Navigation header → use HeaderBar: {"type":"HeaderBar","props":{"title":"Screen Title","showBack":true,"rightIcons":["notifications"]}}
+- User avatar circles → use AvatarCircle: {"type":"AvatarCircle","props":{"name":"User","size":40}}
+- Search input with icon → use SearchBar: {"type":"SearchBar","props":{"placeholder":"Search..."}}
+These expand to guaranteed-correct subtrees. Use them whenever the HTML has matching patterns.
 
 ${DESIGN_TOKENS}
 ${COMPONENT_TYPES}
