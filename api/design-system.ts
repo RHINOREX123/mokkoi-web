@@ -37,6 +37,15 @@ LinearGradient: {"type":"LinearGradient","props":{"colors":["#6366F1","#8B5CF6"]
 SVG ring: {"type":"Svg","style":{"width":56,"height":56},"props":{"viewBox":"0 0 56 56"},"children":[{"type":"Circle","props":{"cx":28,"cy":28,"r":24,"stroke":"#222236","strokeWidth":4,"fill":"none"}},{"type":"Circle","props":{"cx":28,"cy":28,"r":24,"stroke":"#6C5CE7","strokeWidth":4,"fill":"none","strokeDasharray":"151","strokeDashoffset":"38","strokeLinecap":"round"}}]}
   Formula: strokeDasharray=2*pi*r, strokeDashoffset=dasharray*(1-fraction)
 ScrollView: props showsVerticalScrollIndicator, horizontal. TextInput: props placeholder, placeholderTextColor, secureTextEntry. Switch: props value, trackColor, thumbColor.
+
+MACRO COMPONENTS (use these instead of building from raw nodes — they auto-expand to full subtrees):
+BottomNav: {"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Browse"},{"icon":"shopping_cart","label":"Cart"},{"icon":"person","label":"Account"}]}}
+HeaderBar: {"type":"HeaderBar","props":{"title":"Settings","showBack":true,"rightIcons":["notifications","more_vert"]}}
+StatCard: {"type":"StatCard","props":{"icon":"monitoring","iconColor":"#A78BFA","value":"8,450","label":"steps"}}
+AvatarCircle: {"type":"AvatarCircle","props":{"name":"Sarah","size":40}}
+MessageBubble: {"type":"MessageBubble","props":{"text":"Hey! How are you?","sent":false,"time":"10:30 AM"}}
+
+WHEN TO USE MACROS: ALWAYS use BottomNav for bottom navigation, HeaderBar for screen headers, StatCard for dashboard metrics, AvatarCircle for user photos, MessageBubble for chat messages. These guarantee correct spacing, icons, and styling.
 `
 
 export const VIEWPORT_BUDGET = `

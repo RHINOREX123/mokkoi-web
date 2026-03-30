@@ -44,7 +44,10 @@ const SUPPORTED_TYPES = new Set([
   // SVG data visualization components
   'Svg', 'Circle', 'Path', 'Rect', 'Line', 'Defs', 'SvgLinearGradient', 'Stop',
   // Enhanced components
-  'Icon', 'LinearGradient'
+  'Icon', 'LinearGradient',
+  // Macro components (should be expanded by component-library.ts before normalization,
+  // but if expansion fails, these fallback to safe defaults below)
+  'BottomNav', 'HeaderBar', 'StatCard', 'AvatarCircle', 'MessageBubble',
 ])
 
 // SVG types that should skip spacing/font normalization
@@ -162,6 +165,12 @@ function normalizeNode(
       'Modal': 'View',
       'StatusBar': 'View',
       'Animated.View': 'View',
+      // Macro component fallbacks (if expansion failed to run)
+      'BottomNav': 'View',
+      'HeaderBar': 'View',
+      'StatCard': 'View',
+      'AvatarCircle': 'Image',
+      'MessageBubble': 'View',
     }
     normalized.type = typeMap[normalized.type] || 'View'
   }

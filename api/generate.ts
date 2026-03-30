@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan, getSupabaseConfig } from './auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
 import { normalizeComponentTree, type NormalizerOptions } from './normalizer.js'
+import { expandComponents } from './component-library.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './color-themes.js'
 
@@ -1174,7 +1175,8 @@ Requirements:
         return res.end()
       }
 
-      const normalizedTree = normalizeComponentTree(tree)
+      const expandedTree = expandComponents(tree)
+      const normalizedTree = normalizeComponentTree(expandedTree)
       const result = buildSuccessResponse(normalizedTree, modelUsed)
 
       if (!user.isMCP) await deductCredits(user.id, 'new_screen')
@@ -1226,7 +1228,8 @@ Requirements:
     const validation = validateImportTree(tree)
     if (!validation.valid) return res.status(422).json({ error: validation.error })
 
-    const normalizedTree = normalizeComponentTree(tree)
+    const expandedTree = expandComponents(tree)
+    const normalizedTree = normalizeComponentTree(expandedTree)
     const result = buildSuccessResponse(normalizedTree, modelUsed)
 
     if (!user.isMCP) await deductCredits(user.id, 'new_screen')
@@ -1737,6 +1740,9 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
         const { brief: designBrief, jsonText } = extractDesignBrief(fullText)
         let tree = repairJSON(jsonText || fullText)
 
+        // Expand macro components (BottomNav, HeaderBar, etc.) into full subtrees
+        tree = expandComponents(tree)
+
         // Normalize the component tree
         tree = normalizeComponentTree(tree, normalizerOpts)
 
@@ -1828,6 +1834,9 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
       logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, cacheReadTokens: data.usage?.cache_read_input_tokens, cacheCreationTokens: data.usage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: false })
       return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
     }
+
+    // Expand macro components (BottomNav, HeaderBar, etc.) into full subtrees
+    tree = expandComponents(tree)
 
     // Normalize the component tree
     tree = normalizeComponentTree(tree, normalizerOpts)
