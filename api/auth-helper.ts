@@ -142,14 +142,14 @@ export async function checkRateLimit(
 // --- Credit-based system ---
 
 const CREDIT_COSTS: Record<string, Record<string, number>> = {
-  free: { new_screen: 5, edit: 1, flow: 15, screenshot: 8 },
-  pro: { new_screen: 5, edit: 1, flow: 15, screenshot: 8 },
-  max: { new_screen: 3, edit: 1, flow: 10, screenshot: 5 },
+  free: { new_screen: 5, edit: 1, flow: 15, screenshot: 8, app: 20 },
+  pro: { new_screen: 5, edit: 1, flow: 15, screenshot: 8, app: 20 },
+  max: { new_screen: 3, edit: 1, flow: 10, screenshot: 5, app: 15 },
 }
 
 export async function checkCredits(
   userId: string,
-  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot'
+  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot' | 'app'
 ): Promise<{ hasCredits: boolean; creditsRemaining: number; cost: number; error?: string; upgradeUrl?: string }> {
   if (userId === 'anonymous' || userId === 'mcp') {
     return { hasCredits: true, creditsRemaining: -1, cost: 0 }
@@ -190,7 +190,7 @@ export async function checkCredits(
 
 export async function deductCredits(
   userId: string,
-  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot'
+  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot' | 'app'
 ): Promise<{ success: boolean; creditsRemaining: number; error?: string; upgradeUrl?: string }> {
   if (userId === 'anonymous' || userId === 'mcp') {
     return { success: true, creditsRemaining: -1 }

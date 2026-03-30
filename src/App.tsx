@@ -110,6 +110,7 @@ function App() {
     setToastMessage,
     setShowVariationsPanel,
     getNextScreenPosition: screens.getNextScreenPosition,
+    addConnection: screens.addConnection,
     deviceId: screens.activeDeviceId,
   })
 
@@ -443,6 +444,7 @@ function App() {
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
               onDeselectScreen={() => screens.setActiveGeneratedId(null)} focusTrigger={focusTrigger}
               onStopGenerating={ai.isGenerating ? ai.handleStopGenerating : undefined}
+              appPhase={ai.appPhase} appProgress={ai.appProgress}
             />
           </ErrorBoundary>
         </div>

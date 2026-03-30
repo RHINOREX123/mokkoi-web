@@ -42,6 +42,10 @@ interface ChatPanelProps {
   focusTrigger?: number
   /** Callback to cancel in-progress generation */
   onStopGenerating?: () => void
+  /** App generation phase (planning → generating) */
+  appPhase?: 'idle' | 'planning' | 'generating'
+  /** App generation progress (current/total screens) */
+  appProgress?: { current: number; total: number } | null
 }
 
 const PLACEHOLDERS = [
@@ -74,7 +78,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -500,6 +504,48 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                     ? streamingText.slice(streamingText.length - 200)
                     : streamingText}
                   <span style={{ color: '#818CF8', animation: 'blink 1s step-end infinite' }}>|</span>
+                </div>
+              </div>
+            ) : appPhase && appPhase !== 'idle' ? (
+              /* App generation progress (planning → generating screens) */
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: 8,
+                minWidth: 200,
+              }}>
+                {/* Step 1: Planning */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  opacity: 1,
+                }}>
+                  {appPhase === 'generating' ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <circle cx="7" cy="7" r="7" fill="rgba(52,211,153,0.2)" />
+                      <path d="M4 7l2 2 4-4" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" className="animate-spin" style={{ animationDuration: '1.5s' }}>
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                    </svg>
+                  )}
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                    Planning your app...
+                  </span>
+                </div>
+                {/* Step 2: Generating screens */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  opacity: appPhase === 'generating' ? 1 : 0.3,
+                }}>
+                  {appPhase === 'generating' ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" className="animate-spin" style={{ animationDuration: '1.5s' }}>
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                    </svg>
+                  ) : (
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.15)' }} />
+                  )}
+                  <span style={{ fontSize: 12, color: appPhase === 'generating' ? '#94a3b8' : '#3e4a5e' }}>
+                    {appProgress ? `Generating screens (${appProgress.current}/${appProgress.total})...` : 'Generating screens...'}
+                  </span>
                 </div>
               </div>
             ) : (

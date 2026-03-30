@@ -9,9 +9,15 @@ import { GAP } from '../components/FlowConnectors'
 import { getCanvasDimensions } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
 
+const APP_KEYWORDS = [
+  'build me', 'build an app', 'create an app', 'make me an app',
+  'full app', 'complete app', 'entire app', 'whole app',
+  'app with', 'mobile app', 'app that', 'app for',
+]
+
 const FLOW_KEYWORDS = [
-  'flow', 'onboarding', 'walkthrough', 'multi-screen', 'complete app',
-  'full app', 'series of screens', 'connected screens', 'user journey',
+  'flow', 'onboarding', 'walkthrough', 'multi-screen',
+  'series of screens', 'connected screens', 'user journey',
   'navigation flow', 'multi screen', 'multiple screens', 'screen flow',
   'app flow', 'checkout flow', 'signup flow', 'sign up flow',
 ]
@@ -33,6 +39,11 @@ const CREATE_KEYWORDS = [
 // Strong create signal: if prompt matches these patterns, ALWAYS create (never edit)
 const STRONG_CREATE_PATTERN = /\b(create|build|design|generate)\s+(a|an|me)\b/i
 const STRONG_NEW_PATTERN = /\bnew\b/i
+
+function isAppPrompt(prompt: string): boolean {
+  const lower = prompt.toLowerCase()
+  return APP_KEYWORDS.some(kw => lower.includes(kw))
+}
 
 function isFlowPrompt(prompt: string): boolean {
   const lower = prompt.toLowerCase()
@@ -98,6 +109,8 @@ export interface AIGeneration {
   isStreaming: boolean
   streamingText: string
   partialTree: ComponentNode | null
+  appPhase: 'idle' | 'planning' | 'generating'
+  appProgress: { current: number; total: number } | null
 
   handleSend: (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => Promise<void>
   handleRegenerate: () => void
@@ -119,6 +132,7 @@ interface AIGenerationDeps {
   setToastMessage: (msg: string) => void
   setShowVariationsPanel: (show: boolean) => void
   getNextScreenPosition: () => { x: number; y: number }
+  addConnection: (from: string, to: string) => void
   deviceId: DeviceId
 }
 
@@ -150,6 +164,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     setToastMessage,
     setShowVariationsPanel,
     getNextScreenPosition,
+    addConnection,
     deviceId,
   } = deps
 
@@ -158,6 +173,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const [partialTree, setPartialTree] = useState<ComponentNode | null>(null)
+  const [appPhase, setAppPhase] = useState<'idle' | 'planning' | 'generating'>('idle')
+  const [appProgress, setAppProgress] = useState<{ current: number; total: number } | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => {
@@ -210,6 +227,159 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     const editingScreen = editingScreenId
       ? generatedScreens.find(s => s.id === editingScreenId)
       : null
+
+    // App generation — "Build me a fitness app" type prompts
+    const appRequest = isAppPrompt(prompt) && !imageData && !editingScreen
+    if (appRequest) {
+      const placeholderId = crypto.randomUUID()
+      const placeholderName = prompt.length > 25 ? prompt.slice(0, 25) + '...' : prompt
+      const nextPos = getNextScreenPosition()
+      const placeholderScreen: GeneratedScreen = {
+        id: placeholderId,
+        name: placeholderName,
+        originalPrompt: prompt,
+        tree: { type: 'View', style: {}, children: [] },
+        deviceId,
+        ...nextPos,
+      }
+      setGeneratedScreens(prev => [...prev, placeholderScreen])
+      setActiveGeneratedId(placeholderId)
+      setIsGenerating(true)
+      setAppPhase('planning')
+      setAppProgress(null)
+
+      try {
+        const authHeaders = await getAuthHeaders()
+        const conversationHistory = buildConversationHistory(projectMessages)
+        const res = await fetch('/api/generate-app', {
+          method: 'POST',
+          headers: { ...authHeaders, 'Accept': 'text/event-stream' },
+          body: JSON.stringify({ prompt, projectId, conversationHistory, deviceId }),
+        })
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData.error || 'Failed to generate app')
+        }
+
+        // Read SSE stream
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('No response body')
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let allScreens: Array<{ id: string; name: string; tree: ComponentNode }> = []
+        let connections: Array<{ fromScreenId: string; toScreenId: string }> = []
+        let homeScreenId = ''
+        let appName = ''
+        let modelUsed = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const jsonStr = line.slice(6).trim()
+            if (!jsonStr || jsonStr === '[DONE]') continue
+
+            try {
+              const event = JSON.parse(jsonStr)
+
+              if (event.type === 'status') {
+                setAppPhase(event.phase || 'generating')
+                if (event.current != null && event.total != null) {
+                  setAppProgress({ current: event.current, total: event.total })
+                }
+              } else if (event.type === 'screen') {
+                allScreens.push(event.screen)
+              } else if (event.type === 'complete') {
+                allScreens = event.screens || allScreens
+                connections = event.connections || []
+                homeScreenId = event.homeScreenId || ''
+                appName = event.appName || ''
+                modelUsed = event.modelUsed || ''
+              } else if (event.type === 'error') {
+                throw new Error(event.message)
+              }
+            } catch (parseErr) {
+              // Skip unparseable SSE lines
+              if (parseErr instanceof Error && parseErr.message !== 'Unexpected end of JSON input') {
+                if (parseErr.message.startsWith('Failed') || parseErr.message.startsWith('AI')) {
+                  throw parseErr
+                }
+              }
+            }
+          }
+        }
+
+        if (allScreens.length === 0) {
+          throw new Error('No screens were generated')
+        }
+
+        // Calculate grid positions for screens
+        const { CANVAS_W, CANVAS_H } = getCanvasDimensions(deviceId)
+        const cols = allScreens.length <= 4 ? allScreens.length : Math.ceil(allScreens.length / 2)
+        const appScreens: GeneratedScreen[] = allScreens.map((s, i) => ({
+          id: s.id,
+          name: s.name,
+          tree: s.tree,
+          originalPrompt: prompt,
+          deviceId,
+          x: nextPos.x + (i % cols) * (CANVAS_W + GAP),
+          y: nextPos.y + Math.floor(i / cols) * (CANVAS_H + GAP + 50),
+        }))
+
+        // Replace placeholder with actual screens
+        setGeneratedScreens(prev => {
+          const withoutPlaceholder = prev.filter(s => s.id !== placeholderId)
+          return [...withoutPlaceholder, ...appScreens]
+        })
+
+        // Select home screen
+        const homeScreen = appScreens.find(s => s.id === homeScreenId) || appScreens[0]
+        setActiveGeneratedId(homeScreen.id)
+
+        // Auto-create flow connections
+        for (const conn of connections) {
+          addConnection(conn.fromScreenId, conn.toScreenId)
+        }
+
+        // Chat message
+        const screenNames = appScreens.map(s => s.name)
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Generated ${appName || 'your app'} with ${allScreens.length} screens: ${screenNames.join(' \u2192 ')}`,
+          timestamp: Date.now(),
+          flowScreenNames: screenNames,
+          modelUsed,
+        }
+        setProjectMessages(prev => [...prev, assistantMsg])
+        saveMessage(assistantMsg)
+        trackEvent('app_generated', { screen_count: allScreens.length, generation_time_ms: Date.now() - startTime })
+      } catch (err) {
+        const errorMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Error: ${getUserFriendlyError(err)}`,
+          timestamp: Date.now(),
+        }
+        setProjectMessages(prev => [...prev, errorMsg])
+        saveMessage(errorMsg)
+        // Remove placeholder on error
+        setGeneratedScreens(prev => prev.filter(s => s.id !== placeholderId))
+      } finally {
+        setIsGenerating(false)
+        setAppPhase('idle')
+        setAppProgress(null)
+      }
+      return
+    }
 
     // Flow generation
     if (flowRequest && !editingScreen) {
@@ -548,6 +718,8 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     isStreaming,
     streamingText,
     partialTree,
+    appPhase,
+    appProgress,
     handleSend,
     handleRegenerate,
     handleGenerateVariations,
