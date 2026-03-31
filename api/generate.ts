@@ -769,7 +769,7 @@ Each node follows this structure:
 - <ul>/<ol> with <li> → View with View children (no list markers needed)
 - <nav> at bottom of page → View styled as bottom tab bar
 - <header> → View at top
-- <svg> → View with approximate styling (use backgroundColor/borderRadius to approximate simple shapes)
+- <svg> → For simple shapes: View with backgroundColor/borderRadius. For charts/graphs with <path>: use Svg + Path components to preserve the line/curve. For circles: Svg + Circle.
 - <form> → View
 - <select> → TouchableOpacity styled as dropdown
 
@@ -853,7 +853,7 @@ bg-black/#000000, bg-white/#FFFFFF
 - CSS animations and transitions
 - Web-specific meta tags
 - Link/stylesheet imports
-- Complex SVG paths (approximate with View + backgroundColor + borderRadius)
+- Complex SVG paths: use Svg + Path with the original d attribute, stroke, strokeWidth. For very complex SVGs (>500 chars of path data), approximate with View + backgroundColor + borderRadius
 - iframes
 
 ### CRITICAL — ELEMENTS YOU MUST NEVER SKIP
@@ -1219,7 +1219,11 @@ EXAMPLE of correct structure:
    - Preserve the visual hierarchy and layout structure
    - Keep working image URLs (https://...) in Image source.uri
    - Convert broken/relative image URLs to searchQuery props
-6. SVG circles/rings → use Svg + Circle components with stroke, strokeWidth, strokeDasharray for progress rings
+6. SVG elements:
+   - Circles/rings → Svg + Circle with stroke, strokeWidth, strokeDasharray for progress rings
+   - Line charts/graphs → Svg + Path with d (path data), stroke, strokeWidth, fill:"none" to preserve the chart line
+   - Simple shapes (rectangles, dividers) → View with backgroundColor, height, width, borderRadius
+   NEVER skip or omit SVG chart/graph lines — they are key visual elements. Use Svg + Path to preserve them.
 7. Icons with material-symbols class → Icon component with name prop (e.g. {"type":"Icon","props":{"name":"home","size":20,"color":"#FFF"}})
 8. Root must have: flex:1, dark backgroundColor (match HTML), paddingTop:54
 9. Bottom navigation: LAST child of root, flexDirection:'row', justifyContent:'space-around', NO position:'absolute'. Each tab = TouchableOpacity with Icon + Text.

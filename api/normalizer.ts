@@ -105,11 +105,18 @@ function normalizeStyle(
   }
 
   // Fix lineHeight: must be > fontSize to prevent text clipping
-  if (normalized.fontSize && normalized.lineHeight) {
+  if (normalized.fontSize) {
     const fs = typeof normalized.fontSize === 'number' ? normalized.fontSize : parseFloat(normalized.fontSize)
-    const lh = typeof normalized.lineHeight === 'number' ? normalized.lineHeight : parseFloat(normalized.lineHeight)
-    if (!isNaN(fs) && !isNaN(lh) && lh <= fs) {
-      normalized.lineHeight = Math.round(fs * 1.2)
+    if (!isNaN(fs) && fs > 0) {
+      if (normalized.lineHeight) {
+        const lh = typeof normalized.lineHeight === 'number' ? normalized.lineHeight : parseFloat(normalized.lineHeight)
+        if (!isNaN(lh) && lh <= fs) {
+          normalized.lineHeight = Math.round(fs * 1.2)
+        }
+      } else if (fs >= 24) {
+        // Large text without lineHeight — React Native defaults can clip; add safe lineHeight
+        normalized.lineHeight = Math.round(fs * 1.3)
+      }
     }
   }
 
