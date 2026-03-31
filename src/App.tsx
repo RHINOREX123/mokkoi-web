@@ -652,25 +652,34 @@ function App() {
           screens.setActiveGeneratedId(newScreen.id)
           const modelLabel = modelUsed === 'sonnet' ? ' via Sonnet (complex layout)' : ' via Haiku'
           setToastMessage(`Imported: ${screen.name}${modelLabel}`)
-          // Immediately persist to Supabase (don't rely on debounced auto-save)
-          if (projectId && supabase) {
-            const { error } = await supabase.from('screens').upsert({
-              id: newScreen.id,
-              project_id: projectId,
-              name: newScreen.name,
-              component_tree: newScreen.tree,
-              original_prompt: newScreen.originalPrompt,
-              order_index: screens.generatedScreens.length,
-              updated_at: new Date().toISOString(),
-              source: 'web',
-              x_pos: newScreen.x,
-              y_pos: newScreen.y,
-            })
-            if (error) {
-              console.error('[import] immediate save failed:', error)
-              setToastMessage(`⚠ Save failed: ${error.message}`)
-            } else {
-              console.log('[import] screen saved to DB:', newScreen.id, newScreen.name)
+          // Immediately persist via server API (uses service role key, bypasses RLS)
+          if (projectId) {
+            try {
+              const resp = await fetch('/api/save-screen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  screenId: newScreen.id,
+                  projectId,
+                  screenName: newScreen.name,
+                  componentTree: newScreen.tree,
+                  prompt: newScreen.originalPrompt,
+                  orderIndex: screens.generatedScreens.length,
+                  source: 'web',
+                  xPos: newScreen.x,
+                  yPos: newScreen.y,
+                }),
+              })
+              const result = await resp.json()
+              if (!resp.ok || !result.success) {
+                console.error('[import] server save failed:', result)
+                setToastMessage(`⚠ Save failed: ${result.error || 'unknown'}`)
+              } else {
+                console.log('[import] screen saved via server:', newScreen.id, newScreen.name)
+              }
+            } catch (err) {
+              console.error('[import] server save error:', err)
+              setToastMessage(`⚠ Save failed: ${(err as Error).message}`)
             }
           }
         }}
