@@ -91,27 +91,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Handle save_web_screen action BEFORE MCP auth (web UI doesn't have MCP credentials)
   const { action } = req.body || {}
   if (action === 'save_web_screen') {
-    const supabase = getServiceClient()
-    if (!supabase) {
-      return res.status(500).json({ error: 'Database not configured' })
-    }
-    const { screenId, projectId, screenName, componentTree, prompt, orderIndex, source, xPos, yPos } = req.body
-    if (!projectId || !componentTree) {
-      return res.status(400).json({ error: 'projectId and componentTree are required' })
-    }
-    // Verify project exists
-    const { data: project } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('id', projectId)
-      .single()
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' })
-    }
-    const { data: saved, error } = await supabase
-      .from('screens')
-      .upsert({
-        id: screenId || undefined,
+    try {
+      const supabase = getServiceClient()
+      if (!supabase) {
+        return res.status(500).json({ error: 'Database not configured' })
+      }
+      const { screenId, projectId, screenName, componentTree, prompt, orderIndex, source, xPos, yPos } = req.body
+      if (!projectId || !componentTree) {
+        return res.status(400).json({ error: 'projectId and componentTree are required' })
+      }
+
+      const row: Record<string, unknown> = {
         project_id: projectId,
         name: screenName || 'Imported Screen',
         component_tree: componentTree,
@@ -121,14 +111,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         source: source || 'web',
         x_pos: xPos ?? null,
         y_pos: yPos ?? null,
-      })
-      .select('id')
-      .single()
-    if (error) {
-      console.error('[mcp-sync] save_web_screen error:', error.message)
-      return res.status(500).json({ error: `Failed to save: ${error.message}` })
+      }
+      if (screenId) {
+        row.id = screenId
+      }
+
+      const { data: saved, error } = await supabase
+        .from('screens')
+        .upsert(row)
+        .select('id')
+        .single()
+
+      if (error) {
+        console.error('[mcp-sync] save_web_screen error:', error.message, error)
+        return res.status(500).json({ error: `Failed to save: ${error.message}` })
+      }
+      return res.status(200).json({ success: true, screenId: saved.id })
+    } catch (err) {
+      console.error('[mcp-sync] save_web_screen crash:', err)
+      return res.status(500).json({ error: `Server error: ${(err as Error).message}` })
     }
-    return res.status(200).json({ success: true, screenId: saved.id })
   }
 
   // Authenticate MCP request
