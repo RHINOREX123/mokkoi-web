@@ -508,14 +508,7 @@ function tailwindToStyle(classString: string): { style: Record<string, unknown>;
     if (arbTrackingMatch) {
       style.letterSpacing = parseFloat(arbTrackingMatch[1])
       continue
-
-    // Shadow
-    if (c === 'shadow-sm') { style.elevation = 1; continue }
-    if (c === 'shadow') { style.elevation = 2; continue }
-    if (c === 'shadow-md') { style.elevation = 4; continue }
-    if (c === 'shadow-lg') { style.elevation = 8; continue }
-    if (c === 'shadow-xl') { style.elevation = 12; continue }
-    if (c === 'shadow-none') { style.elevation = 0; continue }
+    }
   }
 
   return { style, isHidden }
