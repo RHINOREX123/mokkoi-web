@@ -1222,6 +1222,8 @@ Return ONLY the JSON. No markdown fences, no explanation.`
         const conversionMessages = [{ role: 'user', content: conversionPrompt }]
         const systemMsg = 'You are an expert at converting HTML/Tailwind web designs to React Native component trees. You produce pixel-perfect conversions that preserve every text label, color, and layout detail. Return ONLY valid minified JSON.'
 
+        // Use non-streaming API internally (proven reliable), send result as SSE
+        // Streaming API had parsing issues on Vercel — non-streaming is rock-solid
         if (wantsStream) {
           res.setHeader('Content-Type', 'text/event-stream')
           res.setHeader('Cache-Control', 'no-cache')
@@ -1229,57 +1231,46 @@ Return ONLY the JSON. No markdown fences, no explanation.`
           res.setHeader('X-Accel-Buffering', 'no')
           res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing HTML structure...', model: 'dom-parser' })}\n\n`)
           res.write(`data: ${JSON.stringify({ type: 'status', message: 'Converting to React Native...', model: 'sonnet' })}\n\n`)
+        }
 
-          const convResult = await streamAnthropicImport(SONNET, 12000, systemMsg, conversionMessages, apiKey, res, 'convert')
+        const convResult = await callAnthropicImport(SONNET, 12000, systemMsg, conversionMessages, apiKey)
 
-          let finalTree: any = null
-          if (convResult) {
-            console.log(`[import-html] Hybrid v2 raw output: ${convResult.text.length} chars, first 500: ${convResult.text.substring(0, 500)}`)
-            try { finalTree = repairImportJSON(convResult.text) } catch (e) {
-              console.log(`[import-html] JSON repair failed: ${e instanceof Error ? e.message : String(e)}`)
-              finalTree = null
-            }
-          } else {
-            console.log(`[import-html] Hybrid v2 streamAnthropicImport returned null`)
+        let finalTree: any = null
+        if (convResult) {
+          console.log(`[import-html] Hybrid v2 raw output: ${convResult.text.length} chars, first 200: ${convResult.text.substring(0, 200)}`)
+          try { finalTree = repairImportJSON(convResult.text) } catch (e) {
+            console.log(`[import-html] JSON repair failed: ${e instanceof Error ? e.message : String(e)}`)
+            finalTree = null
           }
+        } else {
+          console.log(`[import-html] Hybrid v2 callAnthropicImport returned null`)
+        }
 
-          if (!finalTree || !isImportTreeGoodEnough(finalTree)) {
-            console.log(`[import-html] Sonnet conversion failed (tree=${!!finalTree}, goodEnough=${finalTree ? isImportTreeGoodEnough(finalTree) : false}), sending error (not falling through — headers already streaming)`)
-            res.write(`data: ${JSON.stringify({ type: 'error', message: 'Import failed: Could not parse conversion result. Please try again.' })}\n\n`)
-            res.write('data: [DONE]\n\n')
-            return res.end()
-          } else {
-            // Single pass of expand + normalize (not double)
-            finalTree = expandComponents(finalTree)
-            finalTree = normalizeComponentTree(finalTree)
+        if (finalTree && isImportTreeGoodEnough(finalTree)) {
+          finalTree = expandComponents(finalTree)
+          finalTree = normalizeComponentTree(finalTree)
 
-            const result = buildSuccessResponse(finalTree, 'hybrid-v2 (text-check+sonnet)')
-            const tokIn = convResult?.inputTokens || 0
-            const tokOut = convResult?.outputTokens || 0
-            logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-sonnet-4-6', tokensIn: tokIn, tokensOut: tokOut, generationType: 'new_screen', promptPreview: `[import-html] Hybrid v2: ${detected.type} from ${source}`, success: true })
-            if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+          const result = buildSuccessResponse(finalTree, 'hybrid-v2 (text-check+sonnet)')
+          const tokIn = convResult?.inputTokens || 0
+          const tokOut = convResult?.outputTokens || 0
+          logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-sonnet-4-6', tokensIn: tokIn, tokensOut: tokOut, generationType: 'new_screen', promptPreview: `[import-html] Hybrid v2: ${detected.type} from ${source}`, success: true })
+          if (!user.isMCP) await deductCredits(user.id, 'new_screen')
 
+          if (wantsStream) {
             res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
             res.write('data: [DONE]\n\n')
             return res.end()
-          }
-        } else {
-          // Non-streaming hybrid v2 path
-          const convResult = await callAnthropicImport(SONNET, 12000, systemMsg, conversionMessages, apiKey)
-          let finalTree: any = null
-          if (convResult) {
-            try { finalTree = repairImportJSON(convResult.text) } catch { finalTree = null }
-          }
-          if (finalTree && isImportTreeGoodEnough(finalTree)) {
-            finalTree = expandComponents(finalTree)
-            finalTree = normalizeComponentTree(finalTree)
-
-            const result = buildSuccessResponse(finalTree, 'hybrid-v2 (text-check+sonnet)')
-            logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-sonnet-4-6', tokensIn: convResult?.inputTokens || 0, tokensOut: convResult?.outputTokens || 0, generationType: 'new_screen', promptPreview: `[import-html] Hybrid v2: ${detected.type} from ${source}`, success: true })
-            if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+          } else {
             return res.status(200).json(result)
           }
-          console.log(`[import-html] Sonnet conversion failed, falling through to full AI...`)
+        }
+
+        // Hybrid v2 failed — send error for streaming, fall through for non-streaming
+        console.log(`[import-html] Sonnet conversion failed (tree=${!!finalTree}, goodEnough=${finalTree ? isImportTreeGoodEnough(finalTree) : false})`)
+        if (wantsStream) {
+          res.write(`data: ${JSON.stringify({ type: 'error', message: 'Import failed: Could not parse conversion result. Please try again.' })}\n\n`)
+          res.write('data: [DONE]\n\n')
+          return res.end()
         }
       } else {
         console.log(`[import-html] Too few text nodes (${textChecklist.length}), falling through to full AI...`)
