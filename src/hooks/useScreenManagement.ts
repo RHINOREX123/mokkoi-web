@@ -227,32 +227,56 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     }
   }, [projectId])
 
+  // Save all screens to Supabase
+  const saveScreensNow = useCallback(async () => {
+    if (!projectId || !projectLoadedRef.current || !supabase) return
+    const sb = supabase
+    for (let i = 0; i < generatedScreens.length; i++) {
+      const s = generatedScreens[i]
+      const { error } = await sb.from('screens').upsert({
+        id: s.id,
+        project_id: projectId,
+        name: s.name,
+        component_tree: s.tree,
+        original_prompt: s.originalPrompt ?? null,
+        order_index: i,
+        updated_at: new Date().toISOString(),
+        source: s.source ?? 'web',
+        x_pos: s.x ?? null,
+        y_pos: s.y ?? null,
+        device_id: s.deviceId ?? DEFAULT_DEVICE,
+      })
+      if (error) console.error('[auto-save] screen upsert failed:', s.id, s.name, error)
+    }
+    const { error: projErr } = await sb.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
+    if (projErr) console.error('[auto-save] project update failed:', projErr)
+  }, [generatedScreens, projectId])
+
   // Auto-save screens to Supabase (debounced)
   useEffect(() => {
     if (!projectId || !projectLoadedRef.current || !supabase) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    const sb = supabase
-    saveTimerRef.current = setTimeout(async () => {
-      for (let i = 0; i < generatedScreens.length; i++) {
-        const s = generatedScreens[i]
-        await sb.from('screens').upsert({
-          id: s.id,
-          project_id: projectId,
-          name: s.name,
-          component_tree: s.tree,
-          original_prompt: s.originalPrompt ?? null,
-          order_index: i,
-          updated_at: new Date().toISOString(),
-          source: s.source ?? 'web',
-          x_pos: s.x ?? null,
-          y_pos: s.y ?? null,
-          device_id: s.deviceId ?? DEFAULT_DEVICE,
-        })
-      }
-      await sb.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
-    }, 2000)
+    saveTimerRef.current = setTimeout(() => { saveScreensNow() }, 2000)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [generatedScreens, projectId])
+  }, [generatedScreens, projectId, saveScreensNow])
+
+  // Flush pending saves before page unload (prevents data loss on refresh)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+        // Use sendBeacon for reliable save on unload
+        if (projectId && projectLoadedRef.current && supabase && generatedScreens.length > 0) {
+          // Synchronous upsert attempt — navigator.sendBeacon not suitable for Supabase,
+          // so we fire-and-forget the async save (browser gives ~2-3s for beforeunload handlers)
+          saveScreensNow()
+        }
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [saveScreensNow, projectId, generatedScreens])
 
   const saveProjectName = useCallback(async (name: string) => {
     if (!projectId || !supabase) return

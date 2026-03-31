@@ -636,7 +636,7 @@ function App() {
       {showImportHtmlModal && <ImportHtmlModal
         onClose={() => setShowImportHtmlModal(false)}
         projectId={projectId}
-        onImported={(screen, modelUsed) => {
+        onImported={async (screen, modelUsed) => {
           setShowImportHtmlModal(false)
           const pos = screens.getNextScreenPosition()
           const newScreen = {
@@ -652,6 +652,22 @@ function App() {
           screens.setActiveGeneratedId(newScreen.id)
           const modelLabel = modelUsed === 'sonnet' ? ' via Sonnet (complex layout)' : ' via Haiku'
           setToastMessage(`Imported: ${screen.name}${modelLabel}`)
+          // Immediately persist to Supabase (don't rely on debounced auto-save)
+          if (projectId && supabase) {
+            const { error } = await supabase.from('screens').upsert({
+              id: newScreen.id,
+              project_id: projectId,
+              name: newScreen.name,
+              component_tree: newScreen.tree,
+              original_prompt: newScreen.originalPrompt,
+              order_index: screens.generatedScreens.length,
+              updated_at: new Date().toISOString(),
+              source: 'web',
+              x_pos: newScreen.x,
+              y_pos: newScreen.y,
+            })
+            if (error) console.error('[import] immediate save failed:', error)
+          }
         }}
       />}
 
