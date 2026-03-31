@@ -989,10 +989,17 @@ async function callAnthropicImport(
       messages,
     }),
   })
-  if (!response.ok) return null
+  if (!response.ok) {
+    const errBody = await response.text().catch(() => '(no body)')
+    console.error(`[import-html] Anthropic API error ${response.status}: ${errBody.substring(0, 500)}`)
+    return null
+  }
   const data = await response.json() as { content?: Array<{ text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } }
   const text = data.content?.[0]?.text
-  if (!text) return null
+  if (!text) {
+    console.error(`[import-html] Anthropic returned no text. Stop reason: ${(data as any).stop_reason}, content: ${JSON.stringify(data.content)?.substring(0, 200)}`)
+    return null
+  }
   return { text, inputTokens: data.usage?.input_tokens || 0, outputTokens: data.usage?.output_tokens || 0 }
 }
 
@@ -1011,7 +1018,11 @@ async function streamAnthropicImport(
       messages,
     }),
   })
-  if (!response.ok) return null
+  if (!response.ok) {
+    const errBody = await response.text().catch(() => '(no body)')
+    console.error(`[import-html] Streaming Anthropic API error ${response.status}: ${errBody.substring(0, 500)}`)
+    return null
+  }
 
   const reader = response.body as any
   if (!reader || typeof reader[Symbol.asyncIterator] !== 'function') {
