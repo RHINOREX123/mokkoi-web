@@ -1234,11 +1234,20 @@ Return ONLY the JSON. No markdown fences, no explanation.`
 
           let finalTree: any = null
           if (convResult) {
-            try { finalTree = repairImportJSON(convResult.text) } catch { finalTree = null }
+            console.log(`[import-html] Hybrid v2 raw output: ${convResult.text.length} chars, first 500: ${convResult.text.substring(0, 500)}`)
+            try { finalTree = repairImportJSON(convResult.text) } catch (e) {
+              console.log(`[import-html] JSON repair failed: ${e instanceof Error ? e.message : String(e)}`)
+              finalTree = null
+            }
+          } else {
+            console.log(`[import-html] Hybrid v2 streamAnthropicImport returned null`)
           }
 
           if (!finalTree || !isImportTreeGoodEnough(finalTree)) {
-            console.log(`[import-html] Sonnet conversion failed, falling through to full AI...`)
+            console.log(`[import-html] Sonnet conversion failed (tree=${!!finalTree}, goodEnough=${finalTree ? isImportTreeGoodEnough(finalTree) : false}), sending error (not falling through — headers already streaming)`)
+            res.write(`data: ${JSON.stringify({ type: 'error', message: 'Import failed: Could not parse conversion result. Please try again.' })}\n\n`)
+            res.write('data: [DONE]\n\n')
+            return res.end()
           } else {
             // Single pass of expand + normalize (not double)
             finalTree = expandComponents(finalTree)
