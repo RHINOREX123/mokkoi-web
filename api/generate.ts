@@ -1187,21 +1187,35 @@ ${textChecklist.slice(0, 80).map((t: string, i: number) => `${i + 1}. "${t}"`).j
 CONVERSION RULES:
 1. Output a single JSON object: {"type":"View","style":{...},"children":[...]}
 2. Component types: View, Text, ScrollView, Image, TouchableOpacity, TextInput, Icon, Svg, Circle, Path
-3. EVERY text string from the checklist MUST appear as a Text child. Missing text = failed conversion.
-4. Match the original design as closely as possible:
+3. Text nodes MUST contain their text as string children in the children array. Example:
+   {"type":"Text","style":{"fontSize":16,"color":"#FFFFFF"},"children":["Actual text here"]}
+   NEVER output empty Text nodes. Every Text node MUST have at least one string in its children array.
+4. EVERY text string from the checklist MUST appear inside a Text node's children array. Missing text = failed conversion.
+
+EXAMPLE of correct structure:
+{"type":"View","style":{"flex":1,"backgroundColor":"#0e0e0e"},"children":[
+  {"type":"Text","style":{"fontSize":24,"fontWeight":"700","color":"#FFFFFF"},"children":["Dashboard"]},
+  {"type":"Text","style":{"fontSize":14,"color":"#9e9e9e"},"children":["Welcome back"]},
+  {"type":"View","style":{"flexDirection":"row"},"children":[
+    {"type":"Icon","props":{"name":"home","size":20,"color":"#FFF"}},
+    {"type":"Text","style":{"fontSize":11,"color":"#FFF"},"children":["Home"]}
+  ]}
+]}
+
+5. Match the original design as closely as possible:
    - Use exact hex colors from the HTML (not approximations)
    - Match font sizes, weights, spacing, border radius exactly
    - Preserve the visual hierarchy and layout structure
    - Keep working image URLs (https://...) in Image source.uri
    - Convert broken/relative image URLs to searchQuery props
-5. SVG circles/rings → use Svg + Circle components with stroke, strokeWidth, strokeDasharray for progress rings
-6. Icons with material-symbols class → Icon component with name prop (e.g. {"type":"Icon","props":{"name":"home","size":20,"color":"#FFF"}})
-7. Root must have: flex:1, dark backgroundColor (match HTML), paddingTop:54
-8. Bottom navigation: LAST child of root, flexDirection:'row', justifyContent:'space-around', NO position:'absolute'. Each tab = TouchableOpacity with Icon + Text.
-9. Use ScrollView (with showsVerticalScrollIndicator:false) for scrollable content areas
-10. All Views default to flexDirection:'column'. Use flexDirection:'row' only where HTML has flex-row/inline layout.
-11. NO position:'absolute' except for badges overlaid on images (use position:'absolute' + top/left for those only)
-12. NO maxWidth:'75%' or chat bubble styling unless the screen is actually a chat/messaging screen
+6. SVG circles/rings → use Svg + Circle components with stroke, strokeWidth, strokeDasharray for progress rings
+7. Icons with material-symbols class → Icon component with name prop (e.g. {"type":"Icon","props":{"name":"home","size":20,"color":"#FFF"}})
+8. Root must have: flex:1, dark backgroundColor (match HTML), paddingTop:54
+9. Bottom navigation: LAST child of root, flexDirection:'row', justifyContent:'space-around', NO position:'absolute'. Each tab = TouchableOpacity with Icon + Text.
+10. Use ScrollView (with showsVerticalScrollIndicator:false) for scrollable content areas
+11. All Views default to flexDirection:'column'. Use flexDirection:'row' only where HTML has flex-row/inline layout.
+12. NO position:'absolute' except for badges overlaid on images (use position:'absolute' + top/left for those only)
+13. NO maxWidth:'75%' or chat bubble styling unless the screen is actually a chat/messaging screen
 
 Return ONLY the JSON. No markdown fences, no explanation.`
 
