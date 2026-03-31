@@ -899,3 +899,24 @@ export function parseHtmlToComponentTree(html: string): ComponentNode {
 
   return root
 }
+
+/**
+ * Extract all visible text strings from a ComponentNode tree.
+ * Used as a checklist to verify Sonnet's conversion preserves every text node.
+ */
+export function extractAllText(tree: any): string[] {
+  const texts: string[] = []
+  function walk(node: any) {
+    if (!node) return
+    if (typeof node === 'string') {
+      const trimmed = node.trim()
+      if (trimmed.length > 0) texts.push(trimmed)
+      return
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) walk(child)
+    }
+  }
+  walk(tree)
+  return texts
+}

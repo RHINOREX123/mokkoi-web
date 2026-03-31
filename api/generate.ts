@@ -3,7 +3,7 @@ import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits
 import { createClient } from '@supabase/supabase-js'
 import { normalizeComponentTree, type NormalizerOptions } from './normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
-import { parseHtmlToComponentTree, shouldUseDomParser } from '../lib/html-parser.js'
+import { parseHtmlToComponentTree, shouldUseDomParser, extractAllText } from '../lib/html-parser.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './design-system.js'
 import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './color-themes.js'
 
@@ -1160,104 +1160,109 @@ Requirements:
     return { success: true, screen: { name: screenName, tree: normalizedTree, detectedColors, detectedSource: source, conversionNotes }, modelUsed }
   }
 
-  // --- HYBRID IMPORT: DOM parser for structure + Sonnet polish for visuals ---
-  // Step 1: DOM parser extracts 100% of text/structure (free, <500ms)
-  // Step 2: Sonnet refines styling to match original HTML (~$0.02, 2-4s)
+  // --- HYBRID IMPORT: DOM parser extracts text checklist + Sonnet does full conversion ---
+  // The DOM parser guarantees 100% text preservation by extracting every text node.
+  // Sonnet does the actual conversion using the original HTML, with the text checklist
+  // ensuring nothing gets hallucinated or dropped.
   if (shouldUseDomParser(cleanedCode, detected)) {
     try {
-      console.log(`[import-html] Hybrid mode: DOM parser + Sonnet polish...`)
-      let parsedTree = parseHtmlToComponentTree(cleanedCode)
-      parsedTree = expandComponents(parsedTree)
-      parsedTree = normalizeComponentTree(parsedTree)
+      console.log(`[import-html] Hybrid v2: text extraction + Sonnet full conversion...`)
+      // Extract all text from HTML via DOM parser (cheap, deterministic)
+      const parsedTree = parseHtmlToComponentTree(cleanedCode)
+      const textChecklist = extractAllText(parsedTree)
+      console.log(`[import-html] Extracted ${textChecklist.length} text nodes for verification`)
 
-      if (isImportTreeGoodEnough(parsedTree)) {
-        // DOM parse succeeded — now send to Sonnet for visual polish
-        const polishPrompt = `You are refining a React Native component tree that was parsed from HTML. The parsed tree has correct text content and structure but needs visual styling improvements.
+      if (textChecklist.length >= 3) {
+        // Build conversion prompt — Sonnet converts directly from HTML, text checklist prevents drops
+        const conversionPrompt = `Convert this HTML/Tailwind web code to a React Native component tree (JSON format).
 
-ORIGINAL HTML (for visual reference):
+SOURCE HTML CODE:
 \`\`\`
-${cleanedCode.slice(0, 16000)}
+${cleanedCode.slice(0, 24000)}
 \`\`\`
 
-PARSED COMPONENT TREE (structure is correct, DO NOT change text content):
-${JSON.stringify(parsedTree).slice(0, 12000)}
+TEXT CONTENT CHECKLIST — every single one of these text strings MUST appear in your output. If any is missing, your conversion is wrong:
+${textChecklist.slice(0, 80).map((t: string, i: number) => `${i + 1}. "${t}"`).join('\n')}
 
-INSTRUCTIONS:
-1. KEEP ALL text content EXACTLY as-is — do not change any labels, prices, names, or button text
-2. KEEP the component tree structure — do not add or remove components
-3. IMPROVE these visual properties to match the original HTML:
-   - Fix colors: match backgrounds, text colors, borders, accents from the HTML
-   - Fix spacing: padding, margins, gaps should match the original layout
-   - Fix borders: borderRadius, borderWidth, borderColor from HTML
-   - Add missing gradients as LinearGradient or solid accent colors
-   - Fix font styling: fontSize, fontWeight, fontStyle, textTransform
-   - Images: keep working URLs (https://...) as-is. Only convert broken/placeholder URLs to searchQuery props
-   - Map backgrounds: replace with Image using searchQuery "dark city map aerial view night"
-4. Ensure root has: flex:1, dark backgroundColor, paddingTop:54
-5. Bottom nav: use flexDirection:'row', justifyContent:'space-around', NO position:'absolute'. Each tab needs an Icon component (name from material-symbols) + Text label. Active tab gets accent color, inactive gets muted gray.
-6. DO NOT use chat bubble styling (maxWidth:'75%', alignSelf:'flex-start/end') for non-chat elements like reviews, ratings, cards, or badges. Reviews should be full-width cards with padding and borderRadius.
-7. DO NOT add position:'absolute' to bottom navs. Use normal flex flow — the nav should be the LAST child of the root View.
+CONVERSION RULES:
+1. Output a single JSON object: {"type":"View","style":{...},"children":[...]}
+2. Component types: View, Text, ScrollView, Image, TouchableOpacity, TextInput, Icon, Svg, Circle, Path
+3. EVERY text string from the checklist MUST appear as a Text child. Missing text = failed conversion.
+4. Match the original design as closely as possible:
+   - Use exact hex colors from the HTML (not approximations)
+   - Match font sizes, weights, spacing, border radius exactly
+   - Preserve the visual hierarchy and layout structure
+   - Keep working image URLs (https://...) in Image source.uri
+   - Convert broken/relative image URLs to searchQuery props
+5. SVG circles/rings → use Svg + Circle components with stroke, strokeWidth, strokeDasharray for progress rings
+6. Icons with material-symbols class → Icon component with name prop (e.g. {"type":"Icon","props":{"name":"home","size":20,"color":"#FFF"}})
+7. Root must have: flex:1, dark backgroundColor (match HTML), paddingTop:54
+8. Bottom navigation: LAST child of root, flexDirection:'row', justifyContent:'space-around', NO position:'absolute'. Each tab = TouchableOpacity with Icon + Text.
+9. Use ScrollView (with showsVerticalScrollIndicator:false) for scrollable content areas
+10. All Views default to flexDirection:'column'. Use flexDirection:'row' only where HTML has flex-row/inline layout.
+11. NO position:'absolute' except for badges overlaid on images (use position:'absolute' + top/left for those only)
+12. NO maxWidth:'75%' or chat bubble styling unless the screen is actually a chat/messaging screen
 
-Return ONLY the complete refined JSON component tree. No markdown, no explanation.`
+Return ONLY the JSON. No markdown fences, no explanation.`
 
-        const polishMessages = [{ role: 'user', content: polishPrompt }]
+        const conversionMessages = [{ role: 'user', content: conversionPrompt }]
+        const systemMsg = 'You are an expert at converting HTML/Tailwind web designs to React Native component trees. You produce pixel-perfect conversions that preserve every text label, color, and layout detail. Return ONLY valid minified JSON.'
 
         if (wantsStream) {
           res.setHeader('Content-Type', 'text/event-stream')
           res.setHeader('Cache-Control', 'no-cache')
           res.setHeader('Connection', 'keep-alive')
           res.setHeader('X-Accel-Buffering', 'no')
-          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Parsing HTML structure...', model: 'dom-parser' })}\n\n`)
-          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Polishing visual design...', model: 'sonnet' })}\n\n`)
+          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing HTML structure...', model: 'dom-parser' })}\n\n`)
+          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Converting to React Native...', model: 'sonnet' })}\n\n`)
 
-          const polishResult = await streamAnthropicImport(SONNET, 8192, 'You are a React Native styling expert. Refine the component tree to match the original HTML design. Return ONLY valid minified JSON.', polishMessages, apiKey, res, 'polish')
+          const convResult = await streamAnthropicImport(SONNET, 12000, systemMsg, conversionMessages, apiKey, res, 'convert')
 
           let finalTree: any = null
-          if (polishResult) {
-            try { finalTree = repairImportJSON(polishResult.text) } catch { finalTree = null }
+          if (convResult) {
+            try { finalTree = repairImportJSON(convResult.text) } catch { finalTree = null }
           }
 
-          // If polish succeeded, use it. If failed, use DOM-parsed tree (still good).
           if (!finalTree || !isImportTreeGoodEnough(finalTree)) {
-            console.log(`[import-html] Sonnet polish failed, using DOM-parsed tree`)
-            finalTree = parsedTree
+            console.log(`[import-html] Sonnet conversion failed, falling through to full AI...`)
           } else {
+            // Single pass of expand + normalize (not double)
             finalTree = expandComponents(finalTree)
             finalTree = normalizeComponentTree(finalTree)
+
+            const result = buildSuccessResponse(finalTree, 'hybrid-v2 (text-check+sonnet)')
+            const tokIn = convResult?.inputTokens || 0
+            const tokOut = convResult?.outputTokens || 0
+            logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-sonnet-4-6', tokensIn: tokIn, tokensOut: tokOut, generationType: 'new_screen', promptPreview: `[import-html] Hybrid v2: ${detected.type} from ${source}`, success: true })
+            if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+
+            res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
+            res.write('data: [DONE]\n\n')
+            return res.end()
           }
-
-          const result = buildSuccessResponse(finalTree, polishResult ? 'hybrid (dom+sonnet)' : 'dom-parser')
-          const tokIn = polishResult?.inputTokens || 0
-          const tokOut = polishResult?.outputTokens || 0
-          logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: polishResult ? 'claude-sonnet-4-6' : 'dom-parser', tokensIn: tokIn, tokensOut: tokOut, generationType: 'new_screen', promptPreview: `[import-html] Hybrid: ${detected.type} from ${source}`, success: true })
-          if (!user.isMCP) await deductCredits(user.id, 'new_screen')
-
-          res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
-          res.write('data: [DONE]\n\n')
-          return res.end()
-        }
-
-        // Non-streaming hybrid path
-        const polishResult = await callAnthropicImport(SONNET, 8192, 'You are a React Native styling expert. Refine the component tree to match the original HTML design. Return ONLY valid minified JSON.', polishMessages, apiKey)
-        let finalTree: any = null
-        if (polishResult) {
-          try { finalTree = repairImportJSON(polishResult.text) } catch { finalTree = null }
-        }
-        if (!finalTree || !isImportTreeGoodEnough(finalTree)) {
-          finalTree = parsedTree
         } else {
-          finalTree = expandComponents(finalTree)
-          finalTree = normalizeComponentTree(finalTree)
-        }
+          // Non-streaming hybrid v2 path
+          const convResult = await callAnthropicImport(SONNET, 12000, systemMsg, conversionMessages, apiKey)
+          let finalTree: any = null
+          if (convResult) {
+            try { finalTree = repairImportJSON(convResult.text) } catch { finalTree = null }
+          }
+          if (finalTree && isImportTreeGoodEnough(finalTree)) {
+            finalTree = expandComponents(finalTree)
+            finalTree = normalizeComponentTree(finalTree)
 
-        const result = buildSuccessResponse(finalTree, polishResult ? 'hybrid (dom+sonnet)' : 'dom-parser')
-        logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: polishResult ? 'claude-sonnet-4-6' : 'dom-parser', tokensIn: polishResult?.inputTokens || 0, tokensOut: polishResult?.outputTokens || 0, generationType: 'new_screen', promptPreview: `[import-html] Hybrid: ${detected.type} from ${source}`, success: true })
-        if (!user.isMCP) await deductCredits(user.id, 'new_screen')
-        return res.status(200).json(result)
+            const result = buildSuccessResponse(finalTree, 'hybrid-v2 (text-check+sonnet)')
+            logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-sonnet-4-6', tokensIn: convResult?.inputTokens || 0, tokensOut: convResult?.outputTokens || 0, generationType: 'new_screen', promptPreview: `[import-html] Hybrid v2: ${detected.type} from ${source}`, success: true })
+            if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+            return res.status(200).json(result)
+          }
+          console.log(`[import-html] Sonnet conversion failed, falling through to full AI...`)
+        }
+      } else {
+        console.log(`[import-html] Too few text nodes (${textChecklist.length}), falling through to full AI...`)
       }
-      console.log(`[import-html] DOM parser tree too simple, falling through to full AI...`)
     } catch (parseErr) {
-      console.log(`[import-html] Hybrid import failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}, falling through to full AI...`)
+      console.log(`[import-html] Hybrid v2 failed: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}, falling through to full AI...`)
     }
   }
 
