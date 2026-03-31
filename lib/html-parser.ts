@@ -278,6 +278,14 @@ function tailwindToStyle(classString: string): { style: Record<string, unknown>;
     if (c === 'h-full') { style.height = '100%'; continue }
     if (c === 'min-h-screen') { style.flex = 1; continue }
     if (c === 'aspect-square') { style.aspectRatio = 1; continue }
+    if (c === 'aspect-video') { style.aspectRatio = 16 / 9; continue }
+    if (c === 'aspect-auto') { continue }
+
+    // Object fit (maps to resizeMode for Images)
+    if (c === 'object-cover') { style.resizeMode = 'cover'; continue }
+    if (c === 'object-contain') { style.resizeMode = 'contain'; continue }
+    if (c === 'object-fill') { style.resizeMode = 'stretch'; continue }
+    if (c === 'object-none') { style.resizeMode = 'center'; continue }
 
     // Overflow
     if (c === 'overflow-hidden') { style.overflow = 'hidden'; continue }
@@ -324,8 +332,15 @@ function tailwindToStyle(classString: string): { style: Record<string, unknown>;
     if (c === 'leading-tight') { style.lineHeight = 1.25; continue }
     if (c === 'leading-normal') { style.lineHeight = 1.5; continue }
     if (c === 'leading-relaxed') { style.lineHeight = 1.625; continue }
+    if (c === 'tracking-tighter') { style.letterSpacing = -0.8; continue }
     if (c === 'tracking-tight') { style.letterSpacing = -0.5; continue }
+    if (c === 'tracking-normal') { style.letterSpacing = 0; continue }
     if (c === 'tracking-wide') { style.letterSpacing = 0.5; continue }
+    if (c === 'tracking-wider') { style.letterSpacing = 1; continue }
+    if (c === 'tracking-widest') { style.letterSpacing = 1.6; continue }
+    if (c === 'leading-loose') { style.lineHeight = 2; continue }
+    if (c === 'no-underline') { style.textDecorationLine = 'none'; continue }
+    if (c === 'not-italic') { style.fontStyle = 'normal'; continue }
 
     // Border radius
     if (c === 'rounded-none') { style.borderRadius = 0; continue }
@@ -346,6 +361,19 @@ function tailwindToStyle(classString: string): { style: Record<string, unknown>;
     if (c === 'border-b') { style.borderBottomWidth = 1; continue }
     if (c === 'border-l') { style.borderLeftWidth = 1; continue }
     if (c === 'border-r') { style.borderRightWidth = 1; continue }
+
+    // Shadows
+    if (c === 'shadow-sm') { style.shadowColor = '#000'; style.shadowOffset = { width: 0, height: 1 }; style.shadowOpacity = 0.05; style.shadowRadius = 2; style.elevation = 1; continue }
+    if (c === 'shadow' || c === 'shadow-DEFAULT') { style.shadowColor = '#000'; style.shadowOffset = { width: 0, height: 1 }; style.shadowOpacity = 0.1; style.shadowRadius = 3; style.elevation = 3; continue }
+    if (c === 'shadow-md') { style.shadowColor = '#000'; style.shadowOffset = { width: 0, height: 4 }; style.shadowOpacity = 0.1; style.shadowRadius = 6; style.elevation = 6; continue }
+    if (c === 'shadow-lg') { style.shadowColor = '#000'; style.shadowOffset = { width: 0, height: 10 }; style.shadowOpacity = 0.1; style.shadowRadius = 15; style.elevation = 10; continue }
+    if (c === 'shadow-xl') { style.shadowColor = '#000'; style.shadowOffset = { width: 0, height: 20 }; style.shadowOpacity = 0.1; style.shadowRadius = 25; style.elevation = 15; continue }
+    if (c === 'shadow-2xl') { style.shadowColor = '#000'; style.shadowOffset = { width: 0, height: 25 }; style.shadowOpacity = 0.25; style.shadowRadius = 50; style.elevation = 20; continue }
+    if (c === 'shadow-none') { style.shadowOpacity = 0; style.elevation = 0; continue }
+
+    // Pointer events
+    if (c === 'pointer-events-none') { style.pointerEvents = 'none'; continue }
+    if (c === 'pointer-events-auto') { style.pointerEvents = 'auto'; continue }
 
     // Opacity
     const opacityMatch = c.match(/^opacity-(\d+)$/)
@@ -423,8 +451,8 @@ function tailwindToStyle(classString: string): { style: Record<string, unknown>;
       continue
     }
 
-    // Arbitrary values: w-[200px], h-[44px], text-[14px], rounded-[12px], p-[16px]
-    const arbMatch = c.match(/^(w|h|p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|rounded|text)-\[(\d+)(?:px)?\]$/)
+    // Arbitrary values: w-[200px], h-[44px], text-[14px], rounded-[12px], p-[16px], max-w-[300px], etc.
+    const arbMatch = c.match(/^(w|h|p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|rounded|text|min-w|min-h|max-w|max-h|top|bottom|left|right)-\[(\d+)(?:px)?\]$/)
     if (arbMatch) {
       const prop = arbMatch[1]
       const val = parseInt(arbMatch[2])
@@ -447,8 +475,39 @@ function tailwindToStyle(classString: string): { style: Record<string, unknown>;
       else if (prop === 'mb') style.marginBottom = val
       else if (prop === 'ml') style.marginLeft = val
       else if (prop === 'mr') style.marginRight = val
+      else if (prop === 'min-w') style.minWidth = val
+      else if (prop === 'min-h') style.minHeight = val
+      else if (prop === 'max-w') style.maxWidth = val
+      else if (prop === 'max-h') style.maxHeight = val
+      else if (prop === 'top') style.top = val
+      else if (prop === 'bottom') style.bottom = val
+      else if (prop === 'left') style.left = val
+      else if (prop === 'right') style.right = val
       continue
     }
+
+    // Arbitrary percentage values: w-[50%], max-w-[75%]
+    const arbPctMatch = c.match(/^(w|h|min-w|min-h|max-w|max-h)-\[(\d+)%\]$/)
+    if (arbPctMatch) {
+      const propMap2: Record<string, string> = { w: 'width', h: 'height', 'min-w': 'minWidth', 'min-h': 'minHeight', 'max-w': 'maxWidth', 'max-h': 'maxHeight' }
+      const rnProp2 = propMap2[arbPctMatch[1]]
+      if (rnProp2) { style[rnProp2] = `${arbPctMatch[2]}%`; continue }
+    }
+
+    // Arbitrary leading (line-height): leading-[24px], leading-[1.5]
+    const arbLeadingMatch = c.match(/^leading-\[(\d+(?:\.\d+)?)(?:px)?\]$/)
+    if (arbLeadingMatch) {
+      const val = parseFloat(arbLeadingMatch[1])
+      // Values < 4 are multipliers, >= 4 are pixel values
+      style.lineHeight = val < 4 ? val : val
+      continue
+    }
+
+    // Arbitrary tracking (letter-spacing): tracking-[0.05em], tracking-[2px]
+    const arbTrackingMatch = c.match(/^tracking-\[(-?\d+(?:\.\d+)?)(?:px|em)?\]$/)
+    if (arbTrackingMatch) {
+      style.letterSpacing = parseFloat(arbTrackingMatch[1])
+      continue
 
     // Shadow
     if (c === 'shadow-sm') { style.elevation = 1; continue }

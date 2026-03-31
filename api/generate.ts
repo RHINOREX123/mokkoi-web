@@ -1176,11 +1176,11 @@ Requirements:
 
 ORIGINAL HTML (for visual reference):
 \`\`\`
-${cleanedCode.slice(0, 8000)}
+${cleanedCode.slice(0, 16000)}
 \`\`\`
 
 PARSED COMPONENT TREE (structure is correct, DO NOT change text content):
-${JSON.stringify(parsedTree).slice(0, 6000)}
+${JSON.stringify(parsedTree).slice(0, 12000)}
 
 INSTRUCTIONS:
 1. KEEP ALL text content EXACTLY as-is — do not change any labels, prices, names, or button text
@@ -1191,10 +1191,12 @@ INSTRUCTIONS:
    - Fix borders: borderRadius, borderWidth, borderColor from HTML
    - Add missing gradients as LinearGradient or solid accent colors
    - Fix font styling: fontSize, fontWeight, fontStyle, textTransform
-   - Images: convert broken URLs to searchQuery props with descriptive text
+   - Images: keep working URLs (https://...) as-is. Only convert broken/placeholder URLs to searchQuery props
    - Map backgrounds: replace with Image using searchQuery "dark city map aerial view night"
 4. Ensure root has: flex:1, dark backgroundColor, paddingTop:54
-5. Ensure bottom nav has proper styling with icon colors
+5. Bottom nav: use flexDirection:'row', justifyContent:'space-around', NO position:'absolute'. Each tab needs an Icon component (name from material-symbols) + Text label. Active tab gets accent color, inactive gets muted gray.
+6. DO NOT use chat bubble styling (maxWidth:'75%', alignSelf:'flex-start/end') for non-chat elements like reviews, ratings, cards, or badges. Reviews should be full-width cards with padding and borderRadius.
+7. DO NOT add position:'absolute' to bottom navs. Use normal flex flow — the nav should be the LAST child of the root View.
 
 Return ONLY the complete refined JSON component tree. No markdown, no explanation.`
 

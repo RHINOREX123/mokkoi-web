@@ -125,11 +125,11 @@ function normalizeStyle(
     else normalized.fontWeight = '700'
   }
 
-  // Fix extreme negative margins (allow small negative for intentional overlap)
+  // Fix extreme negative margins (allow up to -64 for intentional card overlaps and badges)
   const marginProps = ['margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginHorizontal', 'marginVertical']
   for (const prop of marginProps) {
-    if (typeof normalized[prop] === 'number' && normalized[prop] < -16) {
-      normalized[prop] = 0
+    if (typeof normalized[prop] === 'number' && normalized[prop] < -64) {
+      normalized[prop] = -64
     }
   }
 
@@ -213,20 +213,24 @@ function normalizeNode(
     if (!normalized.style.flex) normalized.style.flex = 1
   }
 
-  // Strip flex:1 from deeper section Views (depth 2-3) that have children.
-  // When the AI gives flex:1 to multiple sibling sections, they split the remaining
-  // viewport space evenly, creating massive empty gaps between content.
-  // Depth 0 (root) and depth 1 (main content wrapper) keep flex:1 — they need it
-  // to fill space between header and bottom nav. Only deeper sections get stripped.
-  if (depth >= 2 && depth <= 3 &&
+  // Strip flex:1 ONLY when a parent has 3+ sibling Views all with flex:1
+  // (the actual problem case where AI distributes space evenly, creating gaps).
+  // Single flex:1 children or 2 siblings are likely intentional layout splits.
+  if (depth >= 2 &&
       (normalized.type === 'View' || normalized.type === 'SafeAreaView') &&
       normalized.type !== 'ScrollView' &&
       normalized.style?.flex === 1 &&
-      Array.isArray(normalized.children) && normalized.children.length > 0) {
-    normalized.style = { ...normalized.style }
-    delete normalized.style.flex
-    // Use flexShrink:0 so they don't collapse, but size naturally to content
-    normalized.style.flexShrink = 0
+      Array.isArray(normalized.children) && normalized.children.length >= 3) {
+    const flexOneChildren = normalized.children.filter((c: any) =>
+      c && typeof c === 'object' && c.style?.flex === 1 && (c.type === 'View' || c.type === 'SafeAreaView')
+    )
+    if (flexOneChildren.length >= 3) {
+      for (const child of flexOneChildren) {
+        child.style = { ...child.style }
+        delete child.style.flex
+        child.style.flexShrink = 0
+      }
+    }
   }
 
   // Fix: Image node constraints — prevent oversized images from dominating viewport
@@ -272,15 +276,16 @@ function normalizeNode(
         }
       }
     }
-    // Direct URI source: cap at 300px
+    // Direct URI source: allow larger images (hero images, product shots)
+    // Only cap at 500px to prevent absurdly tall single images
     else {
-      if (typeof normalized.style.height === 'number' && normalized.style.height > 300) {
-        normalized.style.height = 300
+      if (typeof normalized.style.height === 'number' && normalized.style.height > 500) {
+        normalized.style.height = 500
       }
     }
 
-    if (typeof normalized.style.minHeight === 'number' && normalized.style.minHeight > 300) {
-      normalized.style.minHeight = 300
+    if (typeof normalized.style.minHeight === 'number' && normalized.style.minHeight > 500) {
+      normalized.style.minHeight = 500
     }
 
     // Strip cartoon avatar styles — force professional "initials" style
@@ -331,16 +336,12 @@ function normalizeNode(
     })
   }
 
-  // Strip Image children from message-bubble-like containers
-  // Chat bubbles typically have: maxWidth "75%"/"80%", borderRadius >= 12, and contain Text + Image
-  // Images inside these are the main source of oversized blocks in chat screens
-  const looksLikeBubble = normalized.type === 'View' && normalized.style &&
-    (typeof normalized.style.maxWidth === 'string' && /^\d{1,2}%$/.test(normalized.style.maxWidth)) &&
-    (typeof normalized.style.borderRadius === 'number' && normalized.style.borderRadius >= 12)
-  if (looksLikeBubble && Array.isArray(normalized.children)) {
+  // Strip Image children from message-bubble containers ONLY when inside a MessageBubble
+  // or when the parent is a confirmed chat context (has ChatInputBar sibling).
+  // Previously this fired on any View with maxWidth + borderRadius, catching product cards too.
+  if (normalized.type === 'MessageBubble' && Array.isArray(normalized.children)) {
     normalized.children = normalized.children.filter((child: any) => {
       if (child && typeof child === 'object' && child.type === 'Image') {
-        // Keep tiny avatar-like images (≤48px), strip larger ones
         const h = child.style?.height
         return typeof h === 'number' && h <= 48
       }
@@ -413,6 +414,57 @@ function normalizeNode(
   return normalized
 }
 
+/** Strip position:absolute from bottom nav-like containers and convert to normal flex flow */
+function fixAbsoluteBottomNavs(node: any): any {
+  if (!node || typeof node !== 'object') return node
+
+  // Recurse children first
+  if (Array.isArray(node.children)) {
+    node.children = node.children.map((child: any) =>
+      typeof child === 'string' ? child : fixAbsoluteBottomNavs(child)
+    )
+  }
+
+  // Detect absolute-positioned bottom nav: position:absolute + bottom:0 + flexDirection:row
+  const s = node.style
+  if (s?.position === 'absolute' && (s.bottom === 0 || s.bottom === '0') && s.flexDirection === 'row') {
+    delete s.position
+    delete s.top
+    delete s.right
+    delete s.bottom
+    delete s.left
+    delete s.inset
+    delete s.zIndex
+  }
+
+  return node
+}
+
+/** Strip maxWidth:'75%' bubble styling from Views that aren't inside a chat context */
+function stripBubbleStylingFromNonChat(node: any, insideChat: boolean = false): any {
+  if (!node || typeof node !== 'object') return node
+
+  // Detect chat context: has ChatInputBar or MessageBubble among children
+  const isChat = insideChat || (Array.isArray(node.children) && node.children.some((c: any) =>
+    c?.type === 'ChatInputBar' || c?.type === 'MessageBubble'
+  ))
+
+  if (!isChat && node.type === 'View' && node.style?.maxWidth === '75%') {
+    delete node.style.maxWidth
+    if (node.style.alignSelf === 'flex-start' || node.style.alignSelf === 'flex-end') {
+      delete node.style.alignSelf
+    }
+  }
+
+  if (Array.isArray(node.children)) {
+    node.children = node.children.map((child: any) =>
+      typeof child === 'string' ? child : stripBubbleStylingFromNonChat(child, isChat)
+    )
+  }
+
+  return node
+}
+
 export function normalizeComponentTree(tree: any, options?: NormalizerOptions): any {
   if (!tree) return tree
 
@@ -427,5 +479,13 @@ export function normalizeComponentTree(tree: any, options?: NormalizerOptions): 
     ? [...new Set([...DEFAULT_BORDER_RADIUS_SCALE, ...options.customBorderRadius])].sort((a, b) => a - b)
     : DEFAULT_BORDER_RADIUS_SCALE
 
-  return normalizeNode(tree, 0, spacingScale, fontSizeScale, borderRadiusScale)
+  let result = normalizeNode(tree, 0, spacingScale, fontSizeScale, borderRadiusScale)
+
+  // Post-normalization: fix absolute-positioned bottom navs (common in Sonnet polish output)
+  result = fixAbsoluteBottomNavs(result)
+
+  // Post-normalization: strip chat bubble styling from non-chat screens
+  result = stripBubbleStylingFromNonChat(result)
+
+  return result
 }

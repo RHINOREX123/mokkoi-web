@@ -684,6 +684,27 @@ function extractBubbleData(node: any): { text: string; sent: boolean } | null {
  * Walk the tree and convert raw bubble Views into MessageBubble macros.
  * This catches cases where the AI ignores the macro instruction and generates raw nodes.
  */
+/** Check if a tree looks like a chat screen (has ChatInputBar, TextInput at bottom, or 3+ sequential bubble siblings) */
+function isChatContext(tree: any): boolean {
+  if (!tree || typeof tree !== 'object') return false
+  if (tree.type === 'ChatInputBar') return true
+  if (Array.isArray(tree.children)) {
+    let consecutiveBubbles = 0
+    for (const child of tree.children) {
+      if (typeof child === 'object' && (child?.type === 'MessageBubble' || looksLikeBubble(child))) {
+        consecutiveBubbles++
+      } else {
+        consecutiveBubbles = 0
+      }
+      if (consecutiveBubbles >= 3) return true
+    }
+    for (const child of tree.children) {
+      if (typeof child === 'object' && isChatContext(child)) return true
+    }
+  }
+  return false
+}
+
 function convertRawBubbles(node: any): any {
   if (!node || typeof node !== 'object') return node
 
@@ -734,13 +755,15 @@ function convertRawBubbles(node: any): any {
 
 /**
  * Expand high-level macro components into full ComponentNode subtrees.
- * Also auto-converts raw bubble Views into MessageBubble macros.
+ * Only auto-converts raw bubble Views into MessageBubble macros if the tree looks like a chat screen.
  * Call this BEFORE normalizeComponentTree() in the generation pipeline.
  */
 export function expandComponents(tree: any): any {
   if (!tree) return tree
-  // First: convert any raw bubble Views to MessageBubble macros
-  tree = convertRawBubbles(tree)
+  // Only convert raw bubbles if the tree is a chat screen — prevents false positives on product pages, reviews, etc.
+  if (isChatContext(tree)) {
+    tree = convertRawBubbles(tree)
+  }
   // Then: expand all macros (including the newly converted ones)
   return expandNode(tree)
 }
