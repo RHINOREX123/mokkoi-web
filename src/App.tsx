@@ -666,7 +666,12 @@ function App() {
               x_pos: newScreen.x,
               y_pos: newScreen.y,
             })
-            if (error) console.error('[import] immediate save failed:', error)
+            if (error) {
+              console.error('[import] immediate save failed:', error)
+              setToastMessage(`⚠ Save failed: ${error.message}`)
+            } else {
+              console.log('[import] screen saved to DB:', newScreen.id, newScreen.name)
+            }
           }
         }}
       />}
