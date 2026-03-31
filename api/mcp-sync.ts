@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateMCPRequest, getSupabaseConfig } from './auth-helper.js'
+import { authenticateMCPRequest, getSupabaseConfig } from './lib/auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
 
 const MCP_PROJECT_NAME = 'MCP Imports'
@@ -86,6 +86,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Handle save_web_screen action BEFORE MCP auth (web UI doesn't have MCP credentials)
+  const { action } = req.body || {}
+  if (action === 'save_web_screen') {
+    const supabase = getServiceClient()
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' })
+    }
+    const { screenId, projectId, screenName, componentTree, prompt, orderIndex, source, xPos, yPos } = req.body
+    if (!projectId || !componentTree) {
+      return res.status(400).json({ error: 'projectId and componentTree are required' })
+    }
+    // Verify project exists
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single()
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+    const { data: saved, error } = await supabase
+      .from('screens')
+      .upsert({
+        id: screenId || undefined,
+        project_id: projectId,
+        name: screenName || 'Imported Screen',
+        component_tree: componentTree,
+        original_prompt: prompt || null,
+        order_index: orderIndex ?? 0,
+        updated_at: new Date().toISOString(),
+        source: source || 'web',
+        x_pos: xPos ?? null,
+        y_pos: yPos ?? null,
+      })
+      .select('id')
+      .single()
+    if (error) {
+      console.error('[mcp-sync] save_web_screen error:', error.message)
+      return res.status(500).json({ error: `Failed to save: ${error.message}` })
+    }
+    return res.status(200).json({ success: true, screenId: saved.id })
   }
 
   // Authenticate MCP request

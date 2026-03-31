@@ -211,7 +211,8 @@ function App() {
   // Auto-hide toast (and detect credit errors)
   useEffect(() => {
     if (!toastMessage) return
-    const t = setTimeout(() => setToastMessage(''), 2000)
+    const duration = toastMessage.startsWith('✅') || toastMessage.startsWith('❌') ? 5000 : 2000
+    const t = setTimeout(() => setToastMessage(''), duration)
     return () => clearTimeout(t)
   }, [toastMessage])
 
@@ -651,14 +652,15 @@ function App() {
           screens.setGeneratedScreens(prev => [...prev, newScreen])
           screens.setActiveGeneratedId(newScreen.id)
           const modelLabel = modelUsed === 'sonnet' ? ' via Sonnet (complex layout)' : ' via Haiku'
-          setToastMessage(`Imported: ${screen.name}${modelLabel}`)
+          setToastMessage(`Saving...`)
           // Immediately persist via server API (uses service role key, bypasses RLS)
           if (projectId) {
             try {
-              const resp = await fetch('/api/save-screen', {
+              const resp = await fetch('/api/mcp-sync', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                  action: 'save_web_screen',
                   screenId: newScreen.id,
                   projectId,
                   screenName: newScreen.name,
@@ -673,14 +675,17 @@ function App() {
               const result = await resp.json()
               if (!resp.ok || !result.success) {
                 console.error('[import] server save failed:', result)
-                setToastMessage(`⚠ Save failed: ${result.error || 'unknown'}`)
+                setToastMessage(`❌ Save failed: ${result.error || 'unknown'}`)
               } else {
                 console.log('[import] screen saved via server:', newScreen.id, newScreen.name)
+                setToastMessage(`✅ Saved: ${screen.name}${modelLabel}`)
               }
             } catch (err) {
               console.error('[import] server save error:', err)
-              setToastMessage(`⚠ Save failed: ${(err as Error).message}`)
+              setToastMessage(`❌ Save failed: ${(err as Error).message}`)
             }
+          } else {
+            setToastMessage(`Imported: ${screen.name}${modelLabel}`)
           }
         }}
       />}

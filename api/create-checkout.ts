@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest } from './auth-helper.js'
+import { authenticateRequest } from './lib/auth-helper.js'
 
 // TODO: Set these environment variables in Vercel with real Stripe price IDs:
 //   STRIPE_PRICE_PRO_MONTHLY=price_xxx
