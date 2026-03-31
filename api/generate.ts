@@ -1227,6 +1227,7 @@ EXAMPLE of correct structure:
 11. All Views default to flexDirection:'column'. Use flexDirection:'row' only where HTML has flex-row/inline layout.
 12. NO position:'absolute' except for badges overlaid on images (use position:'absolute' + top/left for those only)
 13. NO maxWidth:'75%' or chat bubble styling unless the screen is actually a chat/messaging screen
+14. lineHeight MUST be at least 1.2x fontSize (e.g. fontSize:48 → lineHeight:56, fontSize:24 → lineHeight:30). Never set lineHeight equal to or less than fontSize.
 
 Return ONLY the JSON. No markdown fences, no explanation.`
 

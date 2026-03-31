@@ -104,6 +104,15 @@ function normalizeStyle(
     else normalized.fontSize = snapToScale(fs, fontSizeScale)
   }
 
+  // Fix lineHeight: must be > fontSize to prevent text clipping
+  if (normalized.fontSize && normalized.lineHeight) {
+    const fs = typeof normalized.fontSize === 'number' ? normalized.fontSize : parseFloat(normalized.fontSize)
+    const lh = typeof normalized.lineHeight === 'number' ? normalized.lineHeight : parseFloat(normalized.lineHeight)
+    if (!isNaN(fs) && !isNaN(lh) && lh <= fs) {
+      normalized.lineHeight = Math.round(fs * 1.2)
+    }
+  }
+
   // Snap border radius (including corner-specific props)
   const radiusProps = [
     'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
