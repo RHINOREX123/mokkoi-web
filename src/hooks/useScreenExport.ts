@@ -67,7 +67,9 @@ function safeName(name: string): string {
   let cut = pascal.slice(0, 40)
   const lastUpper = cut.lastIndexOf(cut.match(/[A-Z][^A-Z]*$/)?.[0] || '')
   if (lastUpper > 10) cut = cut.slice(0, lastUpper)
-  return cut || pascal.slice(0, 40)
+  const result = cut || pascal.slice(0, 40)
+  // JS identifiers can't start with a number
+  return /^\d/.test(result) ? 'Screen' + result : result
 }
 
 /** Clean filename: remove special chars, replace spaces with underscores, prefix with Mokkoi_ */

@@ -9,15 +9,21 @@ import type { ComponentNode } from '../types/mokkoi'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from '../components/FlowConnectors'
 
-/** Sanitize screen name to valid PascalCase component name */
+/** Sanitize screen name to valid PascalCase JS identifier */
 function toPascalCase(name: string): string {
-  return name
+  let result = name
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .split(/\s+/)
     .filter(Boolean)
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join('')
-    .slice(0, 30) || 'Screen'
+    .slice(0, 30)
+
+  // JS identifiers can't start with a number
+  if (!result || /^\d/.test(result)) {
+    result = 'Screen' + (result || '')
+  }
+  return result
 }
 
 /** Deduplicate screen names */
