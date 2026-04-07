@@ -1,6 +1,6 @@
-// Expo Snack URL builder.
-// Constructs a snack.expo.dev URL with files, dependencies, and config
-// embedded as query parameters. No server-side API needed.
+// Expo Snack file builder.
+// Constructs the files object and dependencies needed for an Expo Snack.
+// The actual save is done server-side via /api/export?mode=save-snack.
 
 import { convertTreeToTSX } from './exportTsx'
 import { generateMultiScreenAppTsx } from './expoScaffold'
@@ -30,24 +30,23 @@ function deduplicateNames(names: string[]): string[] {
   })
 }
 
-export interface SnackUrlOpts {
+export interface SnackFilesOpts {
   projectName: string
   screens: GeneratedScreen[]
   connections?: FlowConnection[]
 }
 
+export interface SnackPayload {
+  name: string
+  files: Record<string, { type: string; contents: string }>
+  dependencies: Record<string, { version: string }>
+}
+
 /**
- * Build a snack.expo.dev URL that opens the generated screens
- * as a runnable Expo app in the browser or on a phone via QR code.
- *
- * Uses URL query parameters (no API key needed):
- * - files: JSON object of file paths → {type: 'CODE', contents: string}
- * - dependencies: comma-separated package list
- * - name: project name
- * - platform: default preview platform
- * - theme: dark
+ * Build the files object and dependencies for an Expo Snack.
+ * This is sent to /api/export with mode: "save-snack" to get a snack ID back.
  */
-export function buildSnackUrl(opts: SnackUrlOpts): string {
+export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const { projectName, screens, connections } = opts
 
   if (screens.length === 0) throw new Error('No screens to preview')
@@ -102,32 +101,20 @@ export function buildSnackUrl(opts: SnackUrlOpts): string {
   files['App.tsx'] = { type: 'CODE', contents: generateMultiScreenAppTsx(multiOpts) }
 
   // Dependencies
-  const deps = [
-    '@react-navigation/native',
-    '@react-navigation/native-stack',
-    'react-native-screens',
-    'react-native-safe-area-context',
-    'expo-status-bar',
-  ]
+  const dependencies: Record<string, { version: string }> = {
+    '@react-navigation/native': { version: '6.x' },
+    '@react-navigation/native-stack': { version: '6.x' },
+    'react-native-screens': { version: '*' },
+    'react-native-safe-area-context': { version: '*' },
+    'expo-status-bar': { version: '*' },
+  }
   if (tabGroup) {
-    deps.push('@react-navigation/bottom-tabs')
+    dependencies['@react-navigation/bottom-tabs'] = { version: '6.x' }
   }
 
-  // Build URL
-  const params = new URLSearchParams()
-  params.set('name', projectName || 'Mokkoi App')
-  params.set('description', 'Built with Mokkoi — AI Mobile App Builder')
-  params.set('files', JSON.stringify(files))
-  params.set('dependencies', deps.join(','))
-  params.set('platform', 'ios')
-  params.set('theme', 'dark')
-  params.set('preview', 'true')
-
-  return `https://snack.expo.dev?${params.toString()}`
-}
-
-/** Build a shorter embed URL for iframe display */
-export function buildSnackEmbedUrl(opts: SnackUrlOpts): string {
-  const base = buildSnackUrl(opts)
-  return base.replace('https://snack.expo.dev?', 'https://snack.expo.dev/embedded?')
+  return {
+    name: projectName || 'Mokkoi App',
+    files,
+    dependencies,
+  }
 }
