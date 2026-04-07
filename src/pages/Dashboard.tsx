@@ -19,12 +19,12 @@ interface Project {
 }
 
 const SUGGESTION_CHIPS = [
-  'A fitness tracking dashboard',
-  'An e-commerce product page',
-  'A social media profile',
-  'A banking app home screen',
-  'A music player interface',
-  'A food delivery order screen',
+  'A fitness tracking app',
+  'An e-commerce shopping app',
+  'A social media app',
+  'A banking & finance app',
+  'A music streaming app',
+  'A food delivery app',
 ]
 
 // Hash a string to pick a gradient pair
@@ -697,11 +697,11 @@ export default function Dashboard() {
               margin: '0 0 8px', letterSpacing: '-0.02em',
               fontFamily: "'Outfit', 'DM Sans', sans-serif",
             }}>
-              {hasProjects ? `Welcome back, ${firstName}` : 'What shall we design?'}
+              {hasProjects ? `Welcome back, ${firstName}` : 'What app do you want to build?'}
             </h1>
             {!hasProjects && (
               <p style={{ fontSize: 15, color: '#64748b', margin: '0 0 24px', lineHeight: 1.5 }}>
-                Create your first screen — describe what you want below
+                Describe your app — Mokkoi builds it with real React Native code
               </p>
             )}
 
@@ -739,7 +739,7 @@ export default function Dashboard() {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitPrompt() }
                 }}
-                placeholder="What mobile screen shall we design?"
+                placeholder="Describe the app you want to build..."
                 rows={3}
                 style={{
                   width: '100%', padding: '16px 16px 40px', borderRadius: 16,
