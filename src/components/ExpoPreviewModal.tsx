@@ -75,7 +75,7 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
         iframeRef.current?.contentWindow?.postMessage(
           ['expoDataEvent', {
             iframeId,
-            files: p.files,
+            files: JSON.stringify(p.files),
             dependencies: depsString,
           }],
           '*'
