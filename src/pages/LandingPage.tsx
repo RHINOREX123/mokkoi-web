@@ -1,1240 +1,358 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { trackEvent } from '../lib/analytics';
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import { trackEvent } from '../lib/analytics'
+import { Target, RefreshCw, Smartphone, ImageIcon, Palette, MessageSquare } from 'lucide-react'
+import { ComparisonTable } from './landing/ComparisonTable'
+import { PricingSection } from './landing/PricingSection'
+import { MCPSection } from './landing/MCPSection'
 
-/* ─── tiny helpers ─── */
-function FadeIn({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+/* ─── Colors ─── */
+const C = {
+  bg: '#06080D',
+  bgCard: '#0D1117',
+  bgCardHover: '#151B25',
+  border: '#1C2333',
+  borderGlow: '#3B82F620',
+  text: '#E6EDF3',
+  textMuted: '#7D8590',
+  textDim: '#484F58',
+  accent: '#3B82F6',
+  accentGlow: '#3B82F640',
+  teal: '#14B8A6',
+  tealGlow: '#14B8A630',
+  purple: '#A855F7',
+  orange: '#F97316',
+  gradient1: 'linear-gradient(135deg, #3B82F6, #14B8A6)',
+  gradient2: 'linear-gradient(135deg, #A855F7, #3B82F6)',
+}
+
+/* ─── FadeIn helper ─── */
+function FadeIn({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // If already in viewport on mount, show immediately
-    const rect = el.getBoundingClientRect();
-    if (rect.top < window.innerHeight && rect.bottom > 0) {
-      setVisible(true);
-      return;
-    }
-    const io = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setVisible(true); io.disconnect(); } },
-      { threshold: 0.1 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.top < window.innerHeight && rect.bottom > 0) { setVisible(true); return }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); io.disconnect() } }, { threshold: 0.1 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   return (
-    <div
-      ref={ref}
-      className={className}
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(24px)',
-        transition: `opacity 0.6s cubic-bezier(.16,1,.3,1) ${delay}s, transform 0.6s cubic-bezier(.16,1,.3,1) ${delay}s`,
-      }}
-    >
+    <div ref={ref} className={className} style={{
+      opacity: visible ? 1 : 0,
+      transform: visible ? 'translateY(0)' : 'translateY(20px)',
+      transition: `opacity 0.6s ease-out ${delay}s, transform 0.6s ease-out ${delay}s`,
+    }}>
       {children}
     </div>
-  );
+  )
 }
 
-/* ─── Copy button ─── */
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-      style={{
-        background: 'rgba(255,255,255,.06)',
-        border: '1px solid rgba(255,255,255,.1)',
-        borderRadius: 6,
-        padding: '6px 14px',
-        color: copied ? '#34d399' : '#94a3b8',
-        fontSize: 13,
-        cursor: 'pointer',
-        transition: 'all .2s',
-        fontFamily: 'inherit',
-      }}
-    >
-      {copied ? '✓ Copied' : 'Copy'}
-    </button>
-  );
-}
+/* ─── Features data ─── */
+const FEATURES = [
+  { icon: Target, color: C.accent, title: 'Generate App — One Prompt, Full App', desc: 'Describe your idea and get 4-8 connected screens with navigation, tab bars, and consistent styling. AI plans the architecture, then builds every screen.' },
+  { icon: RefreshCw, color: C.teal, title: 'Web-to-Mobile Bridge', desc: 'Built something in Lovable, Bolt, or v0? Paste the HTML and Mokkoi converts it to native React Native components. Your web prototype becomes a mobile app.' },
+  { icon: Smartphone, color: C.purple, title: 'Real React Native Output', desc: 'Not wireframes. Not mockups. Production-ready React Native + Expo code with StyleSheet.create, proper imports, and 26+ macro components.' },
+  { icon: ImageIcon, color: C.orange, title: 'Screenshot to Code', desc: 'Upload a screenshot of any app screen and Mokkoi recreates it in React Native. Reverse-engineer any design you like.' },
+  { icon: Palette, color: C.accent, title: '50+ Color Palettes & Themes', desc: 'Dark mode, light mode, and 50+ curated palettes across 10 categories. Design tokens enforce consistency — spacing, fonts, radius all snapped to scale.' },
+  { icon: MessageSquare, color: C.teal, title: 'Edit via Chat', desc: '"Make the header teal" or "add a search bar at the top." Mokkoi understands edit intent and modifies your screens without regenerating from scratch.' },
+]
 
-/* ─── Phone Frame ─── */
-function PhonePreview({ children, scale = 1 }: { children: React.ReactNode; scale?: number }) {
-  return (
-    <div style={{
-      width: 280 * scale,
-      height: 580 * scale,
-      borderRadius: 36 * scale,
-      border: `${2 * scale}px solid rgba(255,255,255,.12)`,
-      background: '#0a0a0a',
-      overflow: 'hidden',
-      position: 'relative',
-      boxShadow: '0 25px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.05), inset 0 1px 0 rgba(255,255,255,.05)',
-      flexShrink: 0,
-    }}>
-      {/* Notch / Dynamic Island */}
-      <div style={{
-        position: 'absolute',
-        top: 10 * scale,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 90 * scale,
-        height: 24 * scale,
-        borderRadius: 20 * scale,
-        background: '#000',
-        zIndex: 10,
-      }} />
-      {/* Screen content */}
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        borderRadius: 34 * scale,
-        overflow: 'hidden',
-        overflowY: 'auto',
-        msOverflowStyle: 'none',
-        scrollbarWidth: 'none',
-      }}>
-        {children}
-      </div>
-      {/* Home bar */}
-      <div style={{
-        position: 'absolute',
-        bottom: 6 * scale,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 100 * scale,
-        height: 4 * scale,
-        borderRadius: 4 * scale,
-        background: 'rgba(255,255,255,.2)',
-        zIndex: 10,
-      }} />
-    </div>
-  );
-}
+/* ─── Steps data ─── */
+const STEPS = [
+  { num: '01', title: 'Describe your app', desc: 'Tell Mokkoi what you want — "a fitness tracker with workout stats" or "an e-commerce app with product cards and checkout." One sentence or a paragraph.', tag: 'Natural language', color: C.accent },
+  { num: '02', title: 'AI builds it', desc: 'Claude AI plans your app architecture, then generates every screen with real React Native components, proper navigation, and consistent design tokens.', tag: '~30 seconds', color: C.teal },
+  { num: '03', title: 'Export & run', desc: 'Download a complete Expo project with React Navigation, tab bars, and working screen transitions. npm install, expo start — runs on any phone.', tag: 'Production-ready', color: C.purple },
+]
 
-/* ─── Mock Screen Content ─── */
-function MockHomeScreen() {
-  return (
-    <div style={{ padding: '52px 18px 24px', background: 'linear-gradient(180deg, #0a0a0a 0%, #000000 100%)', minHeight: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <div style={{ color: '#94a3b8', fontSize: 13 }}>Good morning 👋</div>
-          <div style={{ color: '#f1f5f9', fontSize: 22, fontWeight: 700 }}>Alex</div>
-        </div>
-        <div style={{ width: 36, height: 36, borderRadius: 18, background: 'linear-gradient(135deg, #818cf8, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 600 }}>A</div>
-      </div>
-      <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #818cf8 50%, #a78bfa 100%)', borderRadius: 16, padding: '18px 16px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ color: '#e0e7ff', fontSize: 13, fontWeight: 500 }}>Weekly Progress</span>
-          <span style={{ fontSize: 16 }}>🚀</span>
-        </div>
-        <div style={{ color: '#fff', fontSize: 32, fontWeight: 800, marginBottom: 8 }}>84%</div>
-        <div style={{ height: 6, background: 'rgba(255,255,255,.2)', borderRadius: 3 }}>
-          <div style={{ height: 6, width: '84%', background: '#fff', borderRadius: 3 }} />
-        </div>
-        <div style={{ color: '#c7d2fe', fontSize: 11, marginTop: 8 }}>21 of 25 tasks completed this week</div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-        {[{ label: 'TASKS', value: '12', sub: '+3 today', icon: '✅' }, { label: 'STREAK', value: '7d', sub: '🌟 Best!', icon: '🔥' }].map((c) => (
-          <div key={c.label} style={{ background: 'rgba(255,255,255,.04)', borderRadius: 14, padding: '14px 12px', border: '1px solid rgba(255,255,255,.06)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ color: '#64748b', fontSize: 10, fontWeight: 600, letterSpacing: 1 }}>{c.label}</span>
-              <span style={{ fontSize: 14 }}>{c.icon}</span>
-            </div>
-            <div style={{ color: '#f1f5f9', fontSize: 24, fontWeight: 800 }}>{c.value}</div>
-            <div style={{ color: '#34d399', fontSize: 11 }}>{c.sub}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ marginBottom: 6 }}>
-        <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 600, letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' as const }}>Recent Activity</div>
-        {[{ t: 'Design review completed', s: '2 hours ago', dot: '#34d399' }, { t: 'New comment on PR #42', s: '5 hours ago', dot: '#818cf8' }].map((a) => (
-          <div key={a.t} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.04)' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 4, background: a.dot, flexShrink: 0 }} />
-            <div>
-              <div style={{ color: '#e2e8f0', fontSize: 13 }}>{a.t}</div>
-              <div style={{ color: '#64748b', fontSize: 11 }}>{a.s}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MockLoginScreen() {
-  return (
-    <div style={{ padding: '72px 24px 24px', background: 'linear-gradient(180deg, #0a0a0a 0%, #000000 100%)', minHeight: '100%', display: 'flex', flexDirection: 'column' as const }}>
-      <div style={{ textAlign: 'center' as const, marginBottom: 36 }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #6366f1, #818cf8)', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>✦</div>
-        <div style={{ color: '#f1f5f9', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Welcome Back</div>
-        <div style={{ color: '#64748b', fontSize: 13 }}>Sign in to your account</div>
-      </div>
-      {['Email address', 'Password'].map((p) => (
-        <div key={p} style={{ background: 'rgba(255,255,255,.04)', borderRadius: 12, padding: '14px 16px', marginBottom: 12, border: '1px solid rgba(255,255,255,.06)' }}>
-          <div style={{ color: '#475569', fontSize: 13 }}>{p}</div>
-        </div>
-      ))}
-      <div style={{ color: '#818cf8', fontSize: 12, textAlign: 'right' as const, marginBottom: 20 }}>Forgot password?</div>
-      <div style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', borderRadius: 12, padding: '14px 0', textAlign: 'center' as const, color: '#fff', fontWeight: 600, fontSize: 15, marginBottom: 20 }}>Sign In</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.08)' }} />
-        <span style={{ color: '#475569', fontSize: 12 }}>or continue with</span>
-        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.08)' }} />
-      </div>
-      <div style={{ display: 'flex', gap: 12 }}>
-        {['G', ''].map((l, i) => (
-          <div key={i} style={{ flex: 1, background: 'rgba(255,255,255,.04)', borderRadius: 12, padding: '12px 0', textAlign: 'center' as const, border: '1px solid rgba(255,255,255,.06)', color: '#94a3b8', fontSize: 18 }}>
-            {l || '🍎'}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MockChatScreen() {
-  return (
-    <div style={{ padding: '48px 14px 24px', background: 'linear-gradient(180deg, #0a0a0a 0%, #000000 100%)', minHeight: '100%', display: 'flex', flexDirection: 'column' as const }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,.06)' }}>
-        <div style={{ width: 34, height: 34, borderRadius: 17, background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 600 }}>AI</div>
-        <div>
-          <div style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 600 }}>FitBot Trainer</div>
-          <div style={{ color: '#34d399', fontSize: 11 }}>● Online</div>
-        </div>
-      </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
-        {/* AI message */}
-        <div style={{ maxWidth: '80%' }}>
-          <div style={{ background: 'rgba(255,255,255,.06)', borderRadius: '4px 14px 14px 14px', padding: '10px 14px', color: '#cbd5e1', fontSize: 13, lineHeight: 1.5 }}>
-            Hey! Ready for today's workout? I've prepared a HIIT session 💪
-          </div>
-          <div style={{ color: '#475569', fontSize: 10, marginTop: 4, marginLeft: 4 }}>2:30 PM</div>
-        </div>
-        {/* User message */}
-        <div style={{ maxWidth: '80%', alignSelf: 'flex-end' }}>
-          <div style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', borderRadius: '14px 4px 14px 14px', padding: '10px 14px', color: '#fff', fontSize: 13, lineHeight: 1.5 }}>
-            Yes! Let's do it 🔥
-          </div>
-          <div style={{ color: '#475569', fontSize: 10, marginTop: 4, textAlign: 'right' as const }}>2:31 PM</div>
-        </div>
-        {/* AI message */}
-        <div style={{ maxWidth: '80%' }}>
-          <div style={{ background: 'rgba(255,255,255,.06)', borderRadius: '4px 14px 14px 14px', padding: '10px 14px', color: '#cbd5e1', fontSize: 13, lineHeight: 1.5 }}>
-            Starting with 4 rounds of burpees, mountain climbers & squat jumps. 45s on, 15s rest.
-          </div>
-          <div style={{ color: '#475569', fontSize: 10, marginTop: 4, marginLeft: 4 }}>2:31 PM</div>
-        </div>
-      </div>
-      {/* Input */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-        <div style={{ flex: 1, background: 'rgba(255,255,255,.04)', borderRadius: 24, padding: '10px 16px', border: '1px solid rgba(255,255,255,.06)', color: '#475569', fontSize: 13 }}>Message...</div>
-        <div style={{ width: 36, height: 36, borderRadius: 18, background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14 }}>↑</div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Screens carousel for hero ─── */
-const SCREENS = [
-  { label: 'Dashboard', comp: <MockHomeScreen /> },
-  { label: 'Login', comp: <MockLoginScreen /> },
-  { label: 'Chat', comp: <MockChatScreen /> },
-];
-
-/* ─── MAIN LANDING PAGE ─── */
-const HERO_PLACEHOLDERS = [
-  'Create a fitness dashboard...',
-  'Design a coffee shop app...',
-  'Build an onboarding flow...',
-  'Make a social media feed...',
-  'Design a fintech wallet...',
-];
-
-const HERO_CHIPS = [
-  { label: 'Fitness Dashboard', prompt: 'A fitness dashboard with activity rings, step counter, and calorie tracker' },
-  { label: 'Login Screen', prompt: 'A login screen with email, password fields and social auth buttons for Google and Apple' },
-  { label: 'E-commerce Home', prompt: 'An e-commerce home screen with featured products, categories, and a search bar' },
-  { label: 'Social Feed', prompt: 'A social media feed with post cards, like buttons, comments, and story circles at the top' },
-  { label: 'Settings Page', prompt: 'A settings page with profile section, notification toggles, theme selector, and account options' },
-];
-
+/* ─── Main Component ─── */
 export default function LandingPage() {
-  const navigate = useNavigate();
-  const [activeScreen, setActiveScreen] = useState(0);
-  const [heroPrompt, setHeroPrompt] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [placeholderIdx, setPlaceholderIdx] = useState(0);
-  const [placeholderVisible, setPlaceholderVisible] = useState(true);
+  const navigate = useNavigate()
+  const [screenCount, setScreenCount] = useState<number | null>(null)
 
-  // Check auth state
   useEffect(() => {
-    supabase?.auth.getUser().then(({ data: { user } }) => setIsLoggedIn(!!user));
-  }, []);
-
-  // Cycle placeholder text
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderVisible(false);
-      setTimeout(() => {
-        setPlaceholderIdx((i) => (i + 1) % HERO_PLACEHOLDERS.length);
-        setPlaceholderVisible(true);
-      }, 300);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Auth-aware navigation: logged in → /projects or create project, not logged in → /auth
-  const goToApp = () => navigate(isLoggedIn ? '/projects' : '/auth');
-  const goWithPrompt = async (prompt: string) => {
-    if (!prompt.trim()) return;
-    trackEvent('hero_prompt_submitted');
-    if (!isLoggedIn) {
-      navigate(`/auth?prompt=${encodeURIComponent(prompt.trim())}`);
-      return;
+    trackEvent('landing_page_viewed')
+    // Fetch total screens generated
+    if (supabase) {
+      supabase.from('usage_logs').select('id', { count: 'exact', head: true })
+        .eq('success', true)
+        .then(({ count }) => { if (count && count > 0) setScreenCount(count) })
     }
-    // Create a project and navigate to it with the prompt
-    if (!supabase) { navigate('/auth'); return; }
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { navigate('/auth'); return; }
-    const { data } = await supabase
-      .from('projects')
-      .insert({ user_id: user.id, name: prompt.slice(0, 30) })
-      .select()
-      .single();
-    if (data) navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`);
-  };
+  }, [])
 
-  // Cycle screens
-  useEffect(() => {
-    const t = setInterval(() => setActiveScreen((s) => (s + 1) % SCREENS.length), 5000);
-    return () => clearInterval(t);
-  }, []);
+  const handleCTA = () => {
+    trackEvent('landing_cta_clicked')
+    navigate('/auth')
+  }
 
   return (
-    <div style={{ background: '#000000', color: '#e2e8f0', minHeight: '100vh', fontFamily: "'Outfit', 'DM Sans', system-ui, sans-serif", overflowX: 'hidden' as const }}>
+    <div style={{ background: C.bg, color: C.text, fontFamily: "'DM Sans', sans-serif", minHeight: '100vh', overflowX: 'hidden' }}>
       {/* Google Fonts */}
-      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
-      <style>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
-        body { background: #000000; }
-        ::selection { background: #6366f1; color: #fff; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
-        @keyframes float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-12px); } }
-        .hero-placeholder { transition: opacity 0.3s ease; }
-        @keyframes glow-pulse { 0%,100% { opacity: .4; } 50% { opacity: .7; } }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .landing-nav-links { display: flex; align-items: center; gap: 32px; }
-        .landing-mobile-cta { display: none; }
-        .landing-cta-cmd { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        @media (max-width: 768px) {
-          .landing-nav-links { display: none !important; }
-          .landing-mobile-cta { display: block !important; }
-          .landing-hero-ctas { flex-direction: column !important; align-items: stretch !important; }
-          .landing-hero-ctas > * { width: 100%; text-align: center; justify-content: center; }
-          .landing-hero-code-block { overflow-x: auto; }
-          .landing-hero-code-block code { font-size: 12px !important; }
-          .landing-cta-cmd { flex-direction: column !important; gap: 8px !important; }
-          .landing-cta-cmd code { font-size: 11px !important; word-break: break-all; white-space: normal !important; }
-          .landing-browser-content { flex-direction: column !important; padding: 24px 16px !important; }
-          .landing-footer-inner { flex-direction: column !important; text-align: center; }
-        }
-      `}</style>
+      {/* Grid background */}
+      <div style={{ position: 'fixed', inset: 0, backgroundImage: `linear-gradient(${C.border} 1px, transparent 1px), linear-gradient(90deg, ${C.border} 1px, transparent 1px)`, backgroundSize: '60px 60px', opacity: 0.15, pointerEvents: 'none' }} />
 
-      {/* ─── NAV ─── */}
-      <nav style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 100,
-        background: 'rgba(9,9,11,.8)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,.05)',
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 14 }}>M</div>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.02em' }}>Mokkoi</span>
+      {/* Glow orbs */}
+      <div style={{ position: 'fixed', width: 600, height: 600, borderRadius: '50%', background: C.accent, filter: 'blur(120px)', opacity: 0.12, top: -200, right: -100, pointerEvents: 'none' }} />
+      <div style={{ position: 'fixed', width: 500, height: 500, borderRadius: '50%', background: C.teal, filter: 'blur(120px)', opacity: 0.12, bottom: '20%', left: -150, pointerEvents: 'none' }} />
+      <div style={{ position: 'fixed', width: 400, height: 400, borderRadius: '50%', background: C.purple, filter: 'blur(120px)', opacity: 0.12, top: '50%', right: '10%', pointerEvents: 'none' }} />
+
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', position: 'relative', zIndex: 1 }}>
+
+        {/* ─── NAV ─── */}
+        <nav style={{ padding: '20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 20, fontWeight: 700, letterSpacing: -0.5, background: C.gradient1, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            mokkoi
           </div>
-
-          {/* Desktop links */}
-          <div className="landing-nav-links">
-            {['Features', 'How it works', 'Pricing', 'Playground'].map((l) => (
-              <a
-                key={l}
-                href={l === 'Playground' ? (isLoggedIn ? '/projects' : '/auth') : l === 'Pricing' ? '/pricing' : `#${l.toLowerCase().replace(/\s/g, '-')}`}
-                style={{ color: '#94a3b8', fontSize: 14, textDecoration: 'none', transition: 'color .2s' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#f1f5f9')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-              >
-                {l}
-              </a>
-            ))}
-            <a
-              href="https://github.com/RHINOREX123/mokkoi-mcp-server"
-              target="_blank"
-              rel="noopener"
-              style={{ color: '#94a3b8', fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#f1f5f9')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" /></svg>
-              Star
-            </a>
-            <button
-              onClick={() => goToApp()}
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                border: 'none',
-                borderRadius: 8,
-                padding: '8px 20px',
-                color: '#fff',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all .2s',
-                fontFamily: 'inherit',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,.4)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-            >
+          <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
+            <a href="#how" style={{ color: C.textMuted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>How It Works</a>
+            <a href="#features" style={{ color: C.textMuted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Features</a>
+            <a href="#pricing" style={{ color: C.textMuted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>Pricing</a>
+            <a href="#mcp" style={{ color: C.textMuted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>MCP</a>
+            <button onClick={handleCTA} style={{ background: C.accent, color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: `0 0 20px ${C.accentGlow}`, fontFamily: "'DM Sans', sans-serif" }}>
               Start Building →
             </button>
           </div>
+        </nav>
 
-          {/* Mobile CTA */}
-          <button
-            className="landing-mobile-cta"
-            onClick={() => goToApp()}
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-              border: 'none',
-              borderRadius: 8,
-              padding: '8px 18px',
-              color: '#fff',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Start Building →
-          </button>
-        </div>
-      </nav>
-
-      {/* ─── HERO ─── */}
-      <section style={{
-        position: 'relative',
-        paddingTop: 160,
-        paddingBottom: 100,
-        overflow: 'hidden',
-      }}>
-        {/* Background glow */}
-        <div style={{
-          position: 'absolute',
-          top: -200,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 800,
-          height: 600,
-          background: 'radial-gradient(ellipse, rgba(99,102,241,.12) 0%, transparent 70%)',
-          pointerEvents: 'none',
-          animation: 'glow-pulse 6s ease-in-out infinite',
-        }} />
-
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', position: 'relative' }}>
-          {/* Badge */}
+        {/* ─── HERO ─── */}
+        <section style={{ padding: '100px 0 80px', textAlign: 'center' }}>
           <FadeIn>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 16px',
-                borderRadius: 100,
-                border: '1px solid rgba(99,102,241,.3)',
-                background: 'rgba(99,102,241,.08)',
-                fontSize: 13,
-                color: '#a5b4fc',
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#34d399', animation: 'glow-pulse 2s infinite' }} />
-                Now live on npm — open source
-              </div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 100, border: `1px solid ${C.border}`, background: C.bgCard, fontSize: 13, color: C.textMuted, fontWeight: 500, marginBottom: 32 }}>
+              <span style={{ width: 6, height: 6, background: C.teal, borderRadius: '50%', boxShadow: `0 0 8px ${C.teal}`, animation: 'mokkoiPulse 2s infinite' }} />
+              {screenCount ? `${screenCount.toLocaleString()}+ screens generated` : 'Now with Generate App — one prompt, full app'}
             </div>
           </FadeIn>
 
-          {/* Headline */}
           <FadeIn delay={0.1}>
-            <h1 style={{
-              textAlign: 'center',
-              fontSize: 'clamp(36px, 6vw, 72px)',
-              fontWeight: 800,
-              lineHeight: 1.05,
-              letterSpacing: '-0.04em',
-              maxWidth: 800,
-              margin: '0 auto 24px',
-            }}>
-              Build{' '}
-              <span style={{
-                background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 40%, #a78bfa 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>
-                mobile screens
-              </span>
-              {' '}with AI
+            <h1 style={{ fontSize: 'clamp(48px, 7vw, 80px)', fontWeight: 700, lineHeight: 1.05, letterSpacing: -2, marginBottom: 24 }}>
+              Describe your app.<br />
+              <span style={{ background: C.gradient1, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Get production code.</span>
             </h1>
           </FadeIn>
 
-          {/* Subtitle */}
-          <FadeIn delay={0.15}>
-            <p style={{
-              textAlign: 'center',
-              color: '#94a3b8',
-              fontSize: 'clamp(16px, 2vw, 19px)',
-              lineHeight: 1.6,
-              maxWidth: 560,
-              margin: '0 auto 40px',
-            }}>
-              Describe any screen. Get production-ready React Native code instantly. Free and open source.
+          <FadeIn delay={0.2}>
+            <p style={{ fontSize: 18, color: C.textMuted, maxWidth: 560, margin: '0 auto 40px', lineHeight: 1.6 }}>
+              Mokkoi is the AI mobile app builder. Type what you want, get real React Native + Expo code — screens, navigation, tab bars, everything. Ready to run on any phone.
             </p>
           </FadeIn>
 
-          {/* Hero prompt input */}
-          <FadeIn delay={0.2}>
-            <div style={{ maxWidth: 600, margin: '0 auto' }}>
-              <div
-                style={{
-                  position: 'relative',
-                  borderRadius: 16,
-                  background: 'rgba(255,255,255,.04)',
-                  border: '1px solid rgba(255,255,255,.1)',
-                  boxShadow: '0 4px 32px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03)',
-                  transition: 'border-color .2s, box-shadow .2s',
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,.4)'; e.currentTarget.style.boxShadow = '0 4px 32px rgba(99,102,241,.12), 0 0 0 1px rgba(99,102,241,.2)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)'; e.currentTarget.style.boxShadow = '0 4px 32px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03)'; }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px 16px 24px', height: 56 }}>
-                  <div style={{ flex: 1, position: 'relative' }}>
-                    <input
-                      type="text"
-                      value={heroPrompt}
-                      onChange={(e) => setHeroPrompt(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && heroPrompt.trim()) { goWithPrompt(heroPrompt.trim()); } }}
-                      style={{
-                        width: '100%',
-                        background: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        color: '#f1f5f9',
-                        fontSize: 18,
-                        fontFamily: 'inherit',
-                      }}
-                    />
-                    {!heroPrompt && (
-                      <span
-                        className="hero-placeholder"
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          pointerEvents: 'none',
-                          fontSize: 18,
-                          color: 'rgba(255,255,255,.25)',
-                          opacity: placeholderVisible ? 1 : 0,
-                        }}
-                      >
-                        {HERO_PLACEHOLDERS[placeholderIdx]}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => { if (heroPrompt.trim()) goWithPrompt(heroPrompt.trim()); }}
-                    style={{
-                      background: heroPrompt.trim() ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,.06)',
-                      border: 'none',
-                      borderRadius: 10,
-                      padding: '10px 24px',
-                      color: '#fff',
-                      fontSize: 15,
-                      fontWeight: 600,
-                      cursor: heroPrompt.trim() ? 'pointer' : 'default',
-                      transition: 'all .2s',
-                      fontFamily: 'inherit',
-                      opacity: heroPrompt.trim() ? 1 : 0.5,
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={(e) => { if (heroPrompt.trim()) { e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,.4)'; } }}
-                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    Generate
-                  </button>
-                </div>
-              </div>
-
-              {/* Suggestion chips */}
-              <div style={{ display: 'flex', flexWrap: 'wrap' as const, justifyContent: 'center', gap: 8, marginTop: 16 }}>
-                {HERO_CHIPS.map((chip) => (
-                  <button
-                    key={chip.label}
-                    onClick={() => setHeroPrompt(chip.prompt)}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid rgba(255,255,255,.1)',
-                      borderRadius: 100,
-                      padding: '6px 14px',
-                      color: '#94a3b8',
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      transition: 'all .2s',
-                      fontFamily: 'inherit',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,241,.4)'; e.currentTarget.style.color = '#c7d2fe'; e.currentTarget.style.background = 'rgba(99,102,241,.08)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.1)'; e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* npx command as secondary CTA */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-                <div className="landing-hero-code-block" style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  background: 'rgba(255,255,255,.03)',
-                  border: '1px solid rgba(255,255,255,.08)',
-                  borderRadius: 10,
-                  padding: '10px 16px',
-                }}>
-                  <code style={{ color: '#a5b4fc', fontSize: 14, fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'nowrap' }}>npx mokkoi-mcp-server</code>
-                  <CopyButton text="npx mokkoi-mcp-server" />
-                </div>
-              </div>
-            </div>
-          </FadeIn>
-
-          {/* Phone showcase */}
           <FadeIn delay={0.3}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              marginTop: 72,
-              position: 'relative',
-            }}>
-              {/* Glow behind phone */}
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: 400,
-                height: 400,
-                background: 'radial-gradient(circle, rgba(99,102,241,.15) 0%, transparent 70%)',
-                pointerEvents: 'none',
-              }} />
-              <div style={{ animation: 'float 6s ease-in-out infinite', position: 'relative' }}>
-                <PhonePreview>
-                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                    {SCREENS.map((s, i) => (
-                      <div
-                        key={s.label}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          height: '100%',
-                          opacity: i === activeScreen ? 1 : 0,
-                          transition: 'opacity 0.6s ease-in-out',
-                          pointerEvents: i === activeScreen ? 'auto' : 'none',
-                        }}
-                      >
-                        {s.comp}
-                      </div>
-                    ))}
-                  </div>
-                </PhonePreview>
-              </div>
-            </div>
-            {/* Dots */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
-              {SCREENS.map((s, i) => (
-                <button
-                  key={s.label}
-                  onClick={() => setActiveScreen(i)}
-                  style={{
-                    width: i === activeScreen ? 24 : 8,
-                    height: 8,
-                    borderRadius: 4,
-                    background: i === activeScreen ? '#6366f1' : 'rgba(255,255,255,.15)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'all .3s',
-                    padding: 0,
-                  }}
-                />
-              ))}
-            </div>
-            <div style={{ textAlign: 'center', color: '#64748b', fontSize: 13, marginTop: 8 }}>
-              {SCREENS[activeScreen].label}
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={handleCTA} style={{ background: C.accent, color: 'white', border: 'none', borderRadius: 10, padding: '14px 28px', fontSize: 16, fontWeight: 600, cursor: 'pointer', boxShadow: `0 0 20px ${C.accentGlow}`, fontFamily: "'DM Sans', sans-serif" }}>
+                Build Your App Free →
+              </button>
+              <a href="#how" style={{ background: 'transparent', color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 28px', fontSize: 16, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                See How It Works
+              </a>
             </div>
           </FadeIn>
-        </div>
-      </section>
+        </section>
 
-      {/* ─── SOCIAL PROOF BAR ─── */}
-      <FadeIn>
-        <section style={{
-          borderTop: '1px solid rgba(255,255,255,.05)',
-          borderBottom: '1px solid rgba(255,255,255,.05)',
-          padding: '32px 24px',
-        }}>
-          <div style={{
-            maxWidth: 800,
-            margin: '0 auto',
-            display: 'flex',
-            justifyContent: 'center',
-            gap: 64,
-            flexWrap: 'wrap' as const,
-          }}>
-            {[
-              { n: '50+', l: 'Screen Templates' },
-              { n: '15', l: 'Design Rules' },
-              { n: '11', l: 'MCP Tools' },
-              { n: '5', l: 'App Categories' },
-            ].map((s) => (
-              <div key={s.l} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.02em' }}>{s.n}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{s.l}</div>
+        {/* ─── DEMO WINDOW ─── */}
+        <FadeIn delay={0.4}>
+          <section style={{ padding: '40px 0 80px' }}>
+            <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }}>
+              {/* Title bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FF5F57' }} />
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FEBC2E' }} />
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#28C840' }} />
+                <span style={{ marginLeft: 12, fontSize: 13, color: C.textDim, fontFamily: "'Space Mono', monospace" }}>mokkoi.com/app</span>
               </div>
+              {/* Content */}
+              <div style={{ padding: 40, display: 'flex', gap: 32, alignItems: 'flex-start', minHeight: 480, flexWrap: 'wrap' }}>
+                {/* Prompt side */}
+                <div style={{ flex: 1, minWidth: 280, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: C.teal, textTransform: 'uppercase', letterSpacing: 2 }}>Your Prompt</div>
+                  <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, fontSize: 15, lineHeight: 1.6 }}>
+                    "Build me a fitness tracking app with a dashboard showing today's workout stats, an exercise library with categories, and a profile page with progress charts"
+                    <span style={{ borderRight: `2px solid ${C.accent}`, animation: 'mokkoiBlink 1s infinite', paddingRight: 2 }} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: C.textDim, fontSize: 13, fontFamily: "'Space Mono', monospace" }}>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12m0 0l4-4m-4 4l-4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    AI generates 4 screens + navigation in ~30 seconds
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: C.textDim, fontSize: 13, fontFamily: "'Space Mono', monospace" }}>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12m0 0l4-4m-4 4l-4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Export as full Expo project → npm install → run
+                  </div>
+                </div>
+                {/* Phone mocks */}
+                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                  {/* Dashboard phone */}
+                  <div style={{ width: 200, background: C.bg, border: `2px solid ${C.accent}`, borderRadius: 24, overflow: 'hidden', boxShadow: `0 0 30px ${C.accentGlow}` }}>
+                    <div style={{ width: 80, height: 20, background: C.bgCard, borderRadius: '0 0 12px 12px', margin: '0 auto' }} />
+                    <div style={{ padding: 12, minHeight: 320 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Today's Workout</div>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                        <div style={{ flex: 1, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.teal }}>847</div>
+                          <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2 }}>Calories</div>
+                        </div>
+                        <div style={{ flex: 1, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.teal }}>45</div>
+                          <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2 }}>Minutes</div>
+                        </div>
+                      </div>
+                      <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600 }}>Morning Run</div>
+                        <div style={{ fontSize: 10, color: C.textMuted }}>5.2km · 28 min · 320 cal</div>
+                      </div>
+                      <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600 }}>Upper Body</div>
+                        <div style={{ fontSize: 10, color: C.textMuted }}>12 exercises · 17 min</div>
+                      </div>
+                      <div style={{ background: C.accent, color: 'white', fontSize: 11, fontWeight: 600, padding: 8, borderRadius: 8, textAlign: 'center', marginTop: 12 }}>Start Workout</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-around', padding: '8px 0', borderTop: `1px solid ${C.border}`, marginTop: 12 }}>
+                        {[true, false, false, false].map((active, i) => (
+                          <div key={i} style={{ width: 20, height: 20, borderRadius: 4, background: active ? C.accent : C.border }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Profile phone */}
+                  <div style={{ width: 180, background: C.bg, border: `2px solid ${C.border}`, borderRadius: 24, overflow: 'hidden' }}>
+                    <div style={{ width: 80, height: 20, background: C.bgCard, borderRadius: '0 0 12px 12px', margin: '0 auto' }} />
+                    <div style={{ padding: 12, minHeight: 320 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.gradient2, marginBottom: 8 }} />
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Your Progress</div>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                        <div style={{ flex: 1, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.teal }}>23</div>
+                          <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2 }}>Workouts</div>
+                        </div>
+                        <div style={{ flex: 1, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.teal }}>12</div>
+                          <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2 }}>Streak</div>
+                        </div>
+                      </div>
+                      <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 10, color: C.textDim, marginBottom: 8 }}>Search exercises...</div>
+                      <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600 }}>This Week</div>
+                        <div style={{ fontSize: 10, color: C.textMuted }}>4 of 5 goals completed</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-around', padding: '8px 0', borderTop: `1px solid ${C.border}`, marginTop: 12 }}>
+                        {[false, false, false, true].map((active, i) => (
+                          <div key={i} style={{ width: 20, height: 20, borderRadius: 4, background: active ? C.accent : C.border }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </FadeIn>
+
+        {/* ─── HOW IT WORKS ─── */}
+        <section id="how" style={{ padding: '80px 0' }}>
+          <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: C.teal, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>How It Works</div>
+          <h2 style={{ fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 700, letterSpacing: -1, textAlign: 'center', marginBottom: 64 }}>Prompt to phone in 3 steps</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24 }}>
+            {STEPS.map((step, i) => (
+              <FadeIn key={step.num} delay={i * 0.1}>
+                <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32, transition: 'all 0.3s', cursor: 'default' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.3)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+                >
+                  <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 48, fontWeight: 700, color: C.border, marginBottom: 16, lineHeight: 1 }}>{step.num}</div>
+                  <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>{step.title}</h3>
+                  <p style={{ fontSize: 14, color: C.textMuted, lineHeight: 1.6 }}>{step.desc}</p>
+                  <div style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, fontFamily: "'Space Mono', monospace", marginTop: 16, background: `${step.color}20`, color: step.color }}>{step.tag}</div>
+                </div>
+              </FadeIn>
             ))}
           </div>
         </section>
-      </FadeIn>
 
-      {/* ─── FEATURES ─── */}
-      <section id="features" style={{ padding: '100px 24px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <FadeIn>
-            <div style={{ textAlign: 'center', marginBottom: 56 }}>
-              <div style={{ color: '#818cf8', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 12 }}>CAPABILITIES</div>
-              <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 16 }}>Everything your AI agent needs</h2>
-              <p style={{ color: '#64748b', fontSize: 17, maxWidth: 500, margin: '0 auto' }}>
-                Production-quality mobile screens without opening Figma.
-              </p>
-            </div>
-          </FadeIn>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
-            {[
-              {
-                icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>,
-                title: '50+ Screen Templates',
-                desc: 'Login, dashboard, chat, e-commerce, fitness, fintech — production-ready layouts your AI agent generates instantly.',
-              },
-              {
-                icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>,
-                title: '15 Design Rules',
-                desc: 'WCAG contrast, touch targets, spacing grid, platform awareness — every screen auto-validated for accessibility.',
-              },
-              {
-                icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>,
-                title: 'Design System Aware',
-                desc: 'Scans your codebase, extracts your tokens, and generates screens that match your existing app perfectly.',
-              },
-            ].map((f, i) => (
-              <FadeIn key={f.title} delay={i * 0.1}>
-                <div style={{
-                  background: 'rgba(255,255,255,.02)',
-                  border: '1px solid rgba(255,255,255,.06)',
-                  borderRadius: 16,
-                  padding: '32px 28px',
-                  transition: 'all .3s',
-                  cursor: 'default',
-                  height: '100%',
-                }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.04)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,.2)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.02)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                >
-                  <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                    {f.icon}
-                  </div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 10, color: '#f1f5f9' }}>{f.title}</h3>
-                  <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.6 }}>{f.desc}</p>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── MCP SERVER ─── */}
-      <section style={{ padding: '80px 24px 100px', borderTop: '1px solid rgba(255,255,255,.06)' }}>
-        <div style={{ maxWidth: 800, margin: '0 auto' }}>
-          <FadeIn>
-            <div style={{ textAlign: 'center', marginBottom: 56 }}>
-              <div style={{ color: '#818cf8', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 12 }}>MCP SERVER</div>
-              <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 16 }}>Works with Claude Code &amp; Cursor</h2>
-              <p style={{ color: '#94a3b8', fontSize: 17, lineHeight: 1.7, maxWidth: 600, margin: '0 auto' }}>
-                The only React Native MCP server. Generate screens from your terminal that appear on the canvas in real-time.
-              </p>
-            </div>
-          </FadeIn>
-
-          <FadeIn delay={0.1}>
-            <div style={{
-              background: '#0a0a0a',
-              border: '1px solid rgba(255,255,255,.08)',
-              borderRadius: 16,
-              padding: '32px',
-              fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
-              fontSize: 14,
-              lineHeight: 1.8,
-              marginBottom: 48,
-              overflow: 'auto',
-            }}>
-              <div style={{ color: '#64748b' }}>$ claude mcp add mokkoi -- npx mokkoi-mcp</div>
-              <div style={{ color: '#64748b' }}>$ claude</div>
-              <div style={{ color: '#e2e8f0', marginTop: 8 }}>
-                <span style={{ color: '#818cf8' }}>&gt;</span> Create a 4-screen onboarding flow for my fitness app
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ color: '#34d399' }}>✓ Generated screens/Welcome.tsx</div>
-                <div style={{ color: '#34d399' }}>✓ Generated screens/Goals.tsx</div>
-                <div style={{ color: '#34d399' }}>✓ Generated screens/FitnessLevel.tsx</div>
-                <div style={{ color: '#34d399' }}>✓ Generated screens/Personalization.tsx</div>
-                <div style={{ color: '#34d399' }}>✓ Synced to mokkoi.com canvas</div>
-              </div>
-            </div>
-          </FadeIn>
-
-          <FadeIn delay={0.2}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: 16,
-              marginBottom: 48,
-            }}>
-              {[
-                { tool: 'generate_screen', desc: 'Text to React Native screen' },
-                { tool: 'edit_screen', desc: 'Modify existing screens' },
-                { tool: 'screenshot_to_screen', desc: 'Screenshot to code' },
-                { tool: 'generate_flow', desc: 'Multi-screen flows' },
-                { tool: 'sync_from_canvas', desc: 'Pull canvas edits' },
-                { tool: 'watch_canvas', desc: 'Track changes' },
-                { tool: 'list_templates', desc: '28 ready templates' },
-              ].map((t) => (
-                <div key={t.tool} style={{
-                  background: 'rgba(255,255,255,.03)',
-                  border: '1px solid rgba(255,255,255,.06)',
-                  borderRadius: 12,
-                  padding: '16px 20px',
-                }}>
-                  <div style={{ color: '#818cf8', fontSize: 13, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 600, marginBottom: 4 }}>{t.tool}</div>
-                  <div style={{ color: '#94a3b8', fontSize: 14 }}>{t.desc}</div>
-                </div>
-              ))}
-            </div>
-          </FadeIn>
-
-          <FadeIn delay={0.3}>
-            <div style={{ textAlign: 'center' }}>
-              <a
-                href="https://www.npmjs.com/package/mokkoi-mcp"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '14px 32px',
-                  background: '#818cf8',
-                  color: '#fff',
-                  fontWeight: 700,
-                  fontSize: 16,
-                  borderRadius: 12,
-                  textDecoration: 'none',
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = '#6366f1')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = '#818cf8')}
-              >
-                Get Started with MCP →
-              </a>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* ─── HOW IT WORKS ─── */}
-      <section id="how-it-works" style={{ padding: '80px 24px 100px' }}>
-        <div style={{ maxWidth: 700, margin: '0 auto' }}>
-          <FadeIn>
-            <div style={{ textAlign: 'center', marginBottom: 56 }}>
-              <div style={{ color: '#818cf8', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 12 }}>HOW IT WORKS</div>
-              <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: '-0.03em' }}>Three steps to ship</h2>
-            </div>
-          </FadeIn>
-
-          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 0 }}>
-            {[
-              {
-                n: '01',
-                title: 'Connect',
-                desc: 'One command. Works with Claude Code, Cursor, Windsurf, or any MCP-compatible AI agent.',
-                code: 'claude mcp add mokkoi — npx mokkoi-mcp-server',
-              },
-              {
-                n: '02',
-                title: 'Describe',
-                desc: 'Tell your AI agent what you need in plain English. No design files required.',
-                code: '"Build me a login screen with social auth"',
-              },
-              {
-                n: '03',
-                title: 'Generate',
-                desc: 'Production-ready React Native code with proper styling, accessibility, and design tokens.',
-                code: null,
-              },
-            ].map((step, i) => (
-              <FadeIn key={step.n} delay={i * 0.1}>
-                <div style={{
-                  display: 'flex',
-                  gap: 24,
-                  padding: '32px 0',
-                  borderBottom: i < 2 ? '1px solid rgba(255,255,255,.05)' : undefined,
-                }}>
-                  <div style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    flexShrink: 0,
-                  }}>
-                    {step.n}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>{step.title}</h3>
-                    <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.6, marginBottom: step.code ? 14 : 0 }}>{step.desc}</p>
-                    {step.code && (
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        background: 'rgba(0,0,0,.3)',
-                        border: '1px solid rgba(255,255,255,.06)',
-                        borderRadius: 10,
-                        padding: '10px 16px',
-                      }}>
-                        <code style={{ color: '#a5b4fc', fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>{step.code}</code>
-                        {i === 0 && <CopyButton text="claude mcp add mokkoi -- npx mokkoi-mcp-server" />}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── PLAYGROUND PREVIEW ─── */}
-      <section id="playground" style={{ padding: '80px 24px 100px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <FadeIn>
-            <div style={{ textAlign: 'center', marginBottom: 48 }}>
-              <div style={{ color: '#818cf8', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 12 }}>PLAYGROUND</div>
-              <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 16 }}>Generate any screen with AI</h2>
-              <p style={{ color: '#64748b', fontSize: 17, maxWidth: 500, margin: '0 auto' }}>
-                Type a description, get production-ready React Native code. Try it live.
-              </p>
-            </div>
-          </FadeIn>
-
-          <FadeIn delay={0.15}>
-            {/* Browser window mockup */}
-            <div style={{
-              maxWidth: 900,
-              margin: '0 auto',
-              borderRadius: 16,
-              border: '1px solid rgba(255,255,255,.08)',
-              background: 'rgba(255,255,255,.02)',
-              overflow: 'hidden',
-            }}>
-              {/* Title bar */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '12px 16px',
-                borderBottom: '1px solid rgba(255,255,255,.05)',
-                background: 'rgba(0,0,0,.2)',
-              }}>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 5, background: '#ef4444' }} />
-                  <div style={{ width: 10, height: 10, borderRadius: 5, background: '#f59e0b' }} />
-                  <div style={{ width: 10, height: 10, borderRadius: 5, background: '#22c55e' }} />
-                </div>
-                <div style={{ flex: 1, textAlign: 'center', color: '#475569', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>mokkoi.com/app</div>
-              </div>
-              {/* Content */}
-              <div className="landing-browser-content" style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 48,
-                padding: '48px 32px',
-                flexWrap: 'wrap' as const,
-              }}>
-                {/* Chat side */}
-                <div style={{ maxWidth: 320, flex: 1, minWidth: 260 }}>
-                  <div style={{
-                    background: 'rgba(99,102,241,.1)',
-                    border: '1px solid rgba(99,102,241,.2)',
-                    borderRadius: '14px 14px 4px 14px',
-                    padding: '14px 18px',
-                    marginBottom: 16,
-                  }}>
-                    <p style={{ color: '#c7d2fe', fontSize: 14, lineHeight: 1.5 }}>Create a fitness dashboard with activity rings and step counter</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>M</span>
+        {/* ─── FEATURES ─── */}
+        <section id="features" style={{ padding: '80px 0' }}>
+          <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: C.teal, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>Built Different</div>
+          <h2 style={{ fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 700, letterSpacing: -1, textAlign: 'center', marginBottom: 64 }}>
+            Everything you need to go<br />from idea to app
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+            {FEATURES.map((f) => {
+              const Icon = f.icon
+              return (
+                <FadeIn key={f.title}>
+                  <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 14, padding: 28, transition: 'all 0.3s' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.background = C.bgCardHover }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bgCard }}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, background: `${f.color}20` }}>
+                      <Icon size={20} color={f.color} />
                     </div>
-                    <div style={{
-                      background: 'rgba(255,255,255,.04)',
-                      border: '1px solid rgba(255,255,255,.06)',
-                      borderRadius: '4px 14px 14px 14px',
-                      padding: '14px 18px',
-                    }}>
-                      <p style={{ color: '#94a3b8', fontSize: 14, lineHeight: 1.5 }}>Generated your fitness dashboard with 4 components — activity rings, step counter, calorie tracker, and streak card.</p>
-                    </div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{f.title}</h3>
+                    <p style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.5 }}>{f.desc}</p>
                   </div>
-                </div>
-                {/* Phone side */}
-                <PhonePreview scale={0.75}>
-                  <MockHomeScreen />
-                </PhonePreview>
-              </div>
-            </div>
-          </FadeIn>
-
-          <FadeIn delay={0.2}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
-              <button
-                onClick={() => goToApp()}
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '14px 32px',
-                  color: '#fff',
-                  fontSize: 16,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  boxShadow: '0 4px 24px rgba(99,102,241,.25)',
-                  transition: 'all .25s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,102,241,.4)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 24px rgba(99,102,241,.25)'; }}
-              >
-                Start Building →
-              </button>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* ─── CATEGORIES ─── */}
-      <section style={{ padding: '80px 24px 100px' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <FadeIn>
-            <div style={{ textAlign: 'center', marginBottom: 48 }}>
-              <div style={{ color: '#818cf8', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 12 }}>CATEGORIES</div>
-              <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: '-0.03em' }}>Built for every app type</h2>
-            </div>
-          </FadeIn>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: 16,
-          }}>
-            {[
-              { icon: '💪', name: 'Fitness', count: '8 screens' },
-              { icon: '💰', name: 'Fintech', count: '6 screens' },
-              { icon: '💬', name: 'Social', count: '5 screens' },
-              { icon: '🛒', name: 'E-commerce', count: '6 screens' },
-              { icon: '❤️', name: 'Health', count: '3 screens' },
-            ].map((c, i) => (
-              <FadeIn key={c.name} delay={i * 0.05}>
-                <div style={{
-                  background: 'rgba(255,255,255,.02)',
-                  border: '1px solid rgba(255,255,255,.06)',
-                  borderRadius: 14,
-                  padding: '28px 16px',
-                  textAlign: 'center',
-                  transition: 'all .3s',
-                  cursor: 'default',
-                }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.04)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,.2)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.02)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,.06)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                >
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>{c.icon}</div>
-                  <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{c.name}</div>
-                  <div style={{ color: '#64748b', fontSize: 13 }}>{c.count}</div>
-                </div>
-              </FadeIn>
-            ))}
+                </FadeIn>
+              )
+            })}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ─── CTA ─── */}
-      <section style={{ padding: '80px 24px 100px' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center' }}>
+        {/* ─── COMPARISON ─── */}
+        <section style={{ padding: '80px 0' }}>
+          <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: C.teal, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>Why Mokkoi</div>
+          <h2 style={{ fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 700, letterSpacing: -1, textAlign: 'center', marginBottom: 64 }}>The only AI builder for mobile</h2>
+          <ComparisonTable />
+        </section>
+
+        {/* ─── PRICING ─── */}
+        <section id="pricing" style={{ padding: '80px 0' }}>
+          <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: C.teal, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>Pricing</div>
+          <h2 style={{ fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 700, letterSpacing: -1, textAlign: 'center', marginBottom: 64 }}>
+            Start free. Scale when ready.
+          </h2>
+          <PricingSection />
+        </section>
+
+        {/* ─── MCP ─── */}
+        <section id="mcp" style={{ padding: '80px 0' }}>
+          <MCPSection />
+        </section>
+
+        {/* ─── CTA ─── */}
+        <section style={{ padding: '100px 0', textAlign: 'center' }}>
           <FadeIn>
-            <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 16 }}>
-              Start generating screens now
+            <h2 style={{ fontSize: 'clamp(36px, 5vw, 56px)', fontWeight: 700, letterSpacing: -1.5, marginBottom: 16 }}>
+              Stop designing screens.<br />
+              <span style={{ background: C.gradient1, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Start building apps.</span>
             </h2>
-            <p style={{ color: '#64748b', fontSize: 17, marginBottom: 32 }}>
-              One command to connect Mokkoi to your AI agent. Free and open source.
-            </p>
           </FadeIn>
-
           <FadeIn delay={0.1}>
-            <div className="landing-cta-cmd" style={{
-              background: 'rgba(0,0,0,.3)',
-              border: '1px solid rgba(255,255,255,.08)',
-              borderRadius: 12,
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 24,
-              maxWidth: 520,
-              margin: '0 auto 24px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-                <span style={{ color: '#34d399', fontFamily: "'JetBrains Mono', monospace", fontSize: 14, flexShrink: 0 }}>$</span>
-                <code style={{ color: '#e2e8f0', fontSize: 14, fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis' }}>claude mcp add mokkoi — npx mokkoi-mcp-server</code>
-              </div>
-              <CopyButton text="claude mcp add mokkoi -- npx mokkoi-mcp-server" />
-            </div>
+            <p style={{ color: C.textMuted, fontSize: 18, marginBottom: 32 }}>50 free generations per month. No credit card required.</p>
           </FadeIn>
-
-          <FadeIn delay={0.15}>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap' as const }}>
-              <button
-                onClick={() => goToApp()}
-                style={{
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '14px 28px',
-                  color: '#fff',
-                  fontSize: 15,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  transition: 'all .25s',
-                  boxShadow: '0 4px 24px rgba(99,102,241,.25)',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
-              >
-                Start Building →
-              </button>
-              <a
-                href="https://www.npmjs.com/package/mokkoi-mcp-server"
-                target="_blank"
-                rel="noopener"
-                style={{
-                  background: 'rgba(255,255,255,.04)',
-                  border: '1px solid rgba(255,255,255,.08)',
-                  borderRadius: 10,
-                  padding: '14px 28px',
-                  color: '#94a3b8',
-                  fontSize: 15,
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  transition: 'all .25s',
-                  display: 'inline-block',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.15)'; e.currentTarget.style.color = '#e2e8f0'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.08)'; e.currentTarget.style.color = '#94a3b8'; }}
-              >
-                View on npm
-              </a>
-            </div>
+          <FadeIn delay={0.2}>
+            <button onClick={handleCTA} style={{ background: C.accent, color: 'white', border: 'none', borderRadius: 10, padding: '14px 28px', fontSize: 16, fontWeight: 600, cursor: 'pointer', boxShadow: `0 0 20px ${C.accentGlow}`, fontFamily: "'DM Sans', sans-serif" }}>
+              Build Your First App →
+            </button>
           </FadeIn>
-        </div>
-      </section>
+        </section>
 
-      {/* ─── FOOTER ─── */}
-      <footer style={{
-        borderTop: '1px solid rgba(255,255,255,.05)',
-        padding: '40px 24px',
-      }}>
-        <div className="landing-footer-inner" style={{
-          maxWidth: 1100,
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap' as const,
-          gap: 20,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 24, height: 24, borderRadius: 6, background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 10 }}>M</div>
-            <span style={{ color: '#475569', fontSize: 14 }}>Mokkoi · Built with love</span>
+        {/* ─── FOOTER ─── */}
+        <footer style={{ padding: '32px 0', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+          <span style={{ fontSize: 13, color: C.textDim }}>© 2026 Mokkoi. Built for builders.</span>
+          <div style={{ display: 'flex', gap: 24 }}>
+            <a href="https://x.com/Mokkoi_dev" target="_blank" rel="noopener" style={{ fontSize: 13, color: C.textMuted, textDecoration: 'none' }}>@Mokkoi_dev</a>
+            <a href="https://www.npmjs.com/package/mokkoi-mcp" target="_blank" rel="noopener" style={{ fontSize: 13, color: C.textMuted, textDecoration: 'none' }}>npm</a>
           </div>
-          <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-            {[
-              { label: 'GitHub', href: 'https://github.com/RHINOREX123/mokkoi-mcp-server' },
-              { label: 'npm', href: 'https://www.npmjs.com/package/mokkoi-mcp-server' },
-              { label: '@Mokkoi_dev', href: 'https://x.com/Mokkoi_dev' },
-            ].map((l) => (
-              <a
-                key={l.label}
-                href={l.href}
-                target="_blank"
-                rel="noopener"
-                style={{ color: '#475569', fontSize: 13, textDecoration: 'none', transition: 'color .2s' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#94a3b8')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#475569')}
-              >
-                {l.label}
-              </a>
-            ))}
-            <span style={{ color: '#334155', fontSize: 13 }}>MIT License</span>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
+
+      {/* Keyframe animations */}
+      <style>{`
+        @keyframes mokkoiPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes mokkoiBlink { 0%, 100% { border-color: ${C.accent}; } 50% { border-color: transparent; } }
+      `}</style>
     </div>
-  );
+  )
 }
