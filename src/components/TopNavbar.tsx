@@ -39,6 +39,7 @@ interface TopNavbarProps {
   setShowDeleteConfirm: (show: boolean) => void
   setToastMessage: (msg: string) => void
   onExportProject: () => void
+  onPreviewPhone?: () => void
   screenCount: number
 }
 
@@ -47,7 +48,7 @@ export function TopNavbar({
   isGenerating, generatedTree, activeGeneratedTree,
   setActiveGeneratedId, setShowCodeExport, setShowShareModal,
   setShowCommandPalette, setShowDeleteConfirm, setToastMessage,
-  onExportProject, screenCount,
+  onExportProject, onPreviewPhone, screenCount,
 }: TopNavbarProps) {
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
@@ -246,6 +247,14 @@ export function TopNavbar({
             ><Smartphone size={16} color={screenCount > 0 ? '#34D399' : '#555'} />Export as Expo App
               {screenCount > 1 && <span style={{ fontSize: 10, color: '#34D399', marginLeft: 'auto' }}>{screenCount} screens</span>}
             </button>
+            {onPreviewPhone && (
+              <button onClick={() => { onPreviewPhone(); setShowHamburgerMenu(false) }}
+                style={{ ...hamburgerItemStyle, color: screenCount > 0 ? '#14B8A6' : '#555' }}
+                onMouseEnter={e => { if (screenCount > 0) e.currentTarget.style.background = 'rgba(20,184,166,0.1)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                title="Preview app on phone via Expo Go"
+              ><Smartphone size={16} color={screenCount > 0 ? '#14B8A6' : '#555'} />Preview on Phone</button>
+            )}
             <button onClick={() => { setToastMessage('Coming soon'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
@@ -327,6 +336,21 @@ export function TopNavbar({
           onMouseEnter={e => { if (generatedTree) e.currentTarget.style.color = '#e2e8f0' }}
           onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8' }}
         ><Download size={14} />Export</button>
+
+        {onPreviewPhone && (
+          <button onClick={onPreviewPhone} style={{
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            color: screenCount > 0 ? '#14B8A6' : '#555',
+            background: screenCount > 0 ? 'rgba(20,184,166,0.1)' : 'transparent',
+            border: screenCount > 0 ? '1px solid rgba(20,184,166,0.2)' : 'none',
+            cursor: screenCount > 0 ? 'pointer' : 'default',
+            opacity: screenCount > 0 ? 1 : 0.4, transition: 'all 0.2s',
+          }}
+            onMouseEnter={e => { if (screenCount > 0) { e.currentTarget.style.background = 'rgba(20,184,166,0.15)'; e.currentTarget.style.color = '#2dd4bf' } }}
+            onMouseLeave={e => { if (screenCount > 0) { e.currentTarget.style.background = 'rgba(20,184,166,0.1)'; e.currentTarget.style.color = '#14B8A6' } }}
+          ><Smartphone size={14} />Preview</button>
+        )}
 
         <button onClick={() => setShowShareModal(true)} style={{
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,

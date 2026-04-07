@@ -649,12 +649,13 @@ export default function Dashboard() {
       </nav>
 
       {/* Main layout */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 56px)' }}>
         {/* Desktop sidebar */}
         <div className="dashboard-sidebar" style={{
           width: 300, flexShrink: 0, background: '#0A0A0A',
           borderRight: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', flexDirection: 'column', padding: '16px 12px',
+          overflowY: 'auto',
         }}>
           {sidebarContent}
         </div>
@@ -683,9 +684,9 @@ export default function Dashboard() {
 
         {/* Main content area */}
         <div style={{
-          flex: 1, overflow: 'auto',
+          flex: 1, overflowY: 'auto',
           display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: hasProjects ? 'center' : 'center',
+          alignItems: 'center', justifyContent: 'center',
           padding: '40px 24px',
         }}>
           <div style={{ width: '100%', maxWidth: 640 }}>

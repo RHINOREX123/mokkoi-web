@@ -19,6 +19,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { TopNavbar } from './components/TopNavbar'
 import { NoCreditsModal } from './components/PricingPage'
 import { ExportProjectModal } from './components/ExportProjectModal'
+import { ExpoPreviewModal } from './components/ExpoPreviewModal'
 import { useScreenExport } from './hooks/useScreenExport'
 
 import { supabase } from './lib/supabase'
@@ -88,6 +89,7 @@ function App() {
   const [showImportHtmlModal, setShowImportHtmlModal] = useState(false)
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [showExportProjectModal, setShowExportProjectModal] = useState(false)
+  const [showExpoPreview, setShowExpoPreview] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -403,6 +405,7 @@ function App() {
         setShowDeleteConfirm={setShowDeleteConfirm}
         setToastMessage={setToastMessage}
         onExportProject={handleExportProject}
+        onPreviewPhone={() => setShowExpoPreview(true)}
         screenCount={screens.generatedScreens.filter(s => s.tree).length}
       />
 
@@ -632,6 +635,7 @@ function App() {
       <ShareModal projectId={projectId || ''} projectName={screens.projectName} isOpen={showShareModal} onClose={() => setShowShareModal(false)} />
       <VariationsPanel isOpen={showVariationsPanel} onClose={() => setShowVariationsPanel(false)} onGenerate={ai.handleGenerateVariations} isGenerating={ai.isGeneratingVariations} />
       {showQrModal && <QrCodeModal url={qrUrl} onClose={() => setShowQrModal(false)} />}
+      {showExpoPreview && <ExpoPreviewModal screens={screens.generatedScreens.filter(s => s.tree)} connections={screens.connections} projectName={screens.projectName} onClose={() => setShowExpoPreview(false)} />}
       {showScreenshotModal && <ScreenshotModal onClose={() => setShowScreenshotModal(false)} onGenerate={(imageData, imageMimeType, prompt) => { setShowScreenshotModal(false); ai.handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true) }} isGenerating={ai.isGenerating} />}
 
       {showImportHtmlModal && <ImportHtmlModal
