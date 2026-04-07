@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { X, Smartphone, ExternalLink, RefreshCw, QrCode, Loader } from 'lucide-react'
 import { buildSnackPayload } from '../utils/snackUrl'
-import { supabase } from '../lib/supabase'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from './FlowConnectors'
 import { trackEvent } from '../lib/analytics'
@@ -36,35 +35,30 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
     try {
       const payload = buildSnackPayload({ projectName, screens, connections })
 
-      // Get auth token
-      let headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (supabase) {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`
-        }
-      }
-
-      const res = await fetch('/api/export', {
+      // Call Snack API directly from browser (no CORS issues, avoids Vercel egress limits)
+      const res = await fetch('https://snack.expo.dev/--/api/v2/snack/save', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'save-snack',
-          files: payload.files,
           name: payload.name,
+          description: 'Built with Mokkoi — AI Mobile App Builder',
+          files: payload.files,
           dependencies: payload.dependencies,
+          sdkVersion: '52.0.0',
         }),
       })
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData.error || `Failed to save snack (${res.status})`)
+        const errText = await res.text().catch(() => '')
+        console.error('Snack API error:', res.status, errText)
+        throw new Error(`Snack API returned ${res.status}`)
       }
 
       const data = await res.json()
-      if (!data.id) throw new Error('No snack ID returned')
+      const id = data.id || data.hashId
+      if (!id) throw new Error('No snack ID returned')
 
-      setSnackId(data.id)
+      setSnackId(id)
       trackEvent('expo_preview_created', { screen_count: screens.length })
     } catch (err) {
       console.error('Save snack error:', err)

@@ -247,61 +247,9 @@ ${styleBlocks.join('\n\n')}
 // API Handler
 // ============================================================
 
-// ============================================================
-// Expo Snack Save (POST with mode: "save-snack")
-// ============================================================
-async function handleSaveSnack(req: VercelRequest, res: VercelResponse) {
-  const { files, name, dependencies } = req.body ?? {}
-  if (!files || typeof files !== 'object') {
-    return res.status(400).json({ error: 'Missing files object' })
-  }
-
-  try {
-    const snackResponse = await fetch('https://snack.expo.dev/--/api/v2/snack/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: name || 'Mokkoi App',
-        description: 'Built with Mokkoi — AI Mobile App Builder',
-        files,
-        dependencies: dependencies || {},
-        sdkVersion: '52.0.0',
-      }),
-    })
-
-    if (!snackResponse.ok) {
-      const errText = await snackResponse.text()
-      console.error('Snack API error:', snackResponse.status, errText)
-      return res.status(502).json({ error: 'Failed to save to Expo Snack' })
-    }
-
-    const snackData = await snackResponse.json()
-    const snackId = snackData.id || snackData.hashId
-
-    if (!snackId) {
-      console.error('No snack ID in response:', JSON.stringify(snackData).slice(0, 300))
-      return res.status(502).json({ error: 'No snack ID returned' })
-    }
-
-    return res.status(200).json({
-      id: snackId,
-      url: `https://snack.expo.dev/@snack/${snackId}`,
-      embedUrl: `https://snack.expo.dev/embedded/@snack/${snackId}`,
-    })
-  } catch (err) {
-    console.error('Save snack error:', err)
-    return res.status(500).json({ error: `Failed to save snack: ${err instanceof Error ? err.message : String(err)}` })
-  }
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  // Route: save to Expo Snack
-  if (req.method === 'POST' && req.body?.mode === 'save-snack') {
-    return handleSaveSnack(req, res)
   }
 
   const user = await authenticateRequest(req, res)
