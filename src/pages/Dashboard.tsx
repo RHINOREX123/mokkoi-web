@@ -505,9 +505,10 @@ export default function Dashboard() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#000000',
+      height: '100vh', background: '#000000',
       fontFamily: "'DM Sans', sans-serif",
       display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
     }}>
       {/* Toast */}
       {toastMessage && (
@@ -649,7 +650,7 @@ export default function Dashboard() {
       </nav>
 
       {/* Main layout */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 56px)' }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* Desktop sidebar */}
         <div className="dashboard-sidebar" style={{
           width: 300, flexShrink: 0, background: '#0A0A0A',
