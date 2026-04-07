@@ -1,10 +1,9 @@
 // Expo Snack file builder.
 // Constructs the files object and dependencies needed for an Expo Snack.
-// The actual save is done server-side via /api/export?mode=save-snack.
+// Uses a simple state-based tab switcher instead of React Navigation
+// to avoid native module crashes in the Snack runtime.
 
 import { convertTreeToTSX } from './exportTsx'
-import { generateMultiScreenAppTsx } from './expoScaffold'
-import { detectTabGroup } from './detectTabBar'
 import type { ComponentNode } from '../types/mokkoi'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from '../components/FlowConnectors'
@@ -61,12 +60,6 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const rawNames = screens.map(s => toPascalCase(s.name))
   const names = deduplicateNames(rawNames)
 
-  // Detect tab groups
-  const tabGroup = detectTabGroup(screens.map((s, i) => ({
-    name: names[i],
-    tree: s.tree,
-  })))
-
   // Build navigation targets from connections
   const connectionMap = new Map<string, string>()
   if (connections) {
@@ -94,28 +87,48 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
     files[`screens/${name}.tsx`] = { type: 'CODE', contents: tsx }
   }
 
-  // App.tsx with navigation
-  const multiOpts = {
-    projectName,
-    screens: names.map((name, i) => ({
-      name,
-      prompt: screens[i].originalPrompt,
-      tabLabels: tabGroup?.screenNames.includes(name) ? tabGroup.labels : undefined,
-    })),
-    tabGroup: tabGroup || undefined,
-  }
-  files['App.tsx'] = { type: 'CODE', contents: generateMultiScreenAppTsx(multiOpts) }
+  // App.tsx — simple state-based tab switcher (no React Navigation needed in Snack)
+  // React Navigation has native module deps that crash in Expo Snack.
+  const imports = names.map(n => `import ${n}Screen from './screens/${n}';`).join('\n')
+  const screenArray = names.map(n => `${n}Screen`).join(', ')
+  const labelArray = names.map(n => `'${n}'`).join(', ')
 
-  // Dependencies
+  const appCode = `import React, { useState } from 'react';
+import { View, TouchableOpacity, Text, SafeAreaView, StatusBar } from 'react-native';
+${imports}
+
+const screens = [${screenArray}];
+const labels = [${labelArray}];
+
+export default function App() {
+  const [active, setActive] = useState(0);
+  const ActiveScreen = screens[active];
+  return (
+    <View style={{ flex: 1, backgroundColor: '#0A0A1A' }}>
+      <StatusBar barStyle="light-content" />
+      <View style={{ flex: 1 }}>
+        <ActiveScreen />
+      </View>
+      {screens.length > 1 && (
+        <SafeAreaView style={{ backgroundColor: '#111' }}>
+          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: '#222', backgroundColor: '#111' }}>
+            {labels.map((label, i) => (
+              <TouchableOpacity key={i} onPress={() => setActive(i)} style={{ flex: 1, paddingVertical: 10, alignItems: 'center' }}>
+                <Text style={{ color: active === i ? '#2563EB' : '#666', fontSize: 11, fontWeight: active === i ? '600' : '400' }}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </SafeAreaView>
+      )}
+    </View>
+  );
+}
+`
+  files['App.tsx'] = { type: 'CODE', contents: appCode }
+
+  // Minimal dependencies — no React Navigation needed for Snack preview
   const dependencies: Record<string, { version: string }> = {
-    '@react-navigation/native': { version: '6.x' },
-    '@react-navigation/native-stack': { version: '6.x' },
-    'react-native-screens': { version: '*' },
-    'react-native-safe-area-context': { version: '*' },
-    'expo-status-bar': { version: '*' },
-  }
-  if (tabGroup) {
-    dependencies['@react-navigation/bottom-tabs'] = { version: '6.x' }
+    'expo-status-bar': { version: '~1.11.1' },
   }
 
   return {
