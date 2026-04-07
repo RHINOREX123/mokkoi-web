@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Smartphone, ExternalLink, RefreshCw, QrCode, Loader } from 'lucide-react'
 import { buildSnackPayload } from '../utils/snackUrl'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
@@ -23,72 +23,126 @@ const C = {
   teal: '#14B8A6',
 }
 
+/**
+ * Expo Snack live preview using the postMessage protocol:
+ *
+ * 1. Embed snack.expo.dev/embedded with waitForData=true
+ * 2. Snack iframe sends ['expoFrameLoaded', {iframeId}] when ready
+ * 3. We reply with ['expoDataEvent', {iframeId, files, dependencies}]
+ * 4. Snack renders the code — live on web, scannable via Expo Go
+ */
 export function ExpoPreviewModal({ screens, connections, projectName, onClose }: ExpoPreviewModalProps) {
   const [showQR, setShowQR] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [snackId, setSnackId] = useState<string | null>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const iframeIdRef = useRef(`mokkoi-${Date.now()}`)
+  const payloadSentRef = useRef(false)
 
-  const saveSnack = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  // Build the snack payload once
+  const payload = useCallback(() => {
     try {
-      const payload = buildSnackPayload({ projectName, screens, connections })
-
-      // Call Snack API directly from browser (no CORS issues, avoids Vercel egress limits)
-      const res = await fetch('https://snack.expo.dev/--/api/v2/snack/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: payload.name,
-          description: 'Built with Mokkoi — AI Mobile App Builder',
-          files: payload.files,
-          dependencies: payload.dependencies,
-          sdkVersion: '52.0.0',
-        }),
-      })
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '')
-        console.error('Snack API error:', res.status, errText)
-        throw new Error(`Snack API returned ${res.status}`)
-      }
-
-      const data = await res.json()
-      const id = data.id || data.hashId
-      if (!id) throw new Error('No snack ID returned')
-
-      setSnackId(id)
-      trackEvent('expo_preview_created', { screen_count: screens.length })
+      return buildSnackPayload({ projectName, screens, connections })
     } catch (err) {
-      console.error('Save snack error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to create preview')
-    } finally {
-      setLoading(false)
+      setError(err instanceof Error ? err.message : 'Failed to build preview')
+      return null
     }
   }, [projectName, screens, connections])
 
+  // Listen for the iframe's "ready" message and send code
   useEffect(() => {
-    saveSnack()
-  }, [saveSnack])
+    const iframeId = iframeIdRef.current
 
-  const embedUrl = snackId ? `https://snack.expo.dev/embedded/@snack/${snackId}` : null
-  const fullUrl = snackId ? `https://snack.expo.dev/@snack/${snackId}` : null
-  const qrUrl = fullUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(fullUrl)}`
-    : null
+    function handleMessage(event: MessageEvent) {
+      // Snack sends: ['expoFrameLoaded', { iframeId }]
+      if (!Array.isArray(event.data) || event.data.length < 2) return
+      const [eventName, data] = event.data
+
+      if (eventName === 'expoFrameLoaded' && data?.iframeId === iframeId) {
+        const p = payload()
+        if (!p) return
+
+        // Convert dependencies from {pkg: {version: "x"}} to "pkg@x,pkg2@y" string
+        const depsString = Object.entries(p.dependencies)
+          .map(([name, val]) => {
+            const v = (val as { version: string }).version
+            return v && v !== '*' ? `${name}@${v}` : name
+          })
+          .join(',')
+
+        // Send code to the Snack iframe
+        // Protocol: ['expoDataEvent', { iframeId, files, dependencies, code }]
+        iframeRef.current?.contentWindow?.postMessage(
+          ['expoDataEvent', {
+            iframeId,
+            files: p.files,
+            dependencies: depsString,
+          }],
+          '*'
+        )
+
+        payloadSentRef.current = true
+        setLoading(false)
+        trackEvent('expo_preview_created', { screen_count: screens.length })
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [payload, screens.length])
+
+  // Timeout — if iframe doesn't respond in 15s, show error
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!payloadSentRef.current) {
+        setLoading(false)
+        setError('Preview timed out. Expo Snack may be unavailable — try "Open in Snack" instead.')
+      }
+    }, 15000)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleRefresh = () => {
+    payloadSentRef.current = false
+    setLoading(true)
+    setError(null)
+    iframeIdRef.current = `mokkoi-${Date.now()}`
     trackEvent('expo_preview_refreshed')
-    saveSnack()
+    // Force iframe reload by updating key
+    setRefreshKey(k => k + 1)
   }
 
-  const handleOpenSnack = () => {
-    if (fullUrl) {
-      window.open(fullUrl, '_blank')
-      trackEvent('expo_preview_opened_snack')
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const iframeId = iframeIdRef.current
+  const iframeSrc = `https://snack.expo.dev/embedded?iframeId=${iframeId}&preview=true&platform=web&supportedPlatforms=mydevice,ios,android&theme=dark&waitForData=true`
+
+  // For QR / "Open in Snack" — build a URL with minimal code
+  const snackUrlForQR = (() => {
+    try {
+      const p = payload()
+      if (!p) return null
+      // Use URL params for the "open in browser" link (may truncate for large apps)
+      const params = new URLSearchParams()
+      params.set('name', p.name)
+      params.set('platform', 'mydevice')
+      params.set('theme', 'dark')
+
+      // Only include App.tsx in URL to keep it short
+      const appCode = p.files['App.tsx']?.contents
+      if (appCode && appCode.length < 4000) {
+        params.set('code', appCode)
+      }
+
+      return `https://snack.expo.dev?${params.toString()}`
+    } catch {
+      return null
     }
-  }
+  })()
+
+  const qrUrl = iframeSrc
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(snackUrlForQR || 'https://snack.expo.dev')}`
+    : null
 
   return (
     <div style={{
@@ -115,12 +169,11 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setShowQR(!showQR)} disabled={!snackId} style={{
+            <button onClick={() => setShowQR(!showQR)} style={{
               background: showQR ? `${C.accent}20` : 'transparent', border: `1px solid ${showQR ? C.accent : C.border}`,
-              borderRadius: 8, padding: '6px 12px', cursor: snackId ? 'pointer' : 'default',
+              borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
               color: showQR ? C.accent : C.textMuted, fontSize: 12, fontWeight: 500,
-              opacity: snackId ? 1 : 0.4,
             }}>
               <QrCode size={14} /> QR Code
             </button>
@@ -131,17 +184,18 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
               color: C.textMuted, fontSize: 12, fontWeight: 500,
               opacity: loading ? 0.4 : 1,
             }}>
-              <RefreshCw size={14} style={loading ? { animation: 'spin 1s linear infinite' } : undefined} /> Refresh
+              <RefreshCw size={14} style={loading ? { animation: 'mokkoiSpin 1s linear infinite' } : undefined} /> Refresh
             </button>
-            <button onClick={handleOpenSnack} disabled={!snackId} style={{
-              background: snackId ? C.accent : '#333', border: 'none',
-              borderRadius: 8, padding: '6px 12px', cursor: snackId ? 'pointer' : 'default',
-              display: 'flex', alignItems: 'center', gap: 6,
-              color: 'white', fontSize: 12, fontWeight: 600,
-              opacity: snackId ? 1 : 0.4,
-            }}>
-              <ExternalLink size={14} /> Open in Snack
-            </button>
+            {snackUrlForQR && (
+              <button onClick={() => window.open(snackUrlForQR, '_blank')} style={{
+                background: C.accent, border: 'none',
+                borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+                color: 'white', fontSize: 12, fontWeight: 600,
+              }}>
+                <ExternalLink size={14} /> Open in Snack
+              </button>
+            )}
             <button onClick={onClose} style={{
               background: 'transparent', border: 'none', cursor: 'pointer', color: C.textMuted, padding: 4, display: 'flex',
             }}>
@@ -154,22 +208,26 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Main preview area */}
           <div style={{ flex: 1, position: 'relative' }}>
-            {loading ? (
+            {/* Loading overlay */}
+            {loading && (
               <div style={{
-                width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexDirection: 'column', gap: 16, color: C.textMuted,
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexDirection: 'column', gap: 16, color: C.textMuted, zIndex: 10, background: C.bgCard,
               }}>
-                <Loader size={32} color={C.teal} style={{ animation: 'spin 1.5s linear infinite' }} />
-                <p style={{ fontSize: 14, fontWeight: 500 }}>Creating Expo Snack preview...</p>
-                <p style={{ fontSize: 12, color: C.textDim }}>Uploading {screens.length} screen{screens.length !== 1 ? 's' : ''} to Expo</p>
+                <Loader size={32} color={C.teal} style={{ animation: 'mokkoiSpin 1.5s linear infinite' }} />
+                <p style={{ fontSize: 14, fontWeight: 500 }}>Loading Expo Snack preview...</p>
+                <p style={{ fontSize: 12, color: C.textDim }}>Sending {screens.length} screen{screens.length !== 1 ? 's' : ''} to Expo</p>
               </div>
-            ) : error ? (
+            )}
+
+            {/* Error state */}
+            {error && !loading && (
               <div style={{
-                width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexDirection: 'column', gap: 12, color: C.textMuted, padding: 40,
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexDirection: 'column', gap: 12, color: C.textMuted, padding: 40, zIndex: 10, background: C.bgCard,
               }}>
                 <Smartphone size={48} color={C.textDim} />
-                <p style={{ fontSize: 14, color: '#f87171' }}>{error}</p>
+                <p style={{ fontSize: 14, color: '#f87171', textAlign: 'center' }}>{error}</p>
                 <button onClick={handleRefresh} style={{
                   padding: '8px 16px', borderRadius: 8, background: C.accent, color: 'white',
                   border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
@@ -177,19 +235,22 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
                   Try Again
                 </button>
               </div>
-            ) : embedUrl ? (
-              <iframe
-                src={embedUrl}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-                title="Expo Snack Preview"
-                allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
-                sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
-              />
-            ) : null}
+            )}
+
+            {/* Snack iframe — always mounted, receives code via postMessage */}
+            <iframe
+              key={refreshKey}
+              ref={iframeRef}
+              src={iframeSrc}
+              style={{ width: '100%', height: '100%', border: 'none' }}
+              title="Expo Snack Preview"
+              allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
+              sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+            />
           </div>
 
           {/* QR panel */}
-          {showQR && snackId && (
+          {showQR && (
             <div style={{
               width: 280, flexShrink: 0, borderLeft: `1px solid ${C.border}`,
               display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -229,7 +290,7 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes mokkoiSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
