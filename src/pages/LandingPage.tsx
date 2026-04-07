@@ -13,18 +13,18 @@ const C = {
   bgCard: '#0D1117',
   bgCardHover: '#151B25',
   border: '#1C2333',
-  borderGlow: '#3B82F620',
+  borderGlow: '#2563EB20',
   text: '#E6EDF3',
   textMuted: '#7D8590',
   textDim: '#484F58',
-  accent: '#3B82F6',
-  accentGlow: '#3B82F640',
+  accent: '#2563EB',
+  accentGlow: '#2563EB30',
   teal: '#14B8A6',
   tealGlow: '#14B8A630',
   purple: '#A855F7',
   orange: '#F97316',
-  gradient1: 'linear-gradient(135deg, #3B82F6, #14B8A6)',
-  gradient2: 'linear-gradient(135deg, #A855F7, #3B82F6)',
+  gradient1: 'linear-gradient(135deg, #2563EB, #14B8A6)',
+  gradient2: 'linear-gradient(135deg, #A855F7, #2563EB)',
 }
 
 /* ─── FadeIn helper ─── */

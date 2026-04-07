@@ -10,7 +10,7 @@ const COLORS = {
   text: '#E6EDF3',
   textMuted: '#7D8590',
   textDim: '#484F58',
-  accent: '#3B82F6',
+  accent: '#2563EB',
   teal: '#14B8A6',
   purple: '#A855F7',
   orange: '#F97316',
