@@ -73,7 +73,7 @@ export function TopNavbar({
 
       // Fetch credits
       supabase.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
-        .eq('user_id', user.id).single()
+        .eq('user_id', user.id).maybeSingle()
         .then(({ data }) => {
           if (data) {
             setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })

@@ -25,6 +25,18 @@ function toPascalCase(name: string): string {
   return result
 }
 
+/** Extract a clean short label for tab display (max ~12 chars) */
+const FILLER_WORDS = new Set(['create', 'a', 'an', 'the', 'build', 'me', 'make', 'design', 'generate', 'screen', 'for', 'with', 'app', 'page', 'style', 'that'])
+function toShortLabel(name: string): string {
+  const words = name
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 0 && !FILLER_WORDS.has(w.toLowerCase()))
+  if (words.length === 0) return name.slice(0, 12).trim() || 'Screen'
+  // Take first 2 meaningful words, capitalize
+  return words.slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
+
 /** Deduplicate screen names */
 function deduplicateNames(names: string[]): string[] {
   const counts = new Map<string, number>()
@@ -91,7 +103,9 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   // React Navigation has native module deps that crash in Expo Snack.
   const imports = names.map(n => `import ${n}Screen from './screens/${n}';`).join('\n')
   const screenArray = names.map(n => `${n}Screen`).join(', ')
-  const labelArray = names.map(n => `'${n}'`).join(', ')
+  // Use clean short labels from original screen names (not PascalCase identifiers)
+  const labels = screens.map(s => toShortLabel(s.name))
+  const labelArray = labels.map(l => `'${l}'`).join(', ')
 
   const appCode = `import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, SafeAreaView, StatusBar } from 'react-native';

@@ -125,7 +125,7 @@ export default function SettingsPage() {
       if (!u) return
       setDisplayName(u.user_metadata?.display_name || u.user_metadata?.full_name || '')
       supabase!.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
-        .eq('user_id', u.id).single()
+        .eq('user_id', u.id).maybeSingle()
         .then(({ data }) => {
           if (data) setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })
           else setCredits({ plan: 'free', remaining: 50, limit: 50 })

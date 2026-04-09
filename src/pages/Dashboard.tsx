@@ -6,8 +6,9 @@ import { trackEvent, resetAnalytics } from '../lib/analytics'
 import {
   Search, MoreVertical, Trash2, Pencil, LogOut, Settings,
   FolderOpen, Users, Smartphone, ArrowUp, Download,
-  Zap, Copy, Menu, X,
+  Zap, Copy, Menu, X, Sparkles,
 } from 'lucide-react'
+import { APP_TEMPLATES } from '../data/appTemplates'
 
 interface Project {
   id: string
@@ -93,6 +94,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [prompt, setPrompt] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [buildingTemplate, setBuildingTemplate] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -122,7 +124,7 @@ export default function Dashboard() {
       if (!u) return
       // Credits
       sb.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
-        .eq('user_id', u.id).single()
+        .eq('user_id', u.id).maybeSingle()
         .then(({ data }) => {
           if (data) setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })
           else setCredits({ plan: 'free', remaining: 50, limit: 50 })
@@ -217,6 +219,27 @@ export default function Dashboard() {
       navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`)
     }
     setIsSubmitting(false)
+  }
+
+  const handleTemplateClick = async (templateId: string) => {
+    const template = APP_TEMPLATES.find(t => t.id === templateId)
+    if (!template || isSubmitting) return
+    setBuildingTemplate(template.name)
+    setIsSubmitting(true)
+    if (!supabase) { navigate('/auth'); return }
+    const { data: { user: u } } = await supabase.auth.getUser()
+    if (!u) { navigate('/auth'); return }
+    const { data } = await supabase
+      .from('projects')
+      .insert({ user_id: u.id, name: template.name })
+      .select().single()
+    if (data) {
+      trackEvent('template_used', { template: template.id, screen_count: template.screenCount })
+      trackEvent('project_created', { source: 'template' })
+      navigate(`/app/${data.id}?prompt=${encodeURIComponent(template.prompt)}`)
+    }
+    setIsSubmitting(false)
+    setBuildingTemplate(null)
   }
 
   const deleteProject = async (id: string) => {
@@ -778,35 +801,50 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Empty state example cards */}
-            {!hasProjects && !loading && (
-              <div style={{ marginTop: 40 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600, color: '#64748b', margin: '0 0 12px' }}>
-                  Need inspiration?
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-                  {[
-                    { name: 'Fitness Tracker', color: '#14b8a6' },
-                    { name: 'Food Delivery', color: '#f97316' },
-                    { name: 'Social Feed', color: '#ec4899' },
-                    { name: 'Banking App', color: '#3b82f6' },
-                  ].map(ex => (
-                    <button key={ex.name} onClick={() => { setPrompt(`A ${ex.name.toLowerCase()} app home screen`); textareaRef.current?.focus() }} style={{
-                      padding: 16, borderRadius: 12,
-                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
-                      cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
+            {/* Building template loading state */}
+            {buildingTemplate && (
+              <div style={{
+                marginTop: 24, padding: '16px 20px', borderRadius: 12,
+                background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.2)',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <Sparkles size={18} color="#2563EB" style={{ animation: 'pulse 1.5s ease-in-out infinite' }} />
+                <span style={{ fontSize: 14, color: '#93c5fd', fontWeight: 500 }}>
+                  Building your {buildingTemplate}...
+                </span>
+              </div>
+            )}
+
+            {/* App templates */}
+            {!buildingTemplate && (
+              <div style={{ marginTop: 32 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Sparkles size={14} color="#64748b" />
+                  <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Start with a template
+                  </h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+                  {APP_TEMPLATES.map(t => (
+                    <button key={t.id} onClick={() => handleTemplateClick(t.id)} disabled={isSubmitting} style={{
+                      padding: 16, borderRadius: 12, textAlign: 'left',
+                      background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                      cursor: isSubmitting ? 'default' : 'pointer', transition: 'all 0.2s',
+                      opacity: isSubmitting ? 0.5 : 1,
                     }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
+                      onMouseEnter={e => { if (!isSubmitting) { e.currentTarget.style.borderColor = `${t.accentColor}40`; e.currentTarget.style.background = `${t.accentColor}08` } }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
                     >
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>{t.icon}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 4 }}>{t.name}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, marginBottom: 8 }}>{t.description}</div>
                       <div style={{
-                        width: 32, height: 32, borderRadius: 8, marginBottom: 8,
-                        background: `${ex.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 600, color: t.accentColor,
+                        background: `${t.accentColor}15`, padding: '2px 8px', borderRadius: 4,
+                        display: 'inline-block',
                       }}>
-                        <Smartphone size={16} color={ex.color} />
+                        {t.screenCount} screens
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{ex.name}</div>
-                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Example project</div>
                     </button>
                   ))}
                 </div>

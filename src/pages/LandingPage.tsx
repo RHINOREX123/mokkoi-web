@@ -272,6 +272,43 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ─── APP TEMPLATES ─── */}
+        <section style={{ padding: '80px 0' }}>
+          <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: C.teal, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>Templates</div>
+          <h2 style={{ fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 700, letterSpacing: -1, textAlign: 'center', marginBottom: 16 }}>
+            One click to a full app
+          </h2>
+          <p style={{ fontSize: 16, color: C.textMuted, textAlign: 'center', maxWidth: 500, margin: '0 auto 48px' }}>
+            Start with a template — Mokkoi generates 4-5 connected screens with navigation, consistent design, and real code.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
+            {[
+              { icon: '💪', name: 'Fitness Tracker', screens: 5, color: '#22C55E' },
+              { icon: '🍔', name: 'Food Delivery', screens: 5, color: '#F97316' },
+              { icon: '📱', name: 'Social Media', screens: 5, color: '#8B5CF6' },
+              { icon: '🛍️', name: 'E-Commerce', screens: 5, color: '#EC4899' },
+              { icon: '🏦', name: 'Banking', screens: 5, color: '#3B82F6' },
+              { icon: '🎵', name: 'Music Streaming', screens: 5, color: '#A855F7' },
+            ].map(t => (
+              <FadeIn key={t.name}>
+                <div style={{
+                  background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20,
+                  textAlign: 'center', transition: 'all 0.3s', cursor: 'default',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${t.color}40`; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = 'none' }}
+                >
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>{t.icon}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 6 }}>{t.name}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: t.color, background: `${t.color}15`, padding: '2px 8px', borderRadius: 4, display: 'inline-block' }}>
+                    {t.screens} screens
+                  </div>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+        </section>
+
         {/* ─── FEATURES ─── */}
         <section id="features" style={{ padding: '80px 0' }}>
           <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: C.teal, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>Built Different</div>
