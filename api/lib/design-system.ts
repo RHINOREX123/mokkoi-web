@@ -158,6 +158,9 @@ SEARCH FUNCTIONALITY:
 - Display filtered array, not the full array
 
 BOTTOM NAVIGATION:
+- Maximum 4 tabs in the bottom nav (NEVER more than 5)
+- Tab labels must be ONE WORD: Home, Explore, Chat, Profile, Cart — NOT "Order Tracking" or "Restaurant Detail"
+- Detail screens (Product Detail, Chat Detail, Workout Detail, etc.) are NEVER tab items — they are pushed on top
 - Tab bar screens MUST include a BottomNav with the SAME items on every screen
 - The active prop must match the current screen: {"icon":"home","label":"Home","active":true}
 - Tab bar must be identical in style, position, and items across all tab screens

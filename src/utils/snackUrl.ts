@@ -9,20 +9,19 @@ import type { ComponentNode } from '../types/mokkoi'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from '../components/FlowConnectors'
 
-/** Walk a component tree and replace searchQuery/avatar Image props with real URLs */
+// ─── FIX 1: Image URL replacement (picsum.photos) ───
+
 let imageCounter = 0
 function replaceImageSources(node: ComponentNode): ComponentNode {
   if (!node) return node
 
-  // If this is an Image with searchQuery, replace with a real URL
   if (node.type === 'Image' && node.props) {
     const props = { ...node.props }
     if (props.searchQuery) {
-      const query = String(props.searchQuery).replace(/\s+/g, ',')
-      props.source = { uri: `https://source.unsplash.com/400x300/?${encodeURIComponent(query)}&sig=${imageCounter++}` }
+      // picsum.photos works reliably in Expo Go (source.unsplash.com does not)
+      props.source = { uri: `https://picsum.photos/400/300?random=${imageCounter++}` }
       delete props.searchQuery
     } else if (props.avatar) {
-      // DiceBear avatar — use a real URL that works in Expo
       const name = String(props.avatar)
       props.source = { uri: `https://api.dicebear.com/7.x/initials/png?seed=${encodeURIComponent(name)}&size=100` }
       delete props.avatar
@@ -30,7 +29,6 @@ function replaceImageSources(node: ComponentNode): ComponentNode {
     return { ...node, props, children: node.children?.map(c => typeof c === 'string' ? c : replaceImageSources(c)) }
   }
 
-  // Recurse into children
   if (node.children) {
     return {
       ...node,
@@ -40,7 +38,56 @@ function replaceImageSources(node: ComponentNode): ComponentNode {
   return node
 }
 
-/** Sanitize screen name to valid PascalCase JS identifier */
+// ─── FIX 2: Strip in-app BottomNav from tree (Snack tab switcher handles navigation) ───
+
+const NAV_TYPES = new Set(['BottomNav', 'BottomNavigation', 'TabBar', 'BottomTab', 'NavigationBar'])
+
+function stripBottomNav(node: ComponentNode): ComponentNode {
+  if (!node) return node
+  if (!node.children) return node
+
+  // Remove direct children that are nav components
+  const filtered = node.children.filter(child => {
+    if (typeof child === 'string') return true
+    if (NAV_TYPES.has(child.type)) return false
+    // Also detect expanded BottomNav: a View at the bottom with flexDirection:'row' + 3-5 short text children
+    if (child.type === 'View' && child.style) {
+      const s = child.style as Record<string, unknown>
+      if (s.flexDirection === 'row' && (s.position === 'absolute' || s.borderTopWidth)) {
+        const textKids = (child.children || []).filter(c =>
+          typeof c !== 'string' && (c.type === 'TouchableOpacity' || c.type === 'View')
+        )
+        if (textKids.length >= 3 && textKids.length <= 6) {
+          // Check if it looks like a nav bar (short labels + icons)
+          const hasShortLabels = textKids.every(c => {
+            if (typeof c === 'string') return false
+            const texts = (c.children || []).filter(gc => typeof gc === 'string' || (typeof gc !== 'string' && gc.type === 'Text'))
+            return texts.length <= 2
+          })
+          if (hasShortLabels) return false
+        }
+      }
+    }
+    return true
+  })
+
+  return {
+    ...node,
+    children: filtered.map(c => typeof c === 'string' ? c : stripBottomNav(c)),
+  }
+}
+
+// ─── FIX 3: Smart tab detection ───
+
+const DETAIL_KEYWORDS = ['detail', 'details', 'checkout', 'payment', 'settings', 'edit', 'chat detail', 'post detail', 'workout detail', 'product detail', 'order detail']
+
+function isDetailScreen(name: string): boolean {
+  const lower = name.toLowerCase()
+  return DETAIL_KEYWORDS.some(kw => lower.includes(kw))
+}
+
+// ─── Name helpers ───
+
 function toPascalCase(name: string): string {
   let result = name
     .replace(/[^a-zA-Z0-9\s]/g, '')
@@ -49,15 +96,10 @@ function toPascalCase(name: string): string {
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join('')
     .slice(0, 30)
-
-  // JS identifiers can't start with a number
-  if (!result || /^\d/.test(result)) {
-    result = 'Screen' + (result || '')
-  }
+  if (!result || /^\d/.test(result)) result = 'Screen' + (result || '')
   return result
 }
 
-/** Extract a clean short label for tab display (max ~12 chars) */
 const FILLER_WORDS = new Set(['create', 'a', 'an', 'the', 'build', 'me', 'make', 'design', 'generate', 'screen', 'for', 'with', 'app', 'page', 'style', 'that'])
 function toShortLabel(name: string): string {
   const words = name
@@ -65,11 +107,10 @@ function toShortLabel(name: string): string {
     .split(/\s+/)
     .filter(w => w.length > 0 && !FILLER_WORDS.has(w.toLowerCase()))
   if (words.length === 0) return name.slice(0, 12).trim() || 'Screen'
-  // Take first 2 meaningful words, capitalize
-  return words.slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+  // Single word preferred for tab labels
+  return words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase()
 }
 
-/** Deduplicate screen names */
 function deduplicateNames(names: string[]): string[] {
   const counts = new Map<string, number>()
   return names.map(name => {
@@ -78,6 +119,8 @@ function deduplicateNames(names: string[]): string[] {
     return count === 0 ? name : `${name}${count + 1}`
   })
 }
+
+// ─── Main export ───
 
 export interface SnackFilesOpts {
   projectName: string
@@ -91,10 +134,6 @@ export interface SnackPayload {
   dependencies: Record<string, { version: string }>
 }
 
-/**
- * Build the files object and dependencies for an Expo Snack.
- * This is sent to /api/export with mode: "save-snack" to get a snack ID back.
- */
 export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const { projectName, screens, connections } = opts
 
@@ -103,6 +142,21 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   // Build screen names
   const rawNames = screens.map(s => toPascalCase(s.name))
   const names = deduplicateNames(rawNames)
+
+  // FIX 3: Separate tab screens from detail screens
+  const tabIndices: number[] = []
+  const detailIndices: number[] = []
+  for (let i = 0; i < screens.length; i++) {
+    if (isDetailScreen(screens[i].name)) {
+      detailIndices.push(i)
+    } else {
+      tabIndices.push(i)
+    }
+  }
+  // Cap tab screens at 5
+  const finalTabIndices = tabIndices.slice(0, 5)
+  // Detail screens that got bumped from tabs
+  const extraDetailIndices = [...tabIndices.slice(5), ...detailIndices]
 
   // Build navigation targets from connections
   const connectionMap = new Map<string, string>()
@@ -116,11 +170,10 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
     }
   }
 
-  // Generate files
+  // Generate files for ALL screens
   const files: Record<string, { type: string; contents: string }> = {}
+  imageCounter = 0
 
-  // Each screen file — expand macros + replace image sources before TSX conversion
-  imageCounter = 0  // Reset counter for each build
   for (let i = 0; i < screens.length; i++) {
     const screen = screens[i]
     const name = names[i]
@@ -128,42 +181,52 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
     if (connectionMap.has(name)) {
       navTargets = new Map([[name, connectionMap.get(name)!]])
     }
-    // 1. Expand macro components (BottomNav, SearchBar, ProductCard, etc.) into real RN components
+    // 1. Expand macro components
     let tree = expandComponents(screen.tree) as ComponentNode
-    // 2. Replace searchQuery/avatar Image props with real URLs (Mokkoi's image proxy doesn't work in Expo)
+    // 2. Replace image sources with picsum.photos
     tree = replaceImageSources(tree)
+    // 3. Strip in-app BottomNav (Snack tab switcher handles navigation)
+    tree = stripBottomNav(tree)
     const tsx = convertTreeToTSX(tree, name, { navigationTargets: navTargets })
     files[`screens/${name}.tsx`] = { type: 'CODE', contents: tsx }
   }
 
-  // App.tsx — simple state-based tab switcher (no React Navigation needed in Snack)
-  // React Navigation has native module deps that crash in Expo Snack.
-  const imports = names.map(n => `import ${n}Screen from './screens/${n}';`).join('\n')
-  const screenArray = names.map(n => `${n}Screen`).join(', ')
-  // Use clean short labels from original screen names (not PascalCase identifiers)
-  const labels = screens.map(s => toShortLabel(s.name))
-  const labelArray = labels.map(l => `'${l}'`).join(', ')
+  // App.tsx — only tab screens get bottom tabs; detail screens are included but not tabbed
+  const allIndices = [...finalTabIndices, ...extraDetailIndices]
+  const imports = allIndices.map(i => `import ${names[i]}Screen from './screens/${names[i]}';`).join('\n')
+
+  // Tab screens array + labels (only main screens)
+  const tabScreenArray = finalTabIndices.map(i => `${names[i]}Screen`).join(', ')
+  const tabLabels = finalTabIndices.map(i => `'${toShortLabel(screens[i].name)}'`).join(', ')
+
+  // All screens array (tabs first, then details) for index-based access
+  const allScreenArray = allIndices.map(i => `${names[i]}Screen`).join(', ')
+  const allLabelsArray = allIndices.map(i => `'${toShortLabel(screens[i].name)}'`).join(', ')
+
+  const hasDetailScreens = extraDetailIndices.length > 0
+  const tabCount = finalTabIndices.length
 
   const appCode = `import React, { useState } from 'react';
-import { View, TouchableOpacity, Text, SafeAreaView, StatusBar } from 'react-native';
+import { View, TouchableOpacity, Text, SafeAreaView, StatusBar, ScrollView } from 'react-native';
 ${imports}
 
-const screens = [${screenArray}];
-const labels = [${labelArray}];
+const tabScreens = [${tabScreenArray}];
+const tabLabels = [${tabLabels}];
+${hasDetailScreens ? `const allScreens = [${allScreenArray}];\nconst allLabels = [${allLabelsArray}];` : ''}
 
 export default function App() {
   const [active, setActive] = useState(0);
-  const ActiveScreen = screens[active];
+  const ActiveScreen = ${hasDetailScreens ? 'active < tabScreens.length ? tabScreens[active] : allScreens[active]' : 'tabScreens[active]'};
   return (
     <View style={{ flex: 1, backgroundColor: '#0A0A1A' }}>
       <StatusBar barStyle="light-content" />
       <View style={{ flex: 1 }}>
         <ActiveScreen />
       </View>
-      {screens.length > 1 && (
+      {${tabCount} > 1 && (
         <SafeAreaView style={{ backgroundColor: '#111' }}>
           <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: '#222', backgroundColor: '#111' }}>
-            {labels.map((label, i) => (
+            {tabLabels.map((label, i) => (
               <TouchableOpacity key={i} onPress={() => setActive(i)} style={{ flex: 1, paddingVertical: 10, alignItems: 'center' }}>
                 <Text style={{ color: active === i ? '#2563EB' : '#666', fontSize: 11, fontWeight: active === i ? '600' : '400' }}>{label}</Text>
               </TouchableOpacity>
@@ -177,7 +240,6 @@ export default function App() {
 `
   files['App.tsx'] = { type: 'CODE', contents: appCode }
 
-  // Minimal dependencies — no React Navigation needed for Snack preview
   const dependencies: Record<string, { version: string }> = {
     'expo-status-bar': { version: '~1.11.1' },
   }
