@@ -136,17 +136,25 @@ function stripCodeFences(text: string): string {
 
 function parseScreenArray(text: string): any {
   const jsonText = stripCodeFences(text)
-  try {
-    return JSON.parse(jsonText)
-  } catch {
-    console.warn('Initial JSON parse failed, attempting repair...')
-    try {
-      return repairJSON(jsonText)
-    } catch {
-      console.error('JSON repair also failed. Raw start:', jsonText.slice(0, 500))
-      return null
-    }
+  // Try 1: direct parse
+  try { return JSON.parse(jsonText) } catch {}
+  // Try 2: repair truncated JSON
+  try { return repairJSON(jsonText) } catch {}
+  // Try 3: find the first [ and extract the array (AI may have added explanation text)
+  const arrayStart = jsonText.indexOf('[')
+  if (arrayStart > 0) {
+    const extracted = jsonText.slice(arrayStart)
+    try { return JSON.parse(extracted) } catch {}
+    try { return repairJSON(extracted) } catch {}
   }
+  // Try 4: find JSON in a code block the stripCodeFences missed
+  const codeBlockMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
+  if (codeBlockMatch) {
+    try { return JSON.parse(codeBlockMatch[1].trim()) } catch {}
+    try { return repairJSON(codeBlockMatch[1].trim()) } catch {}
+  }
+  console.error('All JSON parse attempts failed. Raw start:', jsonText.slice(0, 500))
+  return null
 }
 
 interface AppPlan {
@@ -324,7 +332,9 @@ CRITICAL: ALL screens use accent ${plan.designDirection?.accentColor || '#6C5CE7
 
 Original request: "${prompt}"
 
-Return JSON array of ${screenCount} screens with "id", "name", "tree".`
+IMPORTANT: Keep each screen's tree COMPACT. Use macro components (BottomNav, SearchBar, ProductCard, ListRow, StatCard, etc.) instead of building from raw Views. This keeps output small and ensures valid JSON.
+
+Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No explanation, no markdown.`
 
     const genResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
