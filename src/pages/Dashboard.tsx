@@ -552,12 +552,11 @@ export default function Dashboard() {
         background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
         position: 'sticky', top: 0, zIndex: 50, flexShrink: 0,
       }}>
-        {/* Mobile hamburger */}
+        {/* Hamburger menu — always visible, opens sidebar overlay */}
         <button
-          className="dashboard-mobile-hamburger"
           onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
           style={{
-            display: 'none', width: 32, height: 32, borderRadius: 6,
+            display: 'flex', width: 32, height: 32, borderRadius: 6,
             background: 'transparent', border: 'none',
             alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', color: '#94a3b8', marginRight: 8,
@@ -672,46 +671,34 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      {/* Main layout */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {/* Desktop sidebar */}
-        <div className="dashboard-sidebar" style={{
-          width: 300, flexShrink: 0, background: '#0A0A0A',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex', flexDirection: 'column', padding: '16px 12px',
-          overflowY: 'auto',
-        }}>
-          {sidebarContent}
-        </div>
-
-        {/* Mobile sidebar overlay */}
-        {mobileSidebarOpen && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 100,
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-          }} onClick={() => setMobileSidebarOpen(false)}>
-            <div onClick={e => e.stopPropagation()} style={{
-              width: 300, height: '100%', background: '#0A0A0A',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
-              display: 'flex', flexDirection: 'column', padding: '16px 12px',
-              animation: 'slideInLeft 0.2s ease-out',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <button onClick={() => setMobileSidebarOpen(false)} style={{
-                  background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer',
-                }}><X size={20} /></button>
-              </div>
-              {sidebarContent}
-            </div>
-          </div>
-        )}
-
-        {/* Main content area */}
+      {/* Sidebar overlay — always overlay-based, never persistent */}
+      {mobileSidebarOpen && (
         <div style={{
-          flex: 1, overflowY: 'auto',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          padding: '40px 24px',
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+        }} onClick={() => setMobileSidebarOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: 320, height: '100%', background: '#0A0A0A',
+            borderRight: '1px solid rgba(255,255,255,0.06)',
+            display: 'flex', flexDirection: 'column', padding: '16px 12px',
+            animation: 'slideInLeft 0.2s ease-out', overflowY: 'auto',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button onClick={() => setMobileSidebarOpen(false)} style={{
+                background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer',
+              }}><X size={20} /></button>
+            </div>
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+
+      {/* Main content area — full width, prompt-first */}
+      <div style={{
+        flex: 1, overflowY: 'auto',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: '40px 24px',
         }}>
           <div style={{ width: '100%', maxWidth: 640 }}>
             {/* Welcome */}
@@ -801,6 +788,37 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* Or start from — quick actions */}
+            {!buildingTemplate && (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                  <span style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>or start from</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  {[
+                    { label: 'Template', icon: '📱', action: () => document.getElementById('mokkoi-templates')?.scrollIntoView({ behavior: 'smooth' }) },
+                    { label: 'Screenshot', icon: '📸', action: () => setToastMessage('Screenshot import coming soon') },
+                    { label: 'Import HTML', icon: '🔗', action: () => setToastMessage('HTML import coming soon') },
+                  ].map(a => (
+                    <button key={a.label} onClick={a.action} style={{
+                      padding: '10px 20px', borderRadius: 10,
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                      color: '#94a3b8', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                    >
+                      <span>{a.icon}</span>{a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Building template loading state */}
             {buildingTemplate && (
               <div style={{
@@ -817,7 +835,7 @@ export default function Dashboard() {
 
             {/* App templates */}
             {!buildingTemplate && (
-              <div style={{ marginTop: 32 }}>
+              <div id="mokkoi-templates" style={{ marginTop: 32 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                   <Sparkles size={14} color="#64748b" />
                   <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -852,7 +870,6 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-      </div>
 
       {/* Delete confirmation modal */}
       {deleteConfirmId && (() => {
@@ -899,10 +916,7 @@ export default function Dashboard() {
           from { transform: translateX(-100%); }
           to { transform: translateX(0); }
         }
-        @media (max-width: 768px) {
-          .dashboard-sidebar { display: none !important; }
-          .dashboard-mobile-hamburger { display: flex !important; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
       `}</style>
     </div>
   )
