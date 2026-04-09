@@ -849,9 +849,11 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
     }
 
     default:
+      // Treat unknown component types as View wrappers — render children normally
+      // This handles macro components (StatCard, BottomNav, etc.) that weren't expanded
       return (
-        <div key={key} style={{ padding: 4 }}>
-          <span style={{ color: '#F87171', fontSize: 10 }}>Unknown: {node.type}</span>
+        <div key={key} style={{ ...VIEW_BASE, ...style }}>
+          {children}
         </div>
       )
   }

@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { normalizeComponentTree, type NormalizerOptions } from './lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
 import { parseHtmlToComponentTree, shouldUseDomParser, extractAllText } from '../lib/html-parser.js'
-import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST } from './lib/design-system.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './lib/design-system.js'
 import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './lib/color-themes.js'
 
 // --- Few-shot examples (compact JSON) ---
@@ -328,6 +328,8 @@ DESIGN BRIEF: The App Name from <design_brief> MUST appear in the screen.
 VAGUE PROMPTS: If just an app name, generate a HOME DASHBOARD with header, stat cards, content, and bottom nav.
 
 ${getDefaultExamples()}
+
+${FUNCTIONAL_APP_RULES}
 
 ${QUALITY_CHECKLIST}
 
