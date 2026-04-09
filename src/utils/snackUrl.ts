@@ -4,9 +4,41 @@
 // to avoid native module crashes in the Snack runtime.
 
 import { convertTreeToTSX } from './exportTsx'
+import { expandComponents } from '../../lib/component-library'
 import type { ComponentNode } from '../types/mokkoi'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from '../components/FlowConnectors'
+
+/** Walk a component tree and replace searchQuery/avatar Image props with real URLs */
+let imageCounter = 0
+function replaceImageSources(node: ComponentNode): ComponentNode {
+  if (!node) return node
+
+  // If this is an Image with searchQuery, replace with a real URL
+  if (node.type === 'Image' && node.props) {
+    const props = { ...node.props }
+    if (props.searchQuery) {
+      const query = String(props.searchQuery).replace(/\s+/g, ',')
+      props.source = { uri: `https://source.unsplash.com/400x300/?${encodeURIComponent(query)}&sig=${imageCounter++}` }
+      delete props.searchQuery
+    } else if (props.avatar) {
+      // DiceBear avatar — use a real URL that works in Expo
+      const name = String(props.avatar)
+      props.source = { uri: `https://api.dicebear.com/7.x/initials/png?seed=${encodeURIComponent(name)}&size=100` }
+      delete props.avatar
+    }
+    return { ...node, props, children: node.children?.map(c => typeof c === 'string' ? c : replaceImageSources(c)) }
+  }
+
+  // Recurse into children
+  if (node.children) {
+    return {
+      ...node,
+      children: node.children.map(c => typeof c === 'string' ? c : replaceImageSources(c)),
+    }
+  }
+  return node
+}
 
 /** Sanitize screen name to valid PascalCase JS identifier */
 function toPascalCase(name: string): string {
@@ -87,7 +119,8 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   // Generate files
   const files: Record<string, { type: string; contents: string }> = {}
 
-  // Each screen file
+  // Each screen file — expand macros + replace image sources before TSX conversion
+  imageCounter = 0  // Reset counter for each build
   for (let i = 0; i < screens.length; i++) {
     const screen = screens[i]
     const name = names[i]
@@ -95,7 +128,11 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
     if (connectionMap.has(name)) {
       navTargets = new Map([[name, connectionMap.get(name)!]])
     }
-    const tsx = convertTreeToTSX(screen.tree as ComponentNode, name, { navigationTargets: navTargets })
+    // 1. Expand macro components (BottomNav, SearchBar, ProductCard, etc.) into real RN components
+    let tree = expandComponents(screen.tree) as ComponentNode
+    // 2. Replace searchQuery/avatar Image props with real URLs (Mokkoi's image proxy doesn't work in Expo)
+    tree = replaceImageSources(tree)
+    const tsx = convertTreeToTSX(tree, name, { navigationTargets: navTargets })
     files[`screens/${name}.tsx`] = { type: 'CODE', contents: tsx }
   }
 

@@ -10,7 +10,6 @@
  */
 
 // --- Design tokens (must match design-system.ts) ---
-const SURFACE_0 = '#0A0A1A'
 const SURFACE_1 = '#12121F'
 const SURFACE_2 = '#1A1A2E'
 const TEXT_PRIMARY = '#FFFFFF'
