@@ -227,40 +227,33 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     }
   }, [projectId])
 
-  // Save all screens to Supabase
+  // Save all screens to Supabase (direct client-side upsert — no serverless function needed)
   const saveScreensNow = useCallback(async () => {
-    if (!projectId || !projectLoadedRef.current) return
+    if (!projectId || !projectLoadedRef.current || !supabase) return
     for (let i = 0; i < generatedScreens.length; i++) {
       const s = generatedScreens[i]
       try {
-        const resp = await fetch('/api/mcp-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'save_web_screen',
-            screenId: s.id,
-            projectId,
-            screenName: s.name,
-            componentTree: s.tree,
-            prompt: s.originalPrompt ?? null,
-            orderIndex: i,
-            source: s.source ?? 'web',
-            xPos: s.x ?? null,
-            yPos: s.y ?? null,
-          }),
+        const { error } = await supabase.from('screens').upsert({
+          id: s.id,
+          project_id: projectId,
+          name: s.name,
+          component_tree: s.tree,
+          original_prompt: s.originalPrompt ?? null,
+          order_index: i,
+          source: s.source ?? 'web',
+          x_pos: s.x ?? null,
+          y_pos: s.y ?? null,
+          updated_at: new Date().toISOString(),
         })
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}))
-          console.error('[auto-save] server save failed:', s.id, s.name, err)
+        if (error) {
+          console.error('[auto-save] screen upsert failed:', s.id, s.name, error.message)
         }
       } catch (err) {
-        console.error('[auto-save] server save error:', s.id, s.name, err)
+        console.error('[auto-save] screen save error:', s.id, s.name, err)
       }
     }
-    if (supabase) {
-      const { error: projErr } = await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
-      if (projErr) console.error('[auto-save] project update failed:', projErr)
-    }
+    const { error: projErr } = await supabase.from('projects').update({ updated_at: new Date().toISOString() }).eq('id', projectId)
+    if (projErr) console.error('[auto-save] project update failed:', projErr)
   }, [generatedScreens, projectId])
 
   // Auto-save screens to Supabase (debounced)
