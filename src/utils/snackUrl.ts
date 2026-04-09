@@ -38,52 +38,92 @@ function replaceImageSources(node: ComponentNode): ComponentNode {
   return node
 }
 
-// ─── FIX 2: Strip in-app BottomNav from tree (Snack tab switcher handles navigation) ───
+// ─── FIX 2: Strip in-app BottomNav + floating UI elements from tree ───
 
 const NAV_TYPES = new Set(['BottomNav', 'BottomNavigation', 'TabBar', 'BottomTab', 'NavigationBar'])
 
-function stripBottomNav(node: ComponentNode): ComponentNode {
+/** Check if a node looks like a floating pill/FAB (position:absolute, small, top-right area) */
+function isFloatingPill(node: ComponentNode): boolean {
+  if (!node.style) return false
+  const s = node.style as Record<string, unknown>
+  // Detect position:absolute floating elements (refresh/more pill, FABs)
+  if (s.position === 'absolute') {
+    const top = Number(s.top) || 0
+    const right = Number(s.right) || 0
+    const w = Number(s.width) || 0
+    const h = Number(s.height) || 0
+    // Small floating element in top-right or mid-right area
+    if (right <= 20 && top <= 200 && w <= 80 && h <= 120 && w > 0) return true
+    // Any small absolute element with borderRadius (pill/circle shape)
+    if (s.borderRadius && w <= 60 && h <= 100) return true
+  }
+  return false
+}
+
+/** Check if a node looks like a bottom nav bar */
+function isBottomNavPattern(node: ComponentNode): boolean {
+  if (node.type !== 'View' || !node.style) return false
+  const s = node.style as Record<string, unknown>
+  // Row layout with border or absolute bottom positioning
+  const isRow = s.flexDirection === 'row'
+  const isBottom = s.position === 'absolute' && (s.bottom === 0 || s.bottom === '0')
+  const hasBorderTop = !!s.borderTopWidth || !!s.borderTopColor
+  if (!isRow && !isBottom) return false
+  if (!isRow && !hasBorderTop) return false
+
+  const touchKids = (node.children || []).filter(c =>
+    typeof c !== 'string' && (c.type === 'TouchableOpacity' || c.type === 'View')
+  )
+  // 3-6 tab items with short content (icon + label)
+  return touchKids.length >= 3 && touchKids.length <= 6
+}
+
+function cleanTreeForSnack(node: ComponentNode): ComponentNode {
   if (!node) return node
   if (!node.children) return node
 
-  // Remove direct children that are nav components
   const filtered = node.children.filter(child => {
     if (typeof child === 'string') return true
+    // Strip macro nav types
     if (NAV_TYPES.has(child.type)) return false
-    // Also detect expanded BottomNav: a View at the bottom with flexDirection:'row' + 3-5 short text children
-    if (child.type === 'View' && child.style) {
-      const s = child.style as Record<string, unknown>
-      if (s.flexDirection === 'row' && (s.position === 'absolute' || s.borderTopWidth)) {
-        const textKids = (child.children || []).filter(c =>
-          typeof c !== 'string' && (c.type === 'TouchableOpacity' || c.type === 'View')
-        )
-        if (textKids.length >= 3 && textKids.length <= 6) {
-          // Check if it looks like a nav bar (short labels + icons)
-          const hasShortLabels = textKids.every(c => {
-            if (typeof c === 'string') return false
-            const texts = (c.children || []).filter(gc => typeof gc === 'string' || (typeof gc !== 'string' && gc.type === 'Text'))
-            return texts.length <= 2
-          })
-          if (hasShortLabels) return false
-        }
-      }
-    }
+    // Strip expanded bottom nav patterns
+    if (isBottomNavPattern(child)) return false
+    // Strip floating pills (refresh/more button overlays)
+    if (isFloatingPill(child)) return false
     return true
   })
 
   return {
     ...node,
-    children: filtered.map(c => typeof c === 'string' ? c : stripBottomNav(c)),
+    children: filtered.map(c => typeof c === 'string' ? c : cleanTreeForSnack(c)),
   }
 }
 
 // ─── FIX 3: Smart tab detection ───
 
-const DETAIL_KEYWORDS = ['detail', 'details', 'checkout', 'payment', 'settings', 'edit', 'chat detail', 'post detail', 'workout detail', 'product detail', 'order detail']
+const DETAIL_KEYWORDS = ['detail', 'details', 'checkout', 'payment', 'edit', 'chat detail', 'post detail', 'workout detail', 'product detail', 'order detail']
 
 function isDetailScreen(name: string): boolean {
   const lower = name.toLowerCase()
   return DETAIL_KEYWORDS.some(kw => lower.includes(kw))
+}
+
+/** Count meaningful content nodes in a tree (skip empty Views) */
+function countContentNodes(node: ComponentNode): number {
+  if (!node) return 0
+  let count = 0
+  if (node.type === 'Text' || node.type === 'Image' || node.type === 'TextInput' || node.type === 'Switch') count = 1
+  if (node.children) {
+    for (const c of node.children) {
+      if (typeof c === 'string') { count++; continue }
+      count += countContentNodes(c)
+    }
+  }
+  return count
+}
+
+function isEmptyScreen(tree: ComponentNode): boolean {
+  return countContentNodes(tree) < 3
 }
 
 // ─── Name helpers ───
@@ -143,11 +183,20 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const rawNames = screens.map(s => toPascalCase(s.name))
   const names = deduplicateNames(rawNames)
 
-  // FIX 3: Separate tab screens from detail screens
+  // Pre-process trees for Snack (expand, fix images, clean) so we can check content
+  imageCounter = 0
+  const processedTrees: ComponentNode[] = screens.map(s => {
+    let tree = expandComponents(s.tree) as ComponentNode
+    tree = replaceImageSources(tree)
+    tree = cleanTreeForSnack(tree)
+    return tree
+  })
+
+  // FIX 3: Separate tab screens from detail screens (also exclude empty screens)
   const tabIndices: number[] = []
   const detailIndices: number[] = []
   for (let i = 0; i < screens.length; i++) {
-    if (isDetailScreen(screens[i].name)) {
+    if (isDetailScreen(screens[i].name) || isEmptyScreen(processedTrees[i])) {
       detailIndices.push(i)
     } else {
       tabIndices.push(i)
@@ -170,24 +219,16 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
     }
   }
 
-  // Generate files for ALL screens
+  // Generate files for ALL screens (using pre-processed trees)
   const files: Record<string, { type: string; contents: string }> = {}
-  imageCounter = 0
 
   for (let i = 0; i < screens.length; i++) {
-    const screen = screens[i]
     const name = names[i]
     let navTargets: Map<string, string> | undefined
     if (connectionMap.has(name)) {
       navTargets = new Map([[name, connectionMap.get(name)!]])
     }
-    // 1. Expand macro components
-    let tree = expandComponents(screen.tree) as ComponentNode
-    // 2. Replace image sources with picsum.photos
-    tree = replaceImageSources(tree)
-    // 3. Strip in-app BottomNav (Snack tab switcher handles navigation)
-    tree = stripBottomNav(tree)
-    const tsx = convertTreeToTSX(tree, name, { navigationTargets: navTargets })
+    const tsx = convertTreeToTSX(processedTrees[i], name, { navigationTargets: navTargets })
     files[`screens/${name}.tsx`] = { type: 'CODE', contents: tsx }
   }
 
