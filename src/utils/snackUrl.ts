@@ -147,8 +147,32 @@ function toShortLabel(name: string): string {
     .split(/\s+/)
     .filter(w => w.length > 0 && !FILLER_WORDS.has(w.toLowerCase()))
   if (words.length === 0) return name.slice(0, 12).trim() || 'Screen'
-  // Single word preferred for tab labels
   return words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase()
+}
+
+/** Map screen name to a tab emoji icon */
+const TAB_ICONS: Record<string, string> = {
+  home: '🏠', feed: '🏠', dashboard: '🏠',
+  explore: '🔍', search: '🔍', discover: '🔍', browse: '🔍',
+  messages: '💬', chat: '💬', inbox: '💬', conversations: '💬',
+  profile: '👤', account: '👤', me: '👤', user: '👤',
+  notifications: '🔔', alerts: '🔔', activity: '🔔',
+  cart: '🛒', bag: '🛒', basket: '🛒', order: '🛒', orders: '🛒',
+  settings: '⚙️', preferences: '⚙️',
+  favorites: '❤️', saved: '❤️', wishlist: '❤️', likes: '❤️',
+  workouts: '💪', fitness: '💪', exercise: '💪', training: '💪',
+  progress: '📊', stats: '📊', analytics: '📊', tracking: '📊',
+  library: '📚', recipes: '🍳', menu: '🍽️', restaurants: '🍔',
+  music: '🎵', player: '🎵', playlists: '🎵',
+  wallet: '💳', finance: '💳', banking: '💳', cards: '💳',
+  map: '📍', location: '📍', nearby: '📍',
+}
+function getTabIcon(name: string): string {
+  const lower = name.toLowerCase()
+  for (const [key, icon] of Object.entries(TAB_ICONS)) {
+    if (lower.includes(key)) return icon
+  }
+  return '📱'
 }
 
 function deduplicateNames(names: string[]): string[] {
@@ -236,9 +260,10 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const allIndices = [...finalTabIndices, ...extraDetailIndices]
   const imports = allIndices.map(i => `import ${names[i]}Screen from './screens/${names[i]}';`).join('\n')
 
-  // Tab screens array + labels (only main screens)
+  // Tab screens array + labels + icons (only main screens)
   const tabScreenArray = finalTabIndices.map(i => `${names[i]}Screen`).join(', ')
   const tabLabels = finalTabIndices.map(i => `'${toShortLabel(screens[i].name)}'`).join(', ')
+  const tabIcons = finalTabIndices.map(i => `'${getTabIcon(screens[i].name)}'`).join(', ')
 
   // All screens array (tabs first, then details) for index-based access
   const allScreenArray = allIndices.map(i => `${names[i]}Screen`).join(', ')
@@ -248,11 +273,12 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const tabCount = finalTabIndices.length
 
   const appCode = `import React, { useState } from 'react';
-import { View, TouchableOpacity, Text, SafeAreaView, StatusBar, ScrollView } from 'react-native';
+import { View, TouchableOpacity, Text, SafeAreaView, StatusBar } from 'react-native';
 ${imports}
 
 const tabScreens = [${tabScreenArray}];
 const tabLabels = [${tabLabels}];
+const tabIcons = [${tabIcons}];
 ${hasDetailScreens ? `const allScreens = [${allScreenArray}];\nconst allLabels = [${allLabelsArray}];` : ''}
 
 export default function App() {
@@ -265,11 +291,12 @@ export default function App() {
         <ActiveScreen />
       </View>
       {${tabCount} > 1 && (
-        <SafeAreaView style={{ backgroundColor: '#111' }}>
-          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: '#222', backgroundColor: '#111' }}>
+        <SafeAreaView style={{ backgroundColor: '#0D1117' }}>
+          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: '#1C2333', backgroundColor: '#0D1117', paddingTop: 6, paddingBottom: 4 }}>
             {tabLabels.map((label, i) => (
-              <TouchableOpacity key={i} onPress={() => setActive(i)} style={{ flex: 1, paddingVertical: 10, alignItems: 'center' }}>
-                <Text style={{ color: active === i ? '#2563EB' : '#666', fontSize: 11, fontWeight: active === i ? '600' : '400' }}>{label}</Text>
+              <TouchableOpacity key={i} onPress={() => setActive(i)} style={{ flex: 1, alignItems: 'center', paddingVertical: 4 }}>
+                <Text style={{ fontSize: 20, marginBottom: 2 }}>{tabIcons[i]}</Text>
+                <Text style={{ color: active === i ? '#2563EB' : '#555', fontSize: 10, fontWeight: active === i ? '600' : '400' }}>{label}</Text>
               </TouchableOpacity>
             ))}
           </View>

@@ -130,44 +130,64 @@ Cards: borderRadius 12-16, padding 16, surface-1 bg. Buttons: height 48, borderR
 
 export const FUNCTIONAL_APP_RULES = `
 CRITICAL — GENERATE FUNCTIONAL SCREENS, NOT STATIC MOCKUPS:
-This is an app builder. The output should be a working app prototype, not a design mockup. Every interactive element must actually work.
+This is an app builder. The output should be a working app prototype, not a design mockup. Every interactive element must actually work. Every screen must look like a production app, NOT a wireframe.
 
 STATE MANAGEMENT:
-- Every TextInput MUST have value and onChangeText connected to useState. Example: const [email, setEmail] = useState('') → <TextInput value={email} onChangeText={setEmail}>
-- Every Switch MUST toggle with useState: const [notifs, setNotifs] = useState(true) → <Switch value={notifs} onValueChange={setNotifs}>
-- Search bars MUST filter displayed content: filter items array based on searchText state
+- Every TextInput MUST have value and onChangeText connected to useState
+- Every Switch MUST toggle with useState
+- Search bars MUST filter displayed content using useState + .filter()
 - Quantity controls MUST increment/decrement a count state
 
 BUTTON HANDLERS:
 - Every TouchableOpacity MUST have a meaningful onPress handler
 - Primary CTAs: Alert.alert('Success', 'Action completed!') or toggle a state
 - List items: set a selectedId state to show selection
-- Navigation buttons: set activeScreen state or call navigation
 - Forms: validate inputs and show success Alert
 
 REALISTIC MOCK DATA:
-- Use arrays of realistic data objects, NOT placeholder strings
-- Fitness: [{name:'Bench Press',sets:3,reps:12,weight:'135 lbs'}, {name:'Squats',sets:4,reps:10,weight:'185 lbs'}]
-- Ecommerce: [{name:'Nike Air Max',price:129.99,rating:4.8,image:'...'}, ...]
-- Banking: [{merchant:'Starbucks',amount:-4.50,date:'Today'}, {merchant:'Salary',amount:3200,date:'Mar 1'}]
-- Social: [{user:'Sarah',text:'Just finished my morning run!',likes:42,time:'2h ago'}, ...]
+- Use arrays of realistic data objects with 5-8 items each, NOT placeholder strings
+- Social: [{user:'Sarah Chen',text:'Just caught this amazing sunrise!',likes:42,comments:8,time:'2h ago',avatar:'Sarah Chen'}, ...]
+- Each data item should have all fields needed for the UI (name, subtitle, image, stats, etc.)
 
-SEARCH FUNCTIONALITY:
-- Screens with lists MUST include a search bar
-- Search must use useState + filter: const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
-- Display filtered array, not the full array
+BOTTOM TAB BAR (CRITICAL):
+- Maximum 4 tabs (NEVER more than 5)
+- Tab labels must be ONE WORD: Home, Explore, Chat, Profile
+- Detail screens are NEVER tab items
+- Every tab MUST have an emoji icon ABOVE the label. Required icons:
+  Home: 🏠  Explore/Search: 🔍  Messages/Chat: 💬  Cart: 🛒  Profile: 👤  Notifications: 🔔  Settings: ⚙️  Favorites: ❤️  Activity: 📊
+- Tab bar height: 60-70px. Icon size: 20-24px above 10-11px label.
+- Active tab: accent color icon+label. Inactive: gray/muted.
+- Use BottomNav macro: {"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Explore"},{"icon":"chat","label":"Chat"},{"icon":"person","label":"Profile"}]}}
 
-BOTTOM NAVIGATION:
-- Maximum 4 tabs in the bottom nav (NEVER more than 5)
-- Tab labels must be ONE WORD: Home, Explore, Chat, Profile, Cart — NOT "Order Tracking" or "Restaurant Detail"
-- Detail screens (Product Detail, Chat Detail, Workout Detail, etc.) are NEVER tab items — they are pushed on top
-- Tab bar screens MUST include a BottomNav with the SAME items on every screen
-- The active prop must match the current screen: {"icon":"home","label":"Home","active":true}
-- Tab bar must be identical in style, position, and items across all tab screens
+SCREEN CONTENT DENSITY (CRITICAL):
+Every screen must feel FULL and COMPLETE like a real shipped app. Never leave empty space.
+
+Feed/Home screens:
+- Stories/highlights row at top (4-5 circular avatars with names below)
+- 3-4 post cards, EACH with: avatar circle (40px) + username + timestamp in header row → content text (2-3 lines) → Image placeholder ({"type":"Image","style":{"width":"100%","height":200,"borderRadius":12,"backgroundColor":"#1A1A2E"},"props":{"searchQuery":"relevant photo"}}) → action row with like(❤️ count), comment(💬 count), share(↗️) icons + counts
+- Use realistic engagement numbers (42 likes, 8 comments)
+
+Messages/List screens:
+- 5-6 list items minimum
+- Each item: avatar (40px circle) + name (bold) + subtitle (gray) + timestamp (right-aligned)
+- Search bar at top
+- Proper 12-16px spacing between items
+
+Profile screens:
+- Cover photo area (Image with searchQuery, height 150-180px)
+- Avatar overlapping cover (-30px marginTop, 80px circle)
+- Name (20px bold) + handle/bio (14px gray)
+- Stats row: 3 columns (Posts/Followers/Following with numbers)
+- Follow + Message buttons row
+- Photo grid (2 columns, 3 rows of Image squares)
+
+Detail screens:
+- Hero image or header section at top
+- Rich content with multiple sections
+- Sticky action button at bottom
 
 FORM SCREENS:
-- Login: email + password with useState, Sign In button with validation Alert
-- Signup: name + email + password with useState, Create Account button
+- Login: email + password with useState, Sign In button with Alert
 - Checkout: quantity controls (+ / -), dynamic total calculation
 - Settings: all toggles must use useState and actually toggle
 `
