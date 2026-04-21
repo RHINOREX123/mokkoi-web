@@ -1106,7 +1106,7 @@ async function handleImportHtml(req: VercelRequest, res: VercelResponse, user: {
   }
 
   if (!user.isMCP) {
-    const creditCheck = await checkCredits(user.id, 'new_screen')
+    const creditCheck = await checkCredits(user.id, 'new_screen', user.email)
     if (!creditCheck.hasCredits) {
       return res.status(402).json({ error: creditCheck.error, creditsRemaining: creditCheck.creditsRemaining, upgradeUrl: creditCheck.upgradeUrl })
     }
@@ -1272,7 +1272,7 @@ Return ONLY the JSON. No markdown fences, no explanation.`
           const tokIn = convResult?.inputTokens || 0
           const tokOut = convResult?.outputTokens || 0
           logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-sonnet-4-6', tokensIn: tokIn, tokensOut: tokOut, generationType: 'new_screen', promptPreview: `[import-html] Hybrid v2: ${detected.type} from ${source}`, success: true })
-          if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+          if (!user.isMCP) await deductCredits(user.id, 'new_screen', user.email)
 
           if (wantsStream) {
             res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
@@ -1333,7 +1333,7 @@ Return ONLY the JSON. No markdown fences, no explanation.`
       const normalizedTree = normalizeComponentTree(expandedTree)
       const result = buildSuccessResponse(normalizedTree, modelUsed)
 
-      if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+      if (!user.isMCP) await deductCredits(user.id, 'new_screen', user.email)
       logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: importResult!.inputTokens, tokensOut: importResult!.outputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
 
       res.write(`data: ${JSON.stringify({ type: 'complete', ...result })}\n\n`)
@@ -1373,7 +1373,7 @@ Return ONLY the JSON. No markdown fences, no explanation.`
     const normalizedTree = normalizeComponentTree(expandedTree)
     const result = buildSuccessResponse(normalizedTree, modelUsed)
 
-    if (!user.isMCP) await deductCredits(user.id, 'new_screen')
+    if (!user.isMCP) await deductCredits(user.id, 'new_screen', user.email)
     logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed, tokensIn: totalInputTokens, tokensOut: totalOutputTokens, generationType: 'new_screen', promptPreview: `[import-html] ${detected.type} from ${source}`, success: true })
 
     return res.status(200).json(result)
@@ -1433,7 +1433,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : (isNewScreen || isVariation || isRegenerate) ? 'new_screen' : 'edit'
 
   if (!user.isMCP) {
-    const creditCheck = await checkCredits(user.id, creditType)
+    const creditCheck = await checkCredits(user.id, creditType, user.email)
     if (!creditCheck.hasCredits) {
       return res.status(402).json({
         error: creditCheck.error,
@@ -1458,7 +1458,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Model routing: Sonnet for all generation, Haiku for edits only
   // Sonnet produces significantly better quality screens (~$0.04/screen with caching)
   // Haiku is fine for edits which are simpler structural changes (~$0.02/edit)
-  const userPlan = await getUserPlan(user.id)
+  const userPlan = await getUserPlan(user.id, user.email)
   const freeTierSonnetUpgrade = false // no longer relevant — all generation uses Sonnet
 
   let model: string
@@ -1865,7 +1865,7 @@ Rules:
 
         // Deduct credits
         if (!user.isMCP) {
-          await deductCredits(user.id, creditType)
+          await deductCredits(user.id, creditType, user.email)
         }
 
         // Return via streaming or direct based on client preference
@@ -1972,7 +1972,7 @@ Rules:
         const expandedTree = expandComponents(tree)
         const normalizedTree = normalizeComponentTree(expandedTree, normalizerOpts)
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-haiku-4-5-20251001', tokensIn: authData.usage?.input_tokens || 0, tokensOut: authData.usage?.output_tokens || 0, generationType, promptPreview: prompt, success: true })
-        if (!user.isMCP) await deductCredits(user.id, creditType)
+        if (!user.isMCP) await deductCredits(user.id, creditType, user.email)
 
         const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
         if (wantsStream) {
@@ -2086,7 +2086,7 @@ Rules:
         const expandedTree = expandComponents(tree)
         const normalizedTree = normalizeComponentTree(expandedTree, normalizerOpts)
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-haiku-4-5-20251001', tokensIn: settingsData.usage?.input_tokens || 0, tokensOut: settingsData.usage?.output_tokens || 0, generationType, promptPreview: prompt, success: true })
-        if (!user.isMCP) await deductCredits(user.id, creditType)
+        if (!user.isMCP) await deductCredits(user.id, creditType, user.email)
 
         const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
         if (wantsStream) {
@@ -2123,7 +2123,7 @@ Rules:
       const expanded = expandComponents(tree)
       const normalized = normalizeComponentTree(expanded, normalizerOpts)
       logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: 'claude-haiku-4-5-20251001', tokensIn: data.usage?.input_tokens || 0, tokensOut: data.usage?.output_tokens || 0, generationType, promptPreview: prompt, success: true })
-      if (!user.isMCP) await deductCredits(user.id, creditType)
+      if (!user.isMCP) await deductCredits(user.id, creditType, user.email)
       const wantsStream = req.headers['accept'] === 'text/event-stream' || req.query?.stream === 'true'
       if (wantsStream) {
         res.setHeader('Content-Type', 'text/event-stream')
@@ -2535,10 +2535,10 @@ Rules:
 
         // Deduct credits after successful generation
         if (!user.isMCP) {
-          await deductCredits(user.id, creditType)
+          await deductCredits(user.id, creditType, user.email)
           // Deduct extra credits for free-tier Sonnet upgrade (2x total)
           if (freeTierSonnetUpgrade) {
-            await deductCredits(user.id, creditType)
+            await deductCredits(user.id, creditType, user.email)
           }
         }
 
@@ -2630,10 +2630,10 @@ Rules:
 
     // Deduct credits after successful generation
     if (!user.isMCP) {
-      await deductCredits(user.id, creditType)
+      await deductCredits(user.id, creditType, user.email)
       // Deduct extra credits for free-tier Sonnet upgrade (2x total)
       if (freeTierSonnetUpgrade) {
-        await deductCredits(user.id, creditType)
+        await deductCredits(user.id, creditType, user.email)
       }
     }
 

@@ -172,7 +172,7 @@ function sendSSE(res: VercelResponse, data: Record<string, unknown>) {
 
 async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
   if (!user.isMCP) {
-    const creditCheck = await checkCredits(user.id, 'flow')
+    const creditCheck = await checkCredits(user.id, 'flow', user.email)
     if (!creditCheck.hasCredits) {
       return res.status(402).json({ error: creditCheck.error, creditsRemaining: creditCheck.creditsRemaining, upgradeUrl: creditCheck.upgradeUrl })
     }
@@ -184,7 +184,7 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
   const { prompt, projectId, conversationHistory } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: 'Missing or invalid prompt' })
 
-  const userPlan = await getUserPlan(user.id)
+  const userPlan = await getUserPlan(user.id, user.email)
   const model = userPlan === 'free' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-20250514'
 
   try {
@@ -227,7 +227,7 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
       tree: normalizeComponentTree(s.tree || { type: 'View', style: {}, children: [] }),
     }))
 
-    if (!user.isMCP) await deductCredits(user.id, 'flow')
+    if (!user.isMCP) await deductCredits(user.id, 'flow', user.email)
 
     logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, generationType: 'flow', promptPreview: prompt, success: true })
 
@@ -242,7 +242,7 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
 
 async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
   if (!user.isMCP) {
-    const creditCheck = await checkCredits(user.id, 'app')
+    const creditCheck = await checkCredits(user.id, 'app', user.email)
     if (!creditCheck.hasCredits) {
       return res.status(402).json({ error: creditCheck.error, creditsRemaining: creditCheck.creditsRemaining, upgradeUrl: creditCheck.upgradeUrl })
     }
@@ -260,7 +260,7 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
 
-  const userPlan = await getUserPlan(user.id)
+  const userPlan = await getUserPlan(user.id, user.email)
 
   try {
     // ===== PHASE 1: Plan the app with Haiku =====
@@ -393,7 +393,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     const homePlanId = plan.screens.find(s => s.isHome)?.id || plan.screens[0]?.id
     const homeScreenId = planIdToScreenId.get(homePlanId) || normalizedScreens[0]?.id
 
-    if (!user.isMCP) await deductCredits(user.id, 'app')
+    if (!user.isMCP) await deductCredits(user.id, 'app', user.email)
 
     logUsage({
       userId: user.id, projectId: projectId || undefined, modelUsed: genModel,

@@ -106,9 +106,13 @@ export async function authenticateRequest(
 export async function checkRateLimit(
   userId: string,
   res: VercelResponse,
-  dailyLimit = 10
+  dailyLimit = 10,
+  email?: string | null
 ): Promise<boolean> {
   if (userId === 'anonymous') return false
+
+  // Admin bypass — no rate limit for founders/admins
+  if (isAdmin(email)) return false
 
   const { url, key } = getSupabaseConfig()
   if (!url || !key) return false
@@ -147,12 +151,39 @@ const CREDIT_COSTS: Record<string, Record<string, number>> = {
   max: { new_screen: 3, edit: 1, flow: 10, screenshot: 5, app: 15 },
 }
 
+/**
+ * Admin bypass: users whose email is listed in the ADMIN_EMAILS env var
+ * skip all credit checks, rate limits, and deductions. Intended for founders
+ * and internal testers so they never run out of credits while iterating.
+ *
+ * To add a new admin (e.g., Ishan), edit the Vercel env var — NO code change needed:
+ *
+ *   ADMIN_EMAILS=sihmarsahil@gmail.com,ishan@example.com,another@founder.com
+ *
+ * Comma-separated, case-insensitive, whitespace tolerated. Redeploy to apply.
+ */
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+
+function isAdmin(email?: string | null): boolean {
+  if (!email) return false
+  return ADMIN_EMAILS.includes(email.toLowerCase())
+}
+
 export async function checkCredits(
   userId: string,
-  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot' | 'app'
+  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot' | 'app',
+  email?: string | null
 ): Promise<{ hasCredits: boolean; creditsRemaining: number; cost: number; error?: string; upgradeUrl?: string }> {
   if (userId === 'anonymous' || userId === 'mcp') {
     return { hasCredits: true, creditsRemaining: -1, cost: 0 }
+  }
+
+  // Admin bypass — see ADMIN_EMAILS docs above
+  if (isAdmin(email)) {
+    return { hasCredits: true, creditsRemaining: 99999, cost: 0 }
   }
 
   const { url, key } = getSupabaseConfig()
@@ -190,10 +221,16 @@ export async function checkCredits(
 
 export async function deductCredits(
   userId: string,
-  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot' | 'app'
+  generationType: 'new_screen' | 'edit' | 'flow' | 'screenshot' | 'app',
+  email?: string | null
 ): Promise<{ success: boolean; creditsRemaining: number; error?: string; upgradeUrl?: string }> {
   if (userId === 'anonymous' || userId === 'mcp') {
     return { success: true, creditsRemaining: -1 }
+  }
+
+  // Admin bypass — no deduction, always succeed
+  if (isAdmin(email)) {
+    return { success: true, creditsRemaining: 99999 }
   }
 
   const { url, key } = getSupabaseConfig()
@@ -246,10 +283,16 @@ export async function deductCredits(
 }
 
 export async function getUserCredits(
-  userId: string
+  userId: string,
+  email?: string | null
 ): Promise<{ plan: string; creditsRemaining: number; creditsLimit: number }> {
   if (userId === 'anonymous' || userId === 'mcp') {
     return { plan: 'free', creditsRemaining: -1, creditsLimit: -1 }
+  }
+
+  // Admin bypass — UI shows effectively unlimited
+  if (isAdmin(email)) {
+    return { plan: 'max', creditsRemaining: 99999, creditsLimit: 99999 }
   }
 
   const { url, key } = getSupabaseConfig()
@@ -274,8 +317,11 @@ export async function getUserCredits(
   }
 }
 
-export async function getUserPlan(userId: string): Promise<string> {
+export async function getUserPlan(userId: string, email?: string | null): Promise<string> {
   if (userId === 'anonymous' || userId === 'mcp') return 'pro' // MCP/anonymous get pro models
+
+  // Admin bypass — admins get Max-tier model quality
+  if (isAdmin(email)) return 'max'
 
   const { url, key } = getSupabaseConfig()
   if (!url || !key) return 'free'
