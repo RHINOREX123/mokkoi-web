@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateMCPRequest, getSupabaseConfig } from './lib/auth-helper.js'
+import { authenticateMCPRequest, getSupabaseConfig } from './_lib/auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
 
 const MCP_PROJECT_NAME = 'MCP Imports'

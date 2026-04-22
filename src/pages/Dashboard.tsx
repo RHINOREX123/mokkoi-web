@@ -6,9 +6,8 @@ import { trackEvent, resetAnalytics } from '../lib/analytics'
 import {
   Search, MoreVertical, Trash2, Pencil, LogOut, Settings,
   FolderOpen, Users, Smartphone, ArrowUp, Download,
-  Zap, Copy, Menu, X, Sparkles,
+  Zap, Copy, Menu, X,
 } from 'lucide-react'
-import { APP_TEMPLATES } from '../data/appTemplates'
 
 interface Project {
   id: string
@@ -94,7 +93,6 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [prompt, setPrompt] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [buildingTemplate, setBuildingTemplate] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -219,27 +217,6 @@ export default function Dashboard() {
       navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`)
     }
     setIsSubmitting(false)
-  }
-
-  const handleTemplateClick = async (templateId: string) => {
-    const template = APP_TEMPLATES.find(t => t.id === templateId)
-    if (!template || isSubmitting) return
-    setBuildingTemplate(template.name)
-    setIsSubmitting(true)
-    if (!supabase) { navigate('/auth'); return }
-    const { data: { user: u } } = await supabase.auth.getUser()
-    if (!u) { navigate('/auth'); return }
-    const { data } = await supabase
-      .from('projects')
-      .insert({ user_id: u.id, name: template.name })
-      .select().single()
-    if (data) {
-      trackEvent('template_used', { template: template.id, screen_count: template.screenCount })
-      trackEvent('project_created', { source: 'template' })
-      navigate(`/app/${data.id}?prompt=${encodeURIComponent(template.prompt)}`)
-    }
-    setIsSubmitting(false)
-    setBuildingTemplate(null)
   }
 
   const deleteProject = async (id: string) => {
@@ -700,39 +677,28 @@ export default function Dashboard() {
         alignItems: 'center', justifyContent: 'center',
         padding: '40px 24px',
         }}>
-          <div style={{ width: '100%', maxWidth: 640 }}>
+          <div style={{ width: '100%', maxWidth: 720 }}>
             {/* Welcome */}
             <h1 style={{
-              fontSize: hasProjects ? 28 : 32, fontWeight: 700, color: '#f1f5f9',
-              margin: '0 0 8px', letterSpacing: '-0.02em',
-              fontFamily: "'Outfit', 'DM Sans', sans-serif",
+              fontSize: hasProjects ? 32 : 48, fontWeight: 700, color: '#f1f5f9',
+              margin: '0 0 12px', letterSpacing: '-0.02em', textAlign: 'center',
+              fontFamily: "'Outfit', 'DM Sans', sans-serif", lineHeight: 1.1,
             }}>
-              {hasProjects ? `Welcome back, ${firstName}` : 'What app do you want to build?'}
+              {hasProjects ? (
+                `Welcome back, ${firstName}`
+              ) : (
+                <>What will you <span style={{
+                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  fontStyle: 'italic',
+                }}>build</span> today?</>
+              )}
             </h1>
             {!hasProjects && (
-              <p style={{ fontSize: 15, color: '#64748b', margin: '0 0 24px', lineHeight: 1.5 }}>
-                Describe your app — Mokkoi builds it with real React Native code
+              <p style={{ fontSize: 16, color: '#94a3b8', margin: '0 0 32px', lineHeight: 1.5, textAlign: 'center' }}>
+                Create stunning mobile apps by chatting with AI.
               </p>
             )}
-
-            {/* Suggestion chips */}
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: 8,
-              marginTop: hasProjects ? 4 : 0, marginBottom: 16,
-            }}>
-              {SUGGESTION_CHIPS.map(chip => (
-                <button key={chip} onClick={() => { setPrompt(chip); textareaRef.current?.focus() }} style={{
-                  padding: '6px 14px', borderRadius: 20,
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#94a3b8', fontSize: 13, fontWeight: 500,
-                  cursor: 'pointer', transition: 'all 0.2s',
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.color = '#818cf8' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
-                >{chip}</button>
-              ))}
-            </div>
 
             {/* Chat input area */}
             <div style={{
@@ -749,7 +715,7 @@ export default function Dashboard() {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitPrompt() }
                 }}
-                placeholder="Describe the app you want to build..."
+                placeholder="Let's build"
                 rows={3}
                 style={{
                   width: '100%', padding: '16px 16px 40px', borderRadius: 16,
@@ -777,97 +743,44 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Credits indicator below input */}
-            {credits && (
+            {/* Suggestion chips — below input, first-time users only */}
+            {!hasProjects && (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                marginTop: 12, fontSize: 12, color: '#475569',
+                display: 'flex', flexWrap: 'wrap', gap: 8,
+                marginTop: 20, justifyContent: 'center',
               }}>
-                <Zap size={11} />
-                {credits.remaining} credits remaining · {credits.plan} plan
+                {SUGGESTION_CHIPS.map(chip => (
+                  <button key={chip} onClick={() => { setPrompt(chip); textareaRef.current?.focus() }} style={{
+                    padding: '6px 14px', borderRadius: 20,
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                    color: '#94a3b8', fontSize: 13, fontWeight: 500,
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.color = '#818cf8' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
+                  >{chip}</button>
+                ))}
               </div>
             )}
 
-            {/* Or start from — quick actions */}
-            {!buildingTemplate && (
-              <div style={{ marginTop: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                  <span style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>or start from</span>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                  {[
-                    { label: 'Template', icon: '📱', action: () => document.getElementById('mokkoi-templates')?.scrollIntoView({ behavior: 'smooth' }) },
-                    { label: 'Screenshot', icon: '📸', action: () => setToastMessage('Screenshot import coming soon') },
-                    { label: 'Import HTML', icon: '🔗', action: () => setToastMessage('HTML import coming soon') },
-                  ].map(a => (
-                    <button key={a.label} onClick={a.action} style={{
-                      padding: '10px 20px', borderRadius: 10,
-                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-                      color: '#94a3b8', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
-                    >
-                      <span>{a.icon}</span>{a.label}
-                    </button>
-                  ))}
-                </div>
+            {/* Or start from — compact text link */}
+            {!hasProjects && (
+              <div style={{ marginTop: 20, textAlign: 'center' }}>
+                <span style={{ fontSize: 12, color: '#475569' }}>or start from </span>
+                <button
+                  onClick={() => setToastMessage('Screenshot import coming soon')}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '0 4px' }}
+                >Screenshot</button>
+                <span style={{ fontSize: 12, color: '#475569' }}> · </span>
+                <button
+                  onClick={() => setToastMessage('HTML import coming soon')}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '0 4px' }}
+                >Import HTML</button>
               </div>
             )}
 
-            {/* Building template loading state */}
-            {buildingTemplate && (
-              <div style={{
-                marginTop: 24, padding: '16px 20px', borderRadius: 12,
-                background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.2)',
-                display: 'flex', alignItems: 'center', gap: 12,
-              }}>
-                <Sparkles size={18} color="#2563EB" style={{ animation: 'pulse 1.5s ease-in-out infinite' }} />
-                <span style={{ fontSize: 14, color: '#93c5fd', fontWeight: 500 }}>
-                  Building your {buildingTemplate}...
-                </span>
-              </div>
-            )}
 
-            {/* App templates */}
-            {!buildingTemplate && (
-              <div id="mokkoi-templates" style={{ marginTop: 32 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <Sparkles size={14} color="#64748b" />
-                  <h3 style={{ fontSize: 13, fontWeight: 600, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Start with a template
-                  </h3>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-                  {APP_TEMPLATES.map(t => (
-                    <button key={t.id} onClick={() => handleTemplateClick(t.id)} disabled={isSubmitting} style={{
-                      padding: 16, borderRadius: 12, textAlign: 'left',
-                      background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-                      cursor: isSubmitting ? 'default' : 'pointer', transition: 'all 0.2s',
-                      opacity: isSubmitting ? 0.5 : 1,
-                    }}
-                      onMouseEnter={e => { if (!isSubmitting) { e.currentTarget.style.borderColor = `${t.accentColor}40`; e.currentTarget.style.background = `${t.accentColor}08` } }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
-                    >
-                      <div style={{ fontSize: 24, marginBottom: 8 }}>{t.icon}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 4 }}>{t.name}</div>
-                      <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, marginBottom: 8 }}>{t.description}</div>
-                      <div style={{
-                        fontSize: 10, fontWeight: 600, color: t.accentColor,
-                        background: `${t.accentColor}15`, padding: '2px 8px', borderRadius: 4,
-                        display: 'inline-block',
-                      }}>
-                        {t.screenCount} screens
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

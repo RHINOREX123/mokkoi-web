@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { getSupabaseConfig } from './lib/auth-helper.js'
+import { getSupabaseConfig } from './_lib/auth-helper.js'
 
 // Types inlined here since Vercel serverless can't import from src/
 interface ColorChange { property: string; from: string; to: string }
@@ -148,7 +148,7 @@ function aggregatePatterns(diffs: DiffResult[]): {
 // Previously: api/log-edit-diff.ts
 // ============================================================
 
-import { authenticateRequest } from './lib/auth-helper.js'
+import { authenticateRequest } from './_lib/auth-helper.js'
 
 async function handleLogEditDiff(req: VercelRequest, res: VercelResponse) {
   const user = await authenticateRequest(req, res)

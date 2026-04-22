@@ -227,3 +227,72 @@ Return ONLY valid JSON. No markdown, no explanation, no code fences.
 
 Example output:
 {"appName":"FitForge","screens":[{"id":"home","name":"Home","description":"Dashboard with daily stats, workout streak, and quick-start buttons","screenType":"dashboard","isHome":true},{"id":"workouts","name":"Workouts","description":"Browse workout categories and saved routines","screenType":"list","isHome":false},{"id":"workout-detail","name":"Workout Detail","description":"Exercise list with sets, reps, and timer","screenType":"detail","isHome":false},{"id":"progress","name":"Progress","description":"Weekly charts, body stats, and achievement badges","screenType":"dashboard","isHome":false},{"id":"profile","name":"Profile","description":"User avatar, stats, settings link, and subscription status","screenType":"profile","isHome":false}],"navigation":{"type":"hybrid","tabScreens":["home","workouts","progress","profile"],"connections":[{"from":"home","to":"workout-detail","trigger":"card_tap"},{"from":"workouts","to":"workout-detail","trigger":"list_item"},{"from":"profile","to":"settings","trigger":"button_tap"}]},"designDirection":{"theme":"dark","accentColor":"#8B5CF6","style":"bold energetic"}}`
+
+// ============================================================================
+// Template priors — applied when matchTemplate() recognizes a user prompt as
+// one of the 6 app archetypes. Each prior is spliced into the planner system
+// prompt so the generator has strong structural guidance for that archetype.
+// ============================================================================
+
+const TEMPLATE_PRIORS: Record<string, string> = {
+  'fitness': `
+The user wants a FITNESS app. Typical screens:
+- Home: today's stats (calories/steps/heart rate), workout streak, quick-start CTA, recent workouts list
+- Workouts: category cards (Strength / Cardio / Yoga / HIIT) with hero images, popular workouts list with ratings
+- Workout Detail: header image, stats row (sets/reps/duration), exercise list, start-workout CTA
+- Progress: weekly activity chart area, body measurement stats (weight / body fat), recent achievements
+- Profile: avatar, fitness goals with progress bars, achievement badges, settings links
+Use health-forward content (12-day streak, 420 cal, 8240 steps) and a green accent.`,
+  'food-delivery': `
+The user wants a FOOD DELIVERY app. Typical screens:
+- Home: location header, search bar, featured promo card ("30% off first order") with real food image, cuisine category chips, nearby restaurants with photos/ratings
+- Restaurant Detail: hero image, menu sections, item cards with prices, add-to-cart buttons
+- Cart: line items with qty controls, price breakdown (subtotal/delivery/total), checkout CTA
+- Order Tracking: status timeline (Confirmed → Preparing → On the way → Delivered) with icons and timestamps, map placeholder, order details card
+- Profile: avatar, stats row (orders / rating / spent), saved addresses, payment methods
+Use orange accent, rich food photography, empty states with clear CTAs.`,
+  'social-media': `
+The user wants a SOCIAL MEDIA app. Typical screens:
+- Feed: stories row (circular avatars), post cards with avatar/image/caption/like-comment-share
+- Profile: cover photo, avatar, stats (posts/followers/following), bio, photo grid
+- Messages: search bar, conversation list with avatars/preview/timestamp
+- Notifications: grouped list (likes/comments/follows) with icons and timestamps
+- Search/Explore: trending topics, grid of popular posts
+Use purple accent, avatar-heavy content, realistic usernames.`,
+  'ecommerce': `
+The user wants an E-COMMERCE app. Typical screens:
+- Home: hero banner, category tiles, product grid with images/prices/ratings
+- Product Detail: image carousel, title/price/rating, description, add-to-cart CTA
+- Cart: line items with qty, price breakdown, checkout CTA
+- Checkout: address, payment method, order summary
+- Orders/Profile: order history list, account links
+Use pink/magenta accent, product photography, star ratings.`,
+  'banking': `
+The user wants a BANKING/FINANCE app. Typical screens:
+- Home: account balance card (large), quick actions (transfer/pay/deposit), recent transactions list
+- Transactions: filter chips, grouped list by date with merchant icons and amounts
+- Transfer: recipient selection, amount input, review screen
+- Cards: card carousel, card details, transaction filter
+- Profile: account info, security settings
+Use blue/navy accent, clear numeric hierarchy, positive/negative amount coloring.`,
+  'music': `
+The user wants a MUSIC STREAMING app. Typical screens:
+- Home: featured playlists, recently played, recommended albums
+- Player: album art (large), track title/artist, progress bar, playback controls
+- Library: tabs (Playlists / Artists / Albums / Songs), list views
+- Search: search bar, genre grid, results list
+- Profile: listening stats, followed artists
+Use dark background with vibrant accent, album art everywhere, waveform/progress bars.`,
+}
+
+export function buildPlannerSystem(matchedTemplateId?: string | null): string {
+  if (!matchedTemplateId) return APP_PLANNER_SYSTEM_PROMPT
+  const prior = TEMPLATE_PRIORS[matchedTemplateId]
+  if (!prior) return APP_PLANNER_SYSTEM_PROMPT
+  return `${APP_PLANNER_SYSTEM_PROMPT}
+
+# TEMPLATE HINT (user prompt matched an archetype)
+${prior}
+
+Use this as structural guidance only. The user's own requirements take precedence.`
+}

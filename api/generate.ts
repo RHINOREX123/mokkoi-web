@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan, getSupabaseConfig } from './lib/auth-helper.js'
+import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan, getSupabaseConfig } from './_lib/auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
-import { normalizeComponentTree, type NormalizerOptions } from './lib/normalizer.js'
+import { normalizeComponentTree, type NormalizerOptions } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
 import { parseHtmlToComponentTree, shouldUseDomParser, extractAllText } from '../lib/html-parser.js'
-import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './lib/design-system.js'
-import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './lib/color-themes.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './_lib/design-system.js'
+import { resolveTheme, formatPaletteForPrompt, type ThemeResult } from './_lib/color-themes.js'
 
 // --- Few-shot examples (compact JSON) ---
 // ANCHOR examples: DASHBOARD + SETTINGS (always included)

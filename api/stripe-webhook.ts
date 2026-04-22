@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { getSupabaseConfig } from './lib/auth-helper.js'
+import { getSupabaseConfig } from './_lib/auth-helper.js'
 
 const PLAN_CREDITS: Record<string, number> = {
   free: 50,
