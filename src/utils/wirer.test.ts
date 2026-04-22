@@ -102,26 +102,33 @@ describe('wireScreen', () => {
     expect(result.bindings.get(profileBtn)).toBe('ProfileScreen')
   })
 
-  it('test 9: directional fallback — empty trigger binds first unbound button', () => {
-    const btn = makeButton('Continue')
+  it('test 9: directional fallback — trigger has directional verb, Jaccard=0, binds first unbound button', () => {
+    // "Go Now" → tokens ["go","now"]; button text "Checkout" → tokens ["checkout"]
+    // Jaccard = 0 (no overlap), but "go" is a DIRECTIONAL_VERB → shouldFallback=true
+    // Empty trigger must NOT trigger fallback (never blind-bind)
+    const btn = makeButton('Checkout')
     const screen = makeScreen('s1', 'PaymentScreen', [btn])
     const checkoutScreen = makeScreen('s2', 'CheckoutScreen', [])
-    const conn: FlowConnection = { fromScreenId: 's1', toScreenId: 's2', trigger: '' }
+    const conn: FlowConnection = { fromScreenId: 's1', toScreenId: 's2', trigger: 'Go Now' }
 
     const result = wireScreen(screen, [conn], [screen, checkoutScreen])
 
     expect(result.bindings.get(btn)).toBe('CheckoutScreen')
+    expect(result.unmatched).toHaveLength(0)
   })
 
   it('test 10: target-name fallback — token of target name in button text', () => {
+    // trigger "???" → tokens [] (no Jaccard match, no directional verb)
+    // target name "Dashboard Screen" → tokens ["dashboard","screen"]
+    // button "Dashboard" → tokens ["dashboard"] → overlap → shouldFallback via target-name
     const btn = makeButton('Dashboard')
     const screen = makeScreen('s1', 'HomeScreen', [btn])
-    const dashScreen = makeScreen('s2', 'DashboardScreen', [])
+    const dashScreen = makeScreen('s2', 'Dashboard Screen', [])
     const conn: FlowConnection = { fromScreenId: 's1', toScreenId: 's2', trigger: '???' }
 
     const result = wireScreen(screen, [conn], [screen, dashScreen])
 
-    expect(result.bindings.get(btn)).toBe('DashboardScreen')
+    expect(result.bindings.get(btn)).toBe('Dashboard Screen')
   })
 
   it('test 11: unmatched — no overlap, no directional, no target name', () => {

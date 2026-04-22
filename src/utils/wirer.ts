@@ -191,38 +191,28 @@ export function wireScreen(
     const targetName = screenNameById.get(conn.toScreenId) ?? conn.toScreenId
     const targetTokens = tokenize(targetName)
 
-    // Check fallback conditions
-    const hasDirectionalVerb =
-      triggerTokens.length === 0 ||
-      triggerTokens.some(t => DIRECTIONAL_VERBS.has(t))
-
     // Find unbound buttons
     const unboundTouchables = touchables.filter(b => !assignedButtons.has(b.node) && b.text.length > 0)
 
-    if (hasDirectionalVerb) {
-      // Bind to first unbound button
-      if (unboundTouchables.length > 0) {
-        const target = unboundTouchables[0]
-        bindings.set(target.node, targetName)
-        assignedButtons.add(target.node)
+    // Check fallback conditions independently
+    const hasDirectionalVerb = triggerTokens.some(t => DIRECTIONAL_VERBS.has(t))
+
+    const hasTargetNameToken = unboundTouchables.some(button => {
+      const buttonTokens = tokenize(button.text)
+      return targetTokens.some(t => buttonTokens.includes(t))
+    })
+
+    const shouldFallback = hasDirectionalVerb || hasTargetNameToken
+
+    if (shouldFallback) {
+      const candidate = unboundTouchables.find(b => collectAllText(b.node).trim().length > 0)
+      if (candidate) {
+        bindings.set(candidate.node, targetName)
+        assignedButtons.add(candidate.node)
         assignedConnections.add(conn)
         continue
       }
     }
-
-    // Target-name fallback: any token of the target screen name in any unbound button
-    let targetNameMatched = false
-    for (const button of unboundTouchables) {
-      const buttonTokens = tokenize(button.text)
-      if (targetTokens.some(t => buttonTokens.includes(t))) {
-        bindings.set(button.node, targetName)
-        assignedButtons.add(button.node)
-        assignedConnections.add(conn)
-        targetNameMatched = true
-        break
-      }
-    }
-    if (targetNameMatched) continue
 
     // Truly unmatched
     unmatched.push({
