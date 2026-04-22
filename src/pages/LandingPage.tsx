@@ -376,11 +376,56 @@ export default function LandingPage() {
         </section>
 
         {/* ─── FOOTER ─── */}
-        <footer style={{ padding: '32px 0', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-          <span style={{ fontSize: 13, color: C.textDim }}>© 2026 Mokkoi. Built for builders.</span>
-          <div style={{ display: 'flex', gap: 24 }}>
-            <a href="https://x.com/Mokkoi_dev" target="_blank" rel="noopener" style={{ fontSize: 13, color: C.textMuted, textDecoration: 'none' }}>@Mokkoi_dev</a>
-            <a href="https://www.npmjs.com/package/mokkoi-mcp" target="_blank" rel="noopener" style={{ fontSize: 13, color: C.textMuted, textDecoration: 'none' }}>npm</a>
+        <footer style={{ padding: '64px 0 32px', borderTop: `1px solid ${C.border}` }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 40, marginBottom: 40 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: C.gradient1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff' }}>M</div>
+                <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Mokkoi</span>
+              </div>
+              <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.6, maxWidth: 280 }}>
+                AI mobile app builder. Type what you want, get real React Native + Expo code.
+              </div>
+            </div>
+            {[
+              { title: 'Product', links: [
+                { label: 'Pricing', href: '#pricing' },
+                { label: 'Features', href: '#features' },
+                { label: 'Changelog', href: '/changelog' },
+              ]},
+              { title: 'Resources', links: [
+                { label: 'Docs', href: '/docs' },
+                { label: 'Blog', href: '/blog' },
+                { label: 'Support', href: '/support' },
+              ]},
+              { title: 'Company', links: [
+                { label: 'About', href: '/about' },
+                { label: 'Terms', href: '/terms' },
+                { label: 'Privacy', href: '/privacy' },
+              ]},
+              { title: 'Social', links: [
+                { label: 'Twitter', href: 'https://x.com/Mokkoi_dev', external: true },
+              ]},
+            ].map(col => (
+              <div key={col.title}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 }}>{col.title}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {col.links.map(link => (
+                    <a
+                      key={link.label}
+                      href={link.href}
+                      {...('external' in link && link.external ? { target: '_blank', rel: 'noopener' } : {})}
+                      style={{ fontSize: 14, color: C.textMuted, textDecoration: 'none', transition: 'color 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = C.text }}
+                      onMouseLeave={e => { e.currentTarget.style.color = C.textMuted }}
+                    >{link.label}</a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ paddingTop: 24, borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textDim }}>
+            © 2026 Mokkoi. Built for builders.
           </div>
         </footer>
       </div>
