@@ -677,7 +677,7 @@ export default function Dashboard() {
         alignItems: 'center', justifyContent: 'center',
         padding: '40px 24px',
         }}>
-          <div style={{ width: '100%', maxWidth: 720 }}>
+          <div style={{ width: '100%', maxWidth: 720, opacity: loading ? 0 : 1, transition: 'opacity 0.15s' }}>
             {/* Welcome */}
             <h1 style={{
               fontSize: hasProjects ? 32 : 48, fontWeight: 700, color: '#f1f5f9',
