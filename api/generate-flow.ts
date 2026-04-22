@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './lib/auth-helper.js'
 import { normalizeComponentTree } from './lib/normalizer.js'
-import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, APP_PLANNER_SYSTEM_PROMPT } from './lib/design-system.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, APP_PLANNER_SYSTEM_PROMPT, buildPlannerSystem } from './lib/design-system.js'
+import { matchTemplate } from './lib/template-matcher.js'
 
 const FLOW_SYSTEM_PROMPT = `You are a world-class mobile UI designer and React Native expert. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
@@ -266,13 +267,19 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     // ===== PHASE 1: Plan the app with Haiku =====
     sendSSE(res, { type: 'status', phase: 'planning', message: 'Planning your app...' })
 
+    const templateMatch = matchTemplate(prompt)
+    if (templateMatch) {
+      console.log(`[planner] template match: ${templateMatch.templateId} (score=${templateMatch.score.toFixed(2)})`)
+    }
+    const plannerSystem = buildPlannerSystem(templateMatch?.templateId)
+
     const planResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
-        system: [{ type: 'text', text: APP_PLANNER_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: plannerSystem, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: prompt }],
       }),
     })
