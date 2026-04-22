@@ -377,16 +377,16 @@ export default function LandingPage() {
 
         {/* ─── FOOTER ─── */}
         <footer style={{ padding: '64px 0 32px', borderTop: `1px solid ${C.border}` }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 40, marginBottom: 40 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: C.gradient1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff' }}>M</div>
-                <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Mokkoi</span>
-              </div>
-              <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.6, maxWidth: 280 }}>
-                AI mobile app builder. Type what you want, get real React Native + Expo code.
-              </div>
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: C.gradient1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff' }}>M</div>
+              <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Mokkoi</span>
             </div>
+            <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.6, maxWidth: 420 }}>
+              AI mobile app builder. Type what you want, get real React Native + Expo code.
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24, marginBottom: 40 }}>
             {[
               { title: 'Product', links: [
                 { label: 'Pricing', href: '#pricing' },
