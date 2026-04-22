@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, getSupabaseConfig } from './lib/auth-helper.js'
+import { authenticateRequest, getSupabaseConfig } from './_lib/auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
 
 // ============================================================
