@@ -674,8 +674,8 @@ export default function Dashboard() {
       <div style={{
         flex: 1, overflowY: 'auto',
         display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '40px 24px',
+        alignItems: 'center', justifyContent: hasProjects ? 'flex-start' : 'center',
+        padding: hasProjects ? '80px 24px 40px' : '40px 24px',
         }}>
           <div style={{ width: '100%', maxWidth: 720, opacity: loading ? 0 : 1, transition: 'opacity 0.15s' }}>
             {/* Welcome */}
