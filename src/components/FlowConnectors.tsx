@@ -10,6 +10,7 @@ export const PAD_Y = 40
 export interface FlowConnection {
   fromScreenId: string
   toScreenId: string
+  trigger?: string
 }
 
 function inferTransitionType(screenName: string): string {

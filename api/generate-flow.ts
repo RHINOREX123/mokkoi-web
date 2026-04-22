@@ -165,6 +165,15 @@ interface AppPlan {
   designDirection: { theme: string; accentColor: string; style: string }
 }
 
+export function buildConnections(
+  plan: { navigation?: { connections?: Array<{ from: string; to: string; trigger: string }> } },
+  planIdToScreenId: Map<string, string>
+): Array<{ fromScreenId: string; toScreenId: string; trigger: string }> {
+  return (plan.navigation?.connections || [])
+    .map(c => ({ fromScreenId: planIdToScreenId.get(c.from) || '', toScreenId: planIdToScreenId.get(c.to) || '', trigger: c.trigger }))
+    .filter(c => c.fromScreenId && c.toScreenId)
+}
+
 function sendSSE(res: VercelResponse, data: Record<string, unknown>) {
   res.write(`data: ${JSON.stringify(data)}\n\n`)
 }
@@ -393,9 +402,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     const planIdToScreenId = new Map<string, string>()
     for (const s of normalizedScreens) planIdToScreenId.set(s.planId, s.id)
 
-    const connections = (plan.navigation?.connections || [])
-      .map(c => ({ fromScreenId: planIdToScreenId.get(c.from) || '', toScreenId: planIdToScreenId.get(c.to) || '' }))
-      .filter(c => c.fromScreenId && c.toScreenId)
+    const connections = buildConnections(plan, planIdToScreenId)
 
     const homePlanId = plan.screens.find(s => s.isHome)?.id || plan.screens[0]?.id
     const homeScreenId = planIdToScreenId.get(homePlanId) || normalizedScreens[0]?.id
