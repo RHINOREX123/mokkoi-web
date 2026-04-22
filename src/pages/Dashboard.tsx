@@ -677,39 +677,28 @@ export default function Dashboard() {
         alignItems: 'center', justifyContent: 'center',
         padding: '40px 24px',
         }}>
-          <div style={{ width: '100%', maxWidth: 640 }}>
+          <div style={{ width: '100%', maxWidth: 720 }}>
             {/* Welcome */}
             <h1 style={{
-              fontSize: hasProjects ? 28 : 32, fontWeight: 700, color: '#f1f5f9',
-              margin: '0 0 8px', letterSpacing: '-0.02em',
-              fontFamily: "'Outfit', 'DM Sans', sans-serif",
+              fontSize: hasProjects ? 32 : 48, fontWeight: 700, color: '#f1f5f9',
+              margin: '0 0 12px', letterSpacing: '-0.02em', textAlign: 'center',
+              fontFamily: "'Outfit', 'DM Sans', sans-serif", lineHeight: 1.1,
             }}>
-              {hasProjects ? `Welcome back, ${firstName}` : 'What app do you want to build?'}
+              {hasProjects ? (
+                `Welcome back, ${firstName}`
+              ) : (
+                <>What will you <span style={{
+                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  fontStyle: 'italic',
+                }}>build</span> today?</>
+              )}
             </h1>
             {!hasProjects && (
-              <p style={{ fontSize: 15, color: '#64748b', margin: '0 0 24px', lineHeight: 1.5 }}>
-                Describe your app — Mokkoi builds it with real React Native code
+              <p style={{ fontSize: 16, color: '#94a3b8', margin: '0 0 32px', lineHeight: 1.5, textAlign: 'center' }}>
+                Create stunning mobile apps by chatting with AI.
               </p>
             )}
-
-            {/* Suggestion chips */}
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: 8,
-              marginTop: hasProjects ? 4 : 0, marginBottom: 16,
-            }}>
-              {SUGGESTION_CHIPS.map(chip => (
-                <button key={chip} onClick={() => { setPrompt(chip); textareaRef.current?.focus() }} style={{
-                  padding: '6px 14px', borderRadius: 20,
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#94a3b8', fontSize: 13, fontWeight: 500,
-                  cursor: 'pointer', transition: 'all 0.2s',
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.color = '#818cf8' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
-                >{chip}</button>
-              ))}
-            </div>
 
             {/* Chat input area */}
             <div style={{
@@ -726,7 +715,7 @@ export default function Dashboard() {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitPrompt() }
                 }}
-                placeholder="Describe the app you want to build..."
+                placeholder="Let's build"
                 rows={3}
                 style={{
                   width: '100%', padding: '16px 16px 40px', borderRadius: 16,
@@ -754,45 +743,42 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Credits indicator below input */}
-            {credits && (
+            {/* Suggestion chips — below input, first-time users only */}
+            {!hasProjects && (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                marginTop: 12, fontSize: 12, color: '#475569',
+                display: 'flex', flexWrap: 'wrap', gap: 8,
+                marginTop: 20, justifyContent: 'center',
               }}>
-                <Zap size={11} />
-                {credits.remaining} credits remaining · {credits.plan} plan
+                {SUGGESTION_CHIPS.map(chip => (
+                  <button key={chip} onClick={() => { setPrompt(chip); textareaRef.current?.focus() }} style={{
+                    padding: '6px 14px', borderRadius: 20,
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                    color: '#94a3b8', fontSize: 13, fontWeight: 500,
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.color = '#818cf8' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
+                  >{chip}</button>
+                ))}
               </div>
             )}
 
-            {/* Or start from — quick actions */}
-            <div style={{ marginTop: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                  <span style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>or start from</span>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                  {[
-                    { label: 'Template', icon: '📱', action: () => setToastMessage('Template picker coming soon') },
-                    { label: 'Screenshot', icon: '📸', action: () => setToastMessage('Screenshot import coming soon') },
-                    { label: 'Import HTML', icon: '🔗', action: () => setToastMessage('HTML import coming soon') },
-                  ].map(a => (
-                    <button key={a.label} onClick={a.action} style={{
-                      padding: '10px 20px', borderRadius: 10,
-                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-                      color: '#94a3b8', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
-                    >
-                      <span>{a.icon}</span>{a.label}
-                    </button>
-                  ))}
-                </div>
+            {/* Or start from — compact text link */}
+            {!hasProjects && (
+              <div style={{ marginTop: 20, textAlign: 'center' }}>
+                <span style={{ fontSize: 12, color: '#475569' }}>or start from </span>
+                <button
+                  onClick={() => setToastMessage('Screenshot import coming soon')}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '0 4px' }}
+                >Screenshot</button>
+                <span style={{ fontSize: 12, color: '#475569' }}> · </span>
+                <button
+                  onClick={() => setToastMessage('HTML import coming soon')}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '0 4px' }}
+                >Import HTML</button>
               </div>
+            )}
 
 
           </div>
