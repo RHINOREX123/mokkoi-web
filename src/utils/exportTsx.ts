@@ -178,17 +178,4 @@ function nodeJSXWithNav(
   return `${indent}<${type}${propsStr}>\n${cJSX}\n${indent}</${type}>`
 }
 
-/** Collect all text content from a node tree (for button label matching) */
-function collectAllText(node: ComponentNode): string {
-  const parts: string[] = []
-  if (node.children) {
-    for (const child of node.children) {
-      if (typeof child === 'string') parts.push(child.trim())
-      else parts.push(collectAllText(child))
-    }
-  }
-  if (node.props?.children && typeof node.props.children === 'string') {
-    parts.push(node.props.children)
-  }
-  return parts.join(' ')
-}
+

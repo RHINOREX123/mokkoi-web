@@ -13,6 +13,7 @@ import {
 import { detectTabGroup } from '../utils/detectTabBar'
 import { trackEvent } from '../lib/analytics'
 import type { ComponentNode } from '../types/mokkoi'
+import { wireScreen, type ScreenInfo } from '../utils/wirer'
 
 export interface ExportTarget {
   screenId: string
@@ -261,33 +262,19 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
         nameToTree.push({ name, tree: screen.tree })
       }
 
-      // Build per-screen navigation targets from connections
-      // Key: source screen ID → Map of target screen name (used in navigate())
-      const screenNavTargets = new Map<string, Map<string, string>>()
-      if (connections && connections.length > 0) {
-        for (const conn of connections) {
-          const targetName = screenIdToName.get(conn.toScreenId)
-          if (!targetName) continue
-          if (!screenNavTargets.has(conn.fromScreenId)) {
-            screenNavTargets.set(conn.fromScreenId, new Map())
-          }
-          // Use the target screen's display name as a fuzzy match trigger
-          const targetScreen = allScreens.find(s => s.screenId === conn.toScreenId)
-          if (targetScreen) {
-            // Match buttons containing the target screen name words
-            const words = targetScreen.screenName.toLowerCase().split(/\s+/).filter(w => w.length > 3)
-            for (const word of words) {
-              screenNavTargets.get(conn.fromScreenId)!.set(word, targetName)
-            }
-          }
-        }
-      }
+      // Build ScreenInfo array for wirer
+      const allScreenInfos: ScreenInfo[] = allScreens.map(screen => ({
+        id: screen.screenId,
+        name: screenIdToName.get(screen.screenId)!,
+        tree: screen.tree,
+      }))
 
-      // Second pass: generate TSX with navigation targets
-      for (const screen of allScreens) {
+      // Second pass: generate TSX using wirer-based bindings
+      for (let i = 0; i < allScreens.length; i++) {
+        const screen = allScreens[i]
         const name = screenIdToName.get(screen.screenId)!
-        const navTargets = screenNavTargets.get(screen.screenId)
-        const tsx = convertTreeToTSX(screen.tree, screen.screenName, { navigationTargets: navTargets })
+        const { bindings } = wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
+        const tsx = convertTreeToTSX(screen.tree, name, { bindings: bindings.size > 0 ? bindings : undefined })
         zip.file(`screens/${name}.tsx`, tsx)
       }
 
