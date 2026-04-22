@@ -1,0 +1,85 @@
+{
+  "description": "Fitness app: Dashboard → Workouts/Stats/Profile, Workouts → WorkoutDetail. Tests directional verb Jaccard success, empty trigger → unmatched, and that directional verb fallback doesn't fire when button text has no directional verb and Jaccard is 0.",
+  "screens": [
+    {
+      "id": "dashboard",
+      "name": "Dashboard",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Good Morning!"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Start Workout"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["See Stats"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Settings"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "workouts",
+      "name": "Workouts",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["All Workouts"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["View Workout"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "workoutdetail",
+      "name": "WorkoutDetail",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Workout Details"] }
+        ]
+      }
+    },
+    {
+      "id": "stats",
+      "name": "Stats",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Your Stats"] }
+        ]
+      }
+    },
+    {
+      "id": "profile",
+      "name": "Profile",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Your Profile"] }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    { "fromScreenId": "dashboard", "toScreenId": "workouts", "trigger": "Start Workout" },
+    { "fromScreenId": "dashboard", "toScreenId": "stats", "trigger": "See Stats" },
+    { "fromScreenId": "dashboard", "toScreenId": "profile", "trigger": "" },
+    { "fromScreenId": "workouts", "toScreenId": "workoutdetail", "trigger": "View Workout" }
+  ],
+  "expectedBindings": [
+    { "screenName": "Dashboard", "buttonText": "Start Workout", "target": "Workouts" },
+    { "screenName": "Dashboard", "buttonText": "See Stats", "target": "Stats" },
+    { "screenName": "Workouts", "buttonText": "View Workout", "target": "WorkoutDetail" }
+  ],
+  "expectedUnmatched": [
+    { "screenName": "Dashboard", "trigger": "", "target": "Profile" }
+  ]
+}
