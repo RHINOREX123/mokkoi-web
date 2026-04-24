@@ -11,17 +11,57 @@ import type { ComponentNode } from '../types/mokkoi'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from '../components/FlowConnectors'
 
-// ─── FIX 1: Image URL replacement (picsum.photos) ───
+// ─── FIX 1: Image URL replacement (loremflickr keyword-locked) ───
+//
+// Previously used `picsum.photos/400/300?random=N` — the `random` param is a
+// cache-buster, NOT a seed, so every image came back as a different random
+// stock photo (vintage cars, Machu Picchu, etc.) with no relation to the
+// user's prompt. The canvas shows real food photos via our /api/generate?
+// action=image proxy, so the Snack preview looked completely different.
+//
+// loremflickr.com serves keyword-matched Flickr images AND supports a `lock`
+// param for deterministic results — same lock + tags → same image. We derive
+// tags from the node's `searchQuery` (e.g. "margherita pizza") and a stable
+// hash of the same string as the lock.
 
-let imageCounter = 0
+/** Simple deterministic 32-bit string hash (FNV-1a). Stable across runs. */
+function hashString(s: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = (h * 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+/**
+ * Convert a free-form search phrase into loremflickr tags:
+ * "Margherita Pizza with basil" → "margherita,pizza,basil"
+ * Returns a safe fallback (`food`) if nothing usable remains.
+ */
+function toLoremflickrTags(query: string): string {
+  const stop = new Set(['a', 'an', 'the', 'of', 'with', 'and', 'or', 'for', 'in', 'on', 'at', 'to'])
+  const words = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 2 && !stop.has(w))
+    .slice(0, 3)
+  return words.length > 0 ? words.join(',') : 'food'
+}
+
 function replaceImageSources(node: ComponentNode): ComponentNode {
   if (!node) return node
 
   if (node.type === 'Image' && node.props) {
     const props = { ...node.props }
     if (props.searchQuery) {
-      // picsum.photos works reliably in Expo Go (source.unsplash.com does not)
-      props.source = { uri: `https://picsum.photos/400/300?random=${imageCounter++}` }
+      // Keyword-driven, deterministic image URL. Lock pins the image so the
+      // same query always returns the same photo (stable across Snack reloads).
+      const query = String(props.searchQuery)
+      const tags = toLoremflickrTags(query)
+      const lock = hashString(query) % 1_000_000 // keep URL short
+      props.source = { uri: `https://loremflickr.com/400/300/${tags}?lock=${lock}` }
       delete props.searchQuery
     } else if (props.avatar) {
       const name = String(props.avatar)
@@ -210,7 +250,6 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const names = deduplicateNames(rawNames)
 
   // Pre-process trees for Snack (expand, fix images, clean) so we can check content
-  imageCounter = 0
   const processedTrees: ComponentNode[] = screens.map(s => {
     let tree = expandComponents(s.tree) as ComponentNode
     tree = replaceImageSources(tree)
@@ -263,15 +302,36 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
 
   // Tab screens array + labels + icons (only main screens)
   const tabScreenArray = finalTabIndices.map(i => `${names[i]}Screen`).join(', ')
-  const tabLabels = finalTabIndices.map(i => `'${toShortLabel(screens[i].name)}'`).join(', ')
-  const tabIcons = finalTabIndices.map(i => `'${getTabIcon(screens[i].name)}'`).join(', ')
+  const realLabels = finalTabIndices.map(i => toShortLabel(screens[i].name))
+  const realIcons = finalTabIndices.map(i => getTabIcon(screens[i].name))
+
+  // FIX 3: Always render a tab bar so single-screen previews still look like a
+  // real mobile app (matching the canvas). When only one real tab exists, pad
+  // with disabled placeholder tabs — present but greyed out and non-tappable.
+  const PLACEHOLDER_TABS: Array<{ icon: string; label: string }> = [
+    { icon: '🔍', label: 'Search' },
+    { icon: '🔔', label: 'Activity' },
+    { icon: '👤', label: 'Profile' },
+  ]
+  const realTabCount = finalTabIndices.length
+  const placeholderCount = realTabCount === 1 ? 3 : 0
+  // Drop placeholder candidates that would collide with the real tab's label
+  const usedLabels = new Set(realLabels.map(l => l.toLowerCase()))
+  const chosenPlaceholders = PLACEHOLDER_TABS
+    .filter(p => !usedLabels.has(p.label.toLowerCase()))
+    .slice(0, placeholderCount)
+
+  const displayLabels = [...realLabels, ...chosenPlaceholders.map(p => p.label)]
+  const displayIcons = [...realIcons, ...chosenPlaceholders.map(p => p.icon)]
+
+  const tabLabels = displayLabels.map(l => `'${l.replace(/'/g, "\\'")}'`).join(', ')
+  const tabIcons = displayIcons.map(ic => `'${ic}'`).join(', ')
 
   // All screens array (tabs first, then details) for index-based access
   const allScreenArray = allIndices.map(i => `${names[i]}Screen`).join(', ')
   const allLabelsArray = allIndices.map(i => `'${toShortLabel(screens[i].name)}'`).join(', ')
 
   const hasDetailScreens = extraDetailIndices.length > 0
-  const tabCount = finalTabIndices.length
 
   const appCode = `import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, SafeAreaView, StatusBar } from 'react-native';
@@ -291,18 +351,25 @@ export default function App() {
       <View style={{ flex: 1 }}>
         <ActiveScreen />
       </View>
-      {${tabCount} > 1 && (
-        <SafeAreaView style={{ backgroundColor: '#0D1117' }}>
-          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: '#1C2333', backgroundColor: '#0D1117', paddingTop: 6, paddingBottom: 4 }}>
-            {tabLabels.map((label, i) => (
-              <TouchableOpacity key={i} onPress={() => setActive(i)} style={{ flex: 1, alignItems: 'center', paddingVertical: 4 }}>
+      <SafeAreaView style={{ backgroundColor: '#0D1117' }}>
+        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: '#1C2333', backgroundColor: '#0D1117', paddingTop: 6, paddingBottom: 4 }}>
+          {tabLabels.map((label, i) => {
+            const isPlaceholder = i >= ${realTabCount};
+            return (
+              <TouchableOpacity
+                key={i}
+                onPress={isPlaceholder ? undefined : () => setActive(i)}
+                disabled={isPlaceholder}
+                activeOpacity={isPlaceholder ? 1 : 0.7}
+                style={{ flex: 1, alignItems: 'center', paddingVertical: 4, opacity: isPlaceholder ? 0.35 : 1 }}
+              >
                 <Text style={{ fontSize: 20, marginBottom: 2 }}>{tabIcons[i]}</Text>
                 <Text style={{ color: active === i ? '#2563EB' : '#555', fontSize: 10, fontWeight: active === i ? '600' : '400' }}>{label}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        </SafeAreaView>
-      )}
+            );
+          })}
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
