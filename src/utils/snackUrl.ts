@@ -378,11 +378,15 @@ export default function App() {
 
   const dependencies: Record<string, { version: string }> = {
     'expo-status-bar': { version: '~1.11.1' },
-    // lucide-react-native renders Icon components; react-native-svg is its peer dep.
-    // Expo Snack pins react-native-svg to the version it bundles, but declaring it
-    // explicitly avoids "peer dep missing" warnings on some SDK versions.
-    'lucide-react-native': { version: '^0.469.0' },
-    'react-native-svg': { version: '15.2.0' },
+    // Icons render via @expo/vector-icons (Ionicons). That package is
+    // pre-bundled in every Expo Snack SDK, so we deliberately DO NOT declare
+    // it here — declaring it can force Snack to resolve a version that
+    // conflicts with its bundled one. Pre-bundled === zero version hell.
+    //
+    // Previously we shipped lucide-react-native + a pinned react-native-svg.
+    // That crashed Expo Go with "Cannot read property 'ReactCurrentOwner' of
+    // undefined" whenever the pinned svg version disagreed with Snack's
+    // bundled one (e.g. our 15.2.0 pin vs Snack SDK 52/53's newer svg).
   }
 
   return {

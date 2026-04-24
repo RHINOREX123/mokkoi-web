@@ -5,10 +5,16 @@
 //   - Material Symbols:     favorite, shopping_cart, chevron_right, arrow_back
 //
 // Canvas preview (ScreenRenderer) renders via Material Symbols font →
-// needs Lucide→Material translation.
+// needs Lucide→Material translation (toMaterialSymbol).
 //
-// Snack export (exportTsx) renders via lucide-react-native components →
-// needs Material→Lucide translation, then kebab-case → PascalCase.
+// Snack export (exportTsx) renders via @expo/vector-icons Ionicons —
+// pre-bundled in every Expo Snack SDK, no peer-dep resolution, no version
+// conflicts. Uses toIoniconsName. We previously used lucide-react-native,
+// which crashed Expo Go with "Cannot read property 'ReactCurrentOwner' of
+// undefined" whenever Snack's bundled react-native-svg mismatched our pin.
+//
+// toLucidePascal is kept for backwards compat / potential reuse but is no
+// longer on the export path.
 
 /** Lucide kebab-case → Google Material Symbols snake_case */
 export const LUCIDE_TO_MATERIAL: Record<string, string> = {
@@ -389,3 +395,327 @@ export const KNOWN_LUCIDE_ICONS: Set<string> = (() => {
   set.add('Circle')
   return set
 })()
+
+// ────────────────────────────────────────────────────────────────────────────
+//   Ionicons (@expo/vector-icons) — the safe path for Snack export.
+//   Pre-bundled in every Expo Snack SDK. Zero peer deps, zero version hell.
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lucide kebab-case → Ionicons v7 name.
+ *
+ * Hand-curated: every value here exists in @expo/vector-icons Ionicons in the
+ * SDK versions Snack currently supports (52+). Unknown inputs fall through to
+ * `ellipse` (a plain circle) via `toIoniconsName`.
+ *
+ * When adding entries: verify the Ionicons name at
+ * https://ionic.io/ionicons before shipping — an invalid name renders a
+ * missing-glyph box in Expo Go.
+ */
+export const LUCIDE_TO_IONICONS: Record<string, string> = {
+  // Navigation / arrows
+  'arrow-left': 'arrow-back',
+  'arrow-right': 'arrow-forward',
+  'arrow-up': 'arrow-up',
+  'arrow-down': 'arrow-down',
+  'chevron-left': 'chevron-back',
+  'chevron-right': 'chevron-forward',
+  'chevron-up': 'chevron-up',
+  'chevron-down': 'chevron-down',
+  menu: 'menu',
+  x: 'close',
+  refresh: 'refresh',
+
+  // Core UI
+  home: 'home',
+  search: 'search',
+  settings: 'settings',
+  bell: 'notifications',
+  heart: 'heart',
+  star: 'star',
+  bookmark: 'bookmark',
+  share: 'share-social',
+  check: 'checkmark',
+  plus: 'add',
+  minus: 'remove',
+
+  // User / social
+  user: 'person',
+  users: 'people',
+  group: 'people',
+  'user-plus': 'person-add',
+  'add-user': 'person-add',
+  'circle-user': 'person-circle',
+
+  // Messaging / mail
+  mail: 'mail',
+  send: 'send',
+  chat: 'chatbubble',
+  message: 'chatbubble',
+  'message-circle': 'chatbubble',
+  'message-square': 'chatbubble',
+  phone: 'call',
+
+  // Media
+  play: 'play',
+  pause: 'pause',
+  'skip-forward': 'play-skip-forward',
+  'skip-back': 'play-skip-back',
+  volume: 'volume-high',
+  'volume-1': 'volume-low',
+  'volume-2': 'volume-high',
+  'volume-x': 'volume-mute',
+  music: 'musical-notes',
+  video: 'videocam',
+  mic: 'mic',
+  image: 'image',
+  camera: 'camera',
+  headphones: 'headset',
+  speaker: 'volume-high',
+  radio: 'radio',
+  podcast: 'mic',
+
+  // Actions
+  edit: 'pencil',
+  copy: 'copy',
+  trash: 'trash',
+  'trash-2': 'trash',
+  download: 'download',
+  upload: 'cloud-upload',
+  save: 'save',
+  attach: 'attach',
+  paperclip: 'attach',
+  link: 'link',
+  'external-link': 'open',
+  external: 'open',
+  'log-in': 'log-in',
+  'log-out': 'log-out',
+  power: 'power',
+
+  // Status / alerts
+  info: 'information-circle',
+  help: 'help-circle',
+  alert: 'warning',
+  shield: 'shield',
+  'circle-check': 'checkmark-circle',
+  'circle-x': 'close-circle',
+  'circle-alert': 'alert-circle',
+  'circle-help': 'help-circle',
+  'circle-plus': 'add-circle',
+
+  // Commerce
+  'shopping-cart': 'cart',
+  cart: 'cart',
+  bag: 'bag',
+  'credit-card': 'card',
+  wallet: 'wallet',
+  savings: 'wallet',
+  receipt: 'receipt',
+  tag: 'pricetag',
+  percent: 'pricetag',
+  gift: 'gift',
+  banknote: 'cash',
+  coins: 'cash',
+  'piggy-bank': 'wallet',
+
+  // Location / transport
+  'map-pin': 'location',
+  map: 'map',
+  navigation: 'navigate',
+  'navigation-2': 'navigate',
+  locate: 'locate',
+  crosshair: 'locate',
+  compass: 'compass',
+  pin: 'pin',
+  car: 'car',
+  truck: 'car',
+  bike: 'bicycle',
+  airplane: 'airplane',
+  plane: 'airplane',
+  walk: 'walk',
+  run: 'walk',
+  footprints: 'walk',
+
+  // Time
+  clock: 'time',
+  calendar: 'calendar',
+  timer: 'timer',
+  stopwatch: 'stopwatch',
+  alarm: 'alarm',
+  timeline: 'time',
+
+  // Files
+  file: 'document',
+  folder: 'folder',
+
+  // System / security
+  eye: 'eye',
+  lock: 'lock-closed',
+  unlock: 'lock-open',
+  key: 'key',
+  fingerprint: 'finger-print',
+  scan: 'scan',
+  'qr-code': 'qr-code',
+
+  // Charts
+  'bar-chart': 'bar-chart',
+  'bar-chart-2': 'bar-chart',
+  'pie-chart': 'pie-chart',
+  analytics: 'analytics',
+  'trending-up': 'trending-up',
+  'trending-down': 'trending-down',
+  activity: 'pulse',
+  'heart-pulse': 'pulse',
+
+  // Device / connectivity
+  wifi: 'wifi',
+  'wifi-off': 'wifi',
+  bluetooth: 'bluetooth',
+  battery: 'battery-full',
+  'battery-charging': 'battery-charging',
+  'battery-low': 'battery-dead',
+  signal: 'cellular',
+  zap: 'flash',
+  flash: 'flash',
+  lightbulb: 'bulb',
+  lamp: 'bulb',
+  brain: 'bulb',
+
+  // Weather / nature
+  sun: 'sunny',
+  moon: 'moon',
+  cloud: 'cloud',
+  'cloud-rain': 'rainy',
+  'cloud-sun': 'partly-sunny',
+  snowflake: 'snow',
+  droplet: 'water',
+  droplets: 'water',
+  'glass-water': 'water',
+  bath: 'water',
+  shower: 'water',
+  wind: 'cloudy',
+  thermometer: 'thermometer',
+  mountain: 'triangle',
+  leaf: 'leaf',
+  sprout: 'leaf',
+  'flower-2': 'flower',
+  spa: 'flower',
+  fire: 'flame',
+  flame: 'flame',
+
+  // Food / drink
+  restaurant: 'restaurant',
+  utensils: 'restaurant',
+  salad: 'restaurant',
+  soup: 'restaurant',
+  pizza: 'pizza',
+  apple: 'nutrition',
+  coffee: 'cafe',
+  beer: 'beer',
+  wine: 'wine',
+  candy: 'ice-cream',
+  cookie: 'ice-cream',
+
+  // Lifestyle / misc
+  fitness: 'fitness',
+  dumbbell: 'barbell',
+  medical: 'medical',
+  stethoscope: 'medical',
+  pill: 'medkit',
+  syringe: 'medkit',
+  book: 'book',
+  school: 'school',
+  graduation: 'school',
+  'graduation-cap': 'school',
+  work: 'briefcase',
+  briefcase: 'briefcase',
+  building: 'business',
+  'building-2': 'business',
+  house: 'home',
+  bed: 'bed',
+  hotel: 'bed',
+  shirt: 'shirt',
+  watch: 'watch',
+  glasses: 'glasses',
+
+  // UI layout / tools
+  layers: 'layers',
+  grid: 'grid',
+  list: 'list',
+  dashboard: 'apps',
+  'layout-dashboard': 'apps',
+  package: 'cube',
+  box: 'cube',
+  palette: 'color-palette',
+  brush: 'brush',
+  crop: 'crop',
+  tune: 'options',
+  equalizer: 'options',
+  filter: 'filter',
+  code: 'code-slash',
+  terminal: 'terminal',
+  database: 'server',
+  server: 'server',
+
+  // Emotions / people
+  baby: 'happy',
+  smile: 'happy',
+  frown: 'sad',
+
+  // Transport continued / misc
+  repeat: 'repeat',
+  shuffle: 'shuffle',
+  maximize: 'expand',
+  minimize: 'contract',
+  'more-horizontal': 'ellipsis-horizontal',
+  'more-vertical': 'ellipsis-vertical',
+  'thumb-up': 'thumbs-up',
+  'thumb-down': 'thumbs-down',
+  'thumbs-up': 'thumbs-up',
+  'thumbs-down': 'thumbs-down',
+
+  // Decorative
+  globe: 'globe',
+  flag: 'flag',
+  rocket: 'rocket',
+  sparkles: 'sparkles',
+  wand: 'color-wand',
+  gem: 'diamond',
+  crown: 'ribbon',
+  trophy: 'trophy',
+  award: 'medal',
+  target: 'radio-button-on',
+  gamepad: 'game-controller',
+}
+
+/**
+ * Normalize any icon name (Lucide kebab or Material snake) to an Ionicons
+ * name suitable for `<Ionicons name="..." />` from @expo/vector-icons.
+ *
+ * Falls back to `'ellipse'` (a plain circle) for unknowns — guarantees the
+ * generated TSX always compiles, never emits a missing-glyph box.
+ *
+ * Examples:
+ *   'heart'         → 'heart'
+ *   'shopping-cart' → 'cart'
+ *   'favorite'      → 'heart'         (Material → Lucide → Ionicons)
+ *   'shopping_cart' → 'cart'
+ *   'arrow_back'    → 'arrow-back'
+ *   'unknown-icon'  → 'ellipse'
+ */
+export function toIoniconsName(raw: string): string {
+  const normalized = raw.toLowerCase().trim()
+
+  // Resolve to Lucide kebab-case first (handles Material Symbols input).
+  let lucide: string
+  if (LUCIDE_TO_IONICONS[normalized]) {
+    lucide = normalized
+  } else if (MATERIAL_TO_LUCIDE[normalized]) {
+    lucide = MATERIAL_TO_LUCIDE[normalized]
+  } else {
+    // Try snake→kebab conversion in case it's a Material name we don't have mapped
+    lucide = normalized.includes('_') ? normalized.replace(/_/g, '-') : normalized
+  }
+
+  return LUCIDE_TO_IONICONS[lucide] ?? 'ellipse'
+}
