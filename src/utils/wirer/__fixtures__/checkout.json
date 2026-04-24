@@ -1,0 +1,79 @@
+{
+  "description": "Checkout flow: Cart → Shipping → Payment → OrderConfirmed. Each screen has a generic 'Continue' button plus a decoy button. Tests that 'shipping'/'payment' tokens in the trigger boost the correct button via Jaccard even when a generic 'Continue' button is present alongside a decoy.",
+  "screens": [
+    {
+      "id": "cart",
+      "name": "Cart",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Cart Items"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Continue to Shipping"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Save for Later"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "shipping",
+      "name": "Shipping",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Shipping Address"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Continue to Payment"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Back"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "payment",
+      "name": "Payment",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Payment Details"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Place Order"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Back"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "orderconfirmed",
+      "name": "OrderConfirmed",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Order Confirmed!"] }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    { "fromScreenId": "cart", "toScreenId": "shipping", "trigger": "Continue to Shipping" },
+    { "fromScreenId": "shipping", "toScreenId": "payment", "trigger": "Continue to Payment" },
+    { "fromScreenId": "payment", "toScreenId": "orderconfirmed", "trigger": "Place Order" }
+  ],
+  "expectedBindings": [
+    { "screenName": "Cart", "buttonText": "Continue to Shipping", "target": "Shipping" },
+    { "screenName": "Shipping", "buttonText": "Continue to Payment", "target": "Payment" },
+    { "screenName": "Payment", "buttonText": "Place Order", "target": "OrderConfirmed" }
+  ]
+}

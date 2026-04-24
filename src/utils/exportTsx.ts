@@ -61,8 +61,8 @@ const RN_SET = new Set(['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity
 
 
 export interface TSXExportOpts {
-  /** Map of button text (lowercase) → target screen PascalCase name for navigation.navigate() */
-  navigationTargets?: Map<string, string>
+  /** Map of ComponentNode → target screen PascalCase name for navigation.navigate() */
+  bindings?: Map<ComponentNode, string>
 }
 
 export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?: TSXExportOpts): string {
@@ -70,7 +70,7 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
   const compName = name.charAt(0).toUpperCase() + name.slice(1)
 
   const ctx: Ctx = { styles: [], usedComponents: new Set(), nameCount: new Map() }
-  const navTargets = opts?.navigationTargets
+  const navTargets = opts?.bindings
   const usesNavigation = { value: false }
   const jsx = nodeJSXWithNav(tree, 0, 0, ctx, '    ', navTargets, usesNavigation)
 
@@ -104,7 +104,7 @@ ${styleLines}
 /** Extended nodeJSX that can inject navigation.navigate() on TouchableOpacity */
 function nodeJSXWithNav(
   node: ComponentNode | string, depth: number, idx: number, ctx: Ctx, indent: string,
-  navTargets: Map<string, string> | undefined,
+  navTargets: Map<ComponentNode, string> | undefined,
   usesNavigation: { value: boolean },
 ): string {
   if (typeof node === 'string') {
@@ -129,15 +129,12 @@ function nodeJSXWithNav(
   const props: string[] = []
   if (sName) props.push(`style={styles.${sName}}`)
 
-  // Check if this TouchableOpacity should navigate
-  if (type === 'TouchableOpacity' && navTargets && navTargets.size > 0) {
-    const btnText = collectAllText(node).toLowerCase()
-    for (const [trigger, target] of navTargets) {
-      if (btnText.includes(trigger)) {
-        props.push(`onPress={() => navigation.navigate('${target}')}`)
-        usesNavigation.value = true
-        break
-      }
+  // Check if this TouchableOpacity should navigate (node-identity lookup)
+  if (type === 'TouchableOpacity' && navTargets) {
+    const target = navTargets.get(node)
+    if (target) {
+      props.push(`onPress={() => navigation.navigate('${target}')}`)
+      usesNavigation.value = true
     }
   }
 
@@ -181,17 +178,4 @@ function nodeJSXWithNav(
   return `${indent}<${type}${propsStr}>\n${cJSX}\n${indent}</${type}>`
 }
 
-/** Collect all text content from a node tree (for button label matching) */
-function collectAllText(node: ComponentNode): string {
-  const parts: string[] = []
-  if (node.children) {
-    for (const child of node.children) {
-      if (typeof child === 'string') parts.push(child.trim())
-      else parts.push(collectAllText(child))
-    }
-  }
-  if (node.props?.children && typeof node.props.children === 'string') {
-    parts.push(node.props.children)
-  }
-  return parts.join(' ')
-}
+

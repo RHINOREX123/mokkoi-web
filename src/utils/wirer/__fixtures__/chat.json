@@ -1,0 +1,67 @@
+{
+  "description": "Chat app: Inbox → Conversation/NewMessage, Conversation → Profile. Tests multiple outgoing connections from one screen (Inbox) to ensure both get bound — the key Map-overwrite bug the wirer was originally fixing.",
+  "screens": [
+    {
+      "id": "inbox",
+      "name": "Inbox",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Messages"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Open Chat"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["New Message"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "conversation",
+      "name": "Conversation",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Chat Thread"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["View Profile"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "newmessage",
+      "name": "NewMessage",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Compose Message"] }
+        ]
+      }
+    },
+    {
+      "id": "profile",
+      "name": "Profile",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["User Profile"] }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    { "fromScreenId": "inbox", "toScreenId": "conversation", "trigger": "Open Chat" },
+    { "fromScreenId": "inbox", "toScreenId": "newmessage", "trigger": "New Message" },
+    { "fromScreenId": "conversation", "toScreenId": "profile", "trigger": "View Profile" }
+  ],
+  "expectedBindings": [
+    { "screenName": "Inbox", "buttonText": "Open Chat", "target": "Conversation" },
+    { "screenName": "Inbox", "buttonText": "New Message", "target": "NewMessage" },
+    { "screenName": "Conversation", "buttonText": "View Profile", "target": "Profile" }
+  ]
+}

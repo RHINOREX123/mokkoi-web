@@ -1,0 +1,89 @@
+{
+  "description": "Food delivery app: Home → Restaurants, Cart, Restaurants → Menu, Menu → Cart, Cart → Checkout. Tests Jaccard success and allTokensPresent boost on stopword-heavy triggers.",
+  "screens": [
+    {
+      "id": "home",
+      "name": "Home",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Welcome to FoodApp"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Browse Restaurants"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["View Cart"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "restaurants",
+      "name": "Restaurants",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Nearby Restaurants"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Open Menu"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "menu",
+      "name": "Menu",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Restaurant Menu"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Add to Cart"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cart",
+      "name": "Cart",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Your Cart"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Checkout"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "checkout",
+      "name": "Checkout",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Order Summary"] }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    { "fromScreenId": "home", "toScreenId": "restaurants", "trigger": "Browse Restaurants" },
+    { "fromScreenId": "home", "toScreenId": "cart", "trigger": "View Cart" },
+    { "fromScreenId": "restaurants", "toScreenId": "menu", "trigger": "Open Menu" },
+    { "fromScreenId": "menu", "toScreenId": "cart", "trigger": "Add to Cart" },
+    { "fromScreenId": "cart", "toScreenId": "checkout", "trigger": "Go to Checkout" }
+  ],
+  "expectedBindings": [
+    { "screenName": "Home", "buttonText": "Browse Restaurants", "target": "Restaurants" },
+    { "screenName": "Home", "buttonText": "View Cart", "target": "Cart" },
+    { "screenName": "Restaurants", "buttonText": "Open Menu", "target": "Menu" },
+    { "screenName": "Menu", "buttonText": "Add to Cart", "target": "Cart" },
+    { "screenName": "Cart", "buttonText": "Checkout", "target": "Checkout" }
+  ]
+}

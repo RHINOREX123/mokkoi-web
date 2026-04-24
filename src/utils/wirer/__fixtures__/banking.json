@@ -1,0 +1,85 @@
+{
+  "description": "Banking app: Home → Accounts/Transfer, Accounts → AccountDetail, Transfer → Confirm. Tests exact and token-overlap matching. 'Send Money' button vs 'Transfer Money' trigger fails Jaccard (1/3 < 0.34) and has no directional verb or target-name fallback → unmatched.",
+  "screens": [
+    {
+      "id": "home",
+      "name": "Home",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Banking Dashboard"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Accounts"] }]
+          },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Send Money"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "accounts",
+      "name": "Accounts",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Your Accounts"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Account Details"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "accountdetail",
+      "name": "AccountDetail",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Account Detail"] }
+        ]
+      }
+    },
+    {
+      "id": "transfer",
+      "name": "Transfer",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Transfer Funds"] },
+          {
+            "type": "TouchableOpacity",
+            "children": [{ "type": "Text", "children": ["Confirm Transfer"] }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "confirm",
+      "name": "Confirm",
+      "tree": {
+        "type": "View",
+        "children": [
+          { "type": "Text", "children": ["Confirmation"] }
+        ]
+      }
+    }
+  ],
+  "connections": [
+    { "fromScreenId": "home", "toScreenId": "accounts", "trigger": "Accounts" },
+    { "fromScreenId": "home", "toScreenId": "transfer", "trigger": "Transfer Money" },
+    { "fromScreenId": "accounts", "toScreenId": "accountdetail", "trigger": "Account Details" },
+    { "fromScreenId": "transfer", "toScreenId": "confirm", "trigger": "Confirm Transfer" }
+  ],
+  "expectedBindings": [
+    { "screenName": "Home", "buttonText": "Accounts", "target": "Accounts" },
+    { "screenName": "Accounts", "buttonText": "Account Details", "target": "AccountDetail" },
+    { "screenName": "Transfer", "buttonText": "Confirm Transfer", "target": "Confirm" }
+  ],
+  "expectedUnmatched": [
+    { "screenName": "Home", "trigger": "Transfer Money", "target": "Transfer" }
+  ]
+}

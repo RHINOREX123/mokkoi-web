@@ -5,6 +5,8 @@
 
 import { convertTreeToTSX } from './exportTsx'
 import { expandComponents } from '../../lib/component-library'
+import { wireScreen } from './wirer'
+import type { ScreenInfo } from './wirer'
 import type { ComponentNode } from '../types/mokkoi'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from '../components/FlowConnectors'
@@ -231,29 +233,28 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   // Detail screens that got bumped from tabs
   const extraDetailIndices = [...tabIndices.slice(5), ...detailIndices]
 
-  // Build navigation targets from connections
-  const connectionMap = new Map<string, string>()
-  if (connections) {
-    for (const conn of connections) {
-      const fromIdx = screens.findIndex(s => s.id === conn.fromScreenId)
-      const toIdx = screens.findIndex(s => s.id === conn.toScreenId)
-      if (fromIdx >= 0 && toIdx >= 0) {
-        connectionMap.set(names[fromIdx], names[toIdx])
-      }
-    }
-  }
+  // Build ScreenInfo array for wirer (uses post-processed trees)
+  const allScreenInfos: ScreenInfo[] = screens.map((s, i) => ({
+    id: s.id,
+    name: names[i],
+    tree: processedTrees[i],
+  }))
 
-  // Generate files for ALL screens (using pre-processed trees)
+  // Generate files for ALL screens (using pre-processed trees + wirer bindings)
   const files: Record<string, { type: string; contents: string }> = {}
+  const allUnmatched: Array<{ trigger: string; target: string; reason: string }> = []
 
   for (let i = 0; i < screens.length; i++) {
     const name = names[i]
-    let navTargets: Map<string, string> | undefined
-    if (connectionMap.has(name)) {
-      navTargets = new Map([[name, connectionMap.get(name)!]])
-    }
-    const tsx = convertTreeToTSX(processedTrees[i], name, { navigationTargets: navTargets })
+    const { bindings, unmatched } = wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
+    allUnmatched.push(...unmatched)
+    const tsx = convertTreeToTSX(processedTrees[i], name, { bindings: bindings.size > 0 ? bindings : undefined })
     files[`screens/${name}.tsx`] = { type: 'CODE', contents: tsx }
+  }
+
+  if (allUnmatched.length > 0) {
+    const preview = allUnmatched.slice(0, 5).map(u => `'${u.trigger}' → ${u.target}`).join(', ')
+    console.info(`[wirer] ${allUnmatched.length} unmatched connection(s): ${preview}`)
   }
 
   // App.tsx — only tab screens get bottom tabs; detail screens are included but not tabbed
