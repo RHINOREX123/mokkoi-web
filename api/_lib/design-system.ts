@@ -31,8 +31,10 @@ CRITICAL FORMAT: styles go in "style", NOT in "props.style". Props are for compo
 Image: use searchQuery (descriptive, 5-10 words like a photo prompt) or avatar (name string for DiceBear).
   searchQuery: {"type":"Image","style":{"width":"100%","height":200},"props":{"searchQuery":"modern gym interior dark moody"}}
   avatar: {"type":"Image","style":{"width":48,"height":48,"borderRadius":9999},"props":{"avatar":"Sarah"}}
-Icon: Google Material Symbols only. {"type":"Icon","props":{"name":"favorite","size":20,"color":"#FF6B6B"}}
-  NEVER use emoji for icons or Lucide-style names.
+Icon: Lucide icon names (kebab-case). {"type":"Icon","props":{"name":"heart","size":20,"color":"#FF6B6B"}}
+  Common names: heart, user, shopping-cart, chevron-right, arrow-left, search, settings, bell, home, star, plus, x, check, trash-2, edit, share, bookmark, send, eye, lock, calendar, clock, map-pin, credit-card, menu.
+  Material Symbols snake_case names (favorite, shopping_cart, chevron_right) also work — they are auto-normalized. Prefer Lucide kebab-case.
+  NEVER use emoji for icons.
 LinearGradient: {"type":"LinearGradient","props":{"colors":["#6366F1","#8B5CF6"],"start":{"x":0,"y":0},"end":{"x":1,"y":1}},"children":[...]}
 SVG ring: {"type":"Svg","style":{"width":56,"height":56},"props":{"viewBox":"0 0 56 56"},"children":[{"type":"Circle","props":{"cx":28,"cy":28,"r":24,"stroke":"#222236","strokeWidth":4,"fill":"none"}},{"type":"Circle","props":{"cx":28,"cy":28,"r":24,"stroke":"#6C5CE7","strokeWidth":4,"fill":"none","strokeDasharray":"151","strokeDashoffset":"38","strokeLinecap":"round"}}]}
   Formula: strokeDasharray=2*pi*r, strokeDashoffset=dasharray*(1-fraction)
