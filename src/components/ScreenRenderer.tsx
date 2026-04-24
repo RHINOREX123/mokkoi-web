@@ -3,8 +3,24 @@ import type { ComponentNode } from '../types/mokkoi'
 import { toMaterialSymbol } from '../utils/iconMap'
 
 // --- Async image loader: calls /api/generate-image backend proxy ---
-// Client-side cache so we don't re-fetch the same query on every re-render
-const imageCache = new Map<string, string>()
+// Client-side cache so we don't re-fetch the same query on every re-render.
+// Also exported so the Snack/Expo export path (snackUrl.ts) can reuse the
+// real Pexels/Unsplash URL the canvas already resolved — eliminates the
+// loremflickr mismatch where Expo Go showed a cat statue for "margherita
+// pizza" while the canvas showed a real pizza photo.
+export const imageCache = new Map<string, string>()
+
+/** Look up any cached real image URL for a given search query, ignoring the
+ * width/height suffix. The canvas caches as `${q}:${w}x${h}` but the Snack
+ * exporter doesn't care about exact dims — Pexels/Unsplash CDN URLs are
+ * responsive and will render at whatever size the phone draws them at. */
+export function getCachedImageUrl(searchQuery: string): string | undefined {
+  const needle = searchQuery.toLowerCase().trim()
+  for (const [key, url] of imageCache) {
+    if (key.toLowerCase().startsWith(needle + ':')) return url
+  }
+  return undefined
+}
 
 function ProxyImage({ searchQuery, width, height, style }: {
   searchQuery: string; width: number; height: number; style: React.CSSProperties

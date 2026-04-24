@@ -535,7 +535,20 @@ function App() {
                           <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} deviceId={screen.deviceId || screens.projectDeviceId} />
                           {directEdit.directEditMode && isActive && directEdit.directEditSelectedEl && (
                             <div data-direct-edit-toolbar="true">
-                              <DirectEditToolbar target={directEdit.directEditSelectedEl} phoneFrameEl={phoneFrameRefs.current.get(screen.id)!} onClose={() => directEdit.setDirectEditSelectedEl(null)} onChanged={() => directEdit.setDirectEditDirty(true)} />
+                              <DirectEditToolbar
+                                target={directEdit.directEditSelectedEl}
+                                phoneFrameEl={phoneFrameRefs.current.get(screen.id)!}
+                                onClose={() => directEdit.setDirectEditSelectedEl(null)}
+                                onChanged={() => directEdit.setDirectEditDirty(true)}
+                                onAskAI={(userPrompt, elementDescription) => {
+                                  // Scoped edit: tell the model EXACTLY which node to touch so it
+                                  // doesn't regenerate the whole screen. The AI still sees the full
+                                  // tree via the edit-mode endpoint; this prompt just narrows scope.
+                                  const scoped = `Edit only the ${elementDescription} on this screen. ${userPrompt}. Do not modify any other element.`
+                                  directEdit.exitDirectEdit(false)
+                                  ai.handleSend(scoped)
+                                }}
+                              />
                             </div>
                           )}
 

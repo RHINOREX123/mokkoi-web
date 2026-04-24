@@ -1,23 +1,57 @@
 import { useState, useRef, useEffect } from 'react'
-import { Type, Palette, Minus, Plus, Move, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react'
+import { Type, Palette, Minus, Plus, Move, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
 
 interface DirectEditToolbarProps {
   target: HTMLElement
   phoneFrameEl: HTMLElement
   onClose: () => void
   onChanged: () => void
+  /** Called when user submits a scoped AI prompt for the selected element. */
+  onAskAI?: (prompt: string, elementDescription: string) => void
+}
+
+/** Build a short human-readable description of an element so the AI knows
+ *  which node on the screen to change. Keep it tight — the AI also sees the
+ *  full tree, we just need a disambiguating hint. */
+function describeElement(el: HTMLElement): string {
+  const tag = el.tagName.toLowerCase()
+  const text = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60)
+  if (text) return `${tag} containing "${text}"`
+  const cls = el.className && typeof el.className === 'string' ? el.className.split(/\s+/)[0] : ''
+  if (cls) return `${tag}.${cls}`
+  return tag
 }
 
 const PRESET_COLORS = [
   '#FFFFFF', '#000000', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899',
 ]
 
-export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged }: DirectEditToolbarProps) {
+export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, onAskAI }: DirectEditToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [showMovePicker, setShowMovePicker] = useState(false)
+  const [showAskAI, setShowAskAI] = useState(false)
+  const [askAIValue, setAskAIValue] = useState('')
   const [customColor, setCustomColor] = useState('#3B82F6')
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const askAIInputRef = useRef<HTMLInputElement>(null)
+
+  const closeAllPopovers = () => {
+    setShowColorPicker(false)
+    setShowSizePicker(false)
+    setShowMovePicker(false)
+    setShowAskAI(false)
+  }
+
+  const submitAskAI = () => {
+    const text = askAIValue.trim()
+    if (!text || !onAskAI) return
+    onAskAI(text, describeElement(target))
+    setAskAIValue('')
+    setShowAskAI(false)
+    // Exit the selection — the AI is taking over this element
+    onClose()
+  }
 
   const isTextElement = ['SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'A', 'LABEL', 'BUTTON'].includes(target.tagName) ||
     (target.childNodes.length > 0 && Array.from(target.childNodes).every(n => n.nodeType === Node.TEXT_NODE))
@@ -296,6 +330,76 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged }: 
           </div>
         )}
       </div>
+
+      {/* Ask AI — scoped edit for the selected element */}
+      {onAskAI && (
+        <div style={{ position: 'relative' }}>
+          <button
+            style={btnStyle}
+            onClick={() => {
+              const next = !showAskAI
+              closeAllPopovers()
+              setShowAskAI(next)
+              if (next) setTimeout(() => askAIInputRef.current?.focus(), 0)
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(129,140,248,0.15)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            title="Ask AI to change this element"
+          >
+            <Sparkles size={12} color="#a5b4fc" />
+            <span style={{ color: '#a5b4fc' }}>Ask AI</span>
+          </button>
+          {showAskAI && (
+            <div
+              style={{
+                position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                marginTop: 6,
+                background: '#1A1A1A', borderRadius: 10,
+                border: '1px solid rgba(129,140,248,0.35)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                padding: 8, width: 260,
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}
+            >
+              <div style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.4 }}>
+                Describe a change to <span style={{ color: '#a5b4fc', fontWeight: 600 }}>{describeElement(target)}</span>
+              </div>
+              <input
+                ref={askAIInputRef}
+                type="text"
+                value={askAIValue}
+                onChange={e => setAskAIValue(e.target.value)}
+                placeholder="e.g. make this bolder, change copy to Join Now"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '6px 8px', borderRadius: 6,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#e2e8f0', fontSize: 11, outline: 'none',
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); submitAskAI() }
+                  if (e.key === 'Escape') { e.preventDefault(); setShowAskAI(false) }
+                }}
+              />
+              <button
+                onClick={submitAskAI}
+                disabled={!askAIValue.trim()}
+                style={{
+                  padding: '5px 10px', borderRadius: 6,
+                  background: askAIValue.trim() ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,0.06)',
+                  border: 'none',
+                  color: askAIValue.trim() ? '#fff' : '#64748b',
+                  fontSize: 11, fontWeight: 600,
+                  cursor: askAIValue.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Send to AI
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Separator */}
       <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.1)', margin: '0 2px' }} />
