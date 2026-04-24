@@ -65,6 +65,11 @@ export function buildPersona(seed: string): Persona {
 // Patterns we treat as "this is a person's name the LLM invented"
 const PERSON_NAME_RE = /^[A-Z][a-z]{1,20}(?:\s[A-Z][a-z]{1,20}){0,2}$/
 const EMAIL_RE = /^[\w.+-]+@[\w.-]+\.[a-z]{2,}$/i
+// Greeting text that contains an inline first name, e.g.
+//   "Hi, Marcus!"  "Hello Sarah"  "Welcome back, Jordan 👋"  "Hey John!"
+// We rewrite just the name portion so the rest of the phrase is preserved.
+// Captures: [1]=greeting word, [2]=comma+space or space, [3]=name, [4]=trailing
+const GREETING_NAME_RE = /^(Hi|Hey|Hello|Welcome(?: back)?|Good\s(?:morning|afternoon|evening))(,?\s+)([A-Z][a-z]{1,20})(\b[\s\S]*)$/
 // Components whose `name`/`user` prop is definitely a person identity (not a
 // product title, restaurant name, etc.). Keep this tight to avoid rewriting
 // e.g. an AppName text node.
@@ -105,13 +110,22 @@ export function applyPersonaToTree(node: unknown, persona: Persona, depth = 0): 
     }
   }
 
-  // Normalize Text children (person-name or email)
+  // Normalize Text children (person-name, greeting with inline name, or email)
   if (n.type === 'Text' && Array.isArray(n.children)) {
     n.children = n.children.map(c => {
       if (typeof c !== 'string') return c
       const trimmed = c.trim()
+      // Full "First Last" name alone in the Text node
       if (PERSON_NAME_RE.test(trimmed) && trimmed.split(' ').length >= 2) return persona.fullName
+      // Email alone
       if (EMAIL_RE.test(trimmed)) return persona.email
+      // Inline greeting — "Hi, Marcus!" → "Hi, <persona.firstName>!"
+      // Preserves the original greeting word, punctuation, and any trailing emoji
+      // so we don't flatten "Hi, Marcus! 👋" into just the name.
+      const g = trimmed.match(GREETING_NAME_RE)
+      if (g) {
+        return `${g[1]}${g[2]}${persona.firstName}${g[4]}`
+      }
       return c
     })
   }
