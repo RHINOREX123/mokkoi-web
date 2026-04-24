@@ -3,6 +3,7 @@ import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan
 import { normalizeComponentTree } from './_lib/normalizer.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, buildPlannerSystem } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
+import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
 
 const FLOW_SYSTEM_PROMPT = `You are a world-class mobile UI designer and React Native expert. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
@@ -385,13 +386,21 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       return res.end()
     }
 
+    // Bug 2: derive ONE persona per app so avatars, greetings, and the Profile
+    // page all reference the same user. Deterministic from appName, so
+    // re-generating the same app gives the same user.
+    const persona = buildPersona(plan.appName || prompt)
+
     const normalizedScreens = screens.map((s: any, i: number) => {
       const screenId = crypto.randomUUID()
+      const tree = normalizeComponentTree(s.tree || { type: 'View', style: {}, children: [] })
+      // Walk the tree and replace any invented person-name/email with the shared persona.
+      applyPersonaToTree(tree, persona)
       const normalized = {
         id: screenId,
         planId: s.id || plan.screens[i]?.id || `screen-${i + 1}`,
         name: s.name || plan.screens[i]?.name || `Screen ${i + 1}`,
-        tree: normalizeComponentTree(s.tree || { type: 'View', style: {}, children: [] }),
+        tree,
       }
       sendSSE(res, { type: 'screen', index: i, screen: { id: normalized.id, name: normalized.name, tree: normalized.tree } })
       sendSSE(res, { type: 'status', phase: 'generating', message: `Generated ${normalized.name} (${i + 1}/${screenCount})`, current: i + 1, total: screenCount })

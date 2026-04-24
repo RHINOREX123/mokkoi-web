@@ -10,6 +10,7 @@ import type { ScreenInfo } from './wirer'
 import type { ComponentNode } from '../types/mokkoi'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from '../components/FlowConnectors'
+import { getCachedImageUrl } from '../components/ScreenRenderer'
 
 // ─── FIX 1: Image URL replacement (loremflickr keyword-locked) ───
 //
@@ -56,12 +57,21 @@ function replaceImageSources(node: ComponentNode): ComponentNode {
   if (node.type === 'Image' && node.props) {
     const props = { ...node.props }
     if (props.searchQuery) {
-      // Keyword-driven, deterministic image URL. Lock pins the image so the
-      // same query always returns the same photo (stable across Snack reloads).
       const query = String(props.searchQuery)
-      const tags = toLoremflickrTags(query)
-      const lock = hashString(query) % 1_000_000 // keep URL short
-      props.source = { uri: `https://loremflickr.com/400/300/${tags}?lock=${lock}` }
+      // Bug 3: prefer the real Pexels/Unsplash URL the canvas already resolved
+      // via /api/generate?action=image. Those are public CDN URLs that Expo Go
+      // can load directly — and they match the canvas exactly, eliminating the
+      // "canvas shows pizza, Expo Go shows a cat" surprise. We only fall back
+      // to loremflickr if the canvas never resolved this query (e.g. user hit
+      // Preview before the image finished loading).
+      const cached = getCachedImageUrl(query)
+      if (cached) {
+        props.source = { uri: cached }
+      } else {
+        const tags = toLoremflickrTags(query)
+        const lock = hashString(query) % 1_000_000
+        props.source = { uri: `https://loremflickr.com/400/300/${tags}?lock=${lock}` }
+      }
       delete props.searchQuery
     } else if (props.avatar) {
       const name = String(props.avatar)
@@ -182,39 +192,81 @@ function toPascalCase(name: string): string {
   return result
 }
 
-const FILLER_WORDS = new Set(['create', 'a', 'an', 'the', 'build', 'me', 'make', 'design', 'generate', 'screen', 'for', 'with', 'app', 'page', 'style', 'that'])
-function toShortLabel(name: string): string {
+const FILLER_WORDS = new Set(['create', 'a', 'an', 'the', 'build', 'me', 'make', 'design', 'generate', 'screen', 'for', 'with', 'app', 'page', 'style', 'that', 'delivery', 'tracking'])
+/** Names that look like the user's original prompt rather than a screen title.
+ * These should fall back to "Home" when they appear at screen index 0. */
+function looksLikePromptNotName(name: string): boolean {
+  const wordCount = name.trim().split(/\s+/).length
+  if (wordCount >= 4) return true                            // "Build a food delivery app"
+  if (/^(build|create|make|design|generate)\b/i.test(name)) return true
+  return false
+}
+function toShortLabel(name: string, fallback = 'Screen'): string {
+  if (looksLikePromptNotName(name)) return fallback
   const words = name
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .split(/\s+/)
     .filter(w => w.length > 0 && !FILLER_WORDS.has(w.toLowerCase()))
-  if (words.length === 0) return name.slice(0, 12).trim() || 'Screen'
+  if (words.length === 0) return name.slice(0, 12).trim() || fallback
   return words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase()
 }
 
-/** Map screen name to a tab emoji icon */
-const TAB_ICONS: Record<string, string> = {
-  home: '🏠', feed: '🏠', dashboard: '🏠',
-  explore: '🔍', search: '🔍', discover: '🔍', browse: '🔍',
-  messages: '💬', chat: '💬', inbox: '💬', conversations: '💬',
-  profile: '👤', account: '👤', me: '👤', user: '👤',
-  notifications: '🔔', alerts: '🔔', activity: '🔔',
-  cart: '🛒', bag: '🛒', basket: '🛒', order: '🛒', orders: '🛒',
-  settings: '⚙️', preferences: '⚙️',
-  favorites: '❤️', saved: '❤️', wishlist: '❤️', likes: '❤️',
-  workouts: '💪', fitness: '💪', exercise: '💪', training: '💪',
-  progress: '📊', stats: '📊', analytics: '📊', tracking: '📊',
-  library: '📚', recipes: '🍳', menu: '🍽️', restaurants: '🍔',
-  music: '🎵', player: '🎵', playlists: '🎵',
-  wallet: '💳', finance: '💳', banking: '💳', cards: '💳',
-  map: '📍', location: '📍', nearby: '📍',
-}
+/** Map screen name to a tab emoji icon.
+ *
+ * Match uses WORD BOUNDARIES, not substring. Previously `.includes("me")` was
+ * matching "menu" → mapped Restaurant Menu to the 👤 profile icon. Same class
+ * of bug would hit "bag" in "baggage", "map" in "shampoo", etc. Word-boundary
+ * regex eliminates the false positives. Entries are evaluated in order so put
+ * more specific/longer keys first. */
+const TAB_ICON_ENTRIES: Array<[string, string]> = [
+  ['restaurants', '🍔'], ['restaurant', '🍔'], ['recipes', '🍳'],
+  ['menu', '🍽️'], ['food', '🍔'], ['dishes', '🍽️'],
+  ['home', '🏠'], ['feed', '🏠'], ['dashboard', '🏠'],
+  ['explore', '🔍'], ['search', '🔍'], ['discover', '🔍'], ['browse', '🔍'],
+  ['messages', '💬'], ['chat', '💬'], ['inbox', '💬'], ['conversations', '💬'],
+  ['profile', '👤'], ['account', '👤'], ['user', '👤'],
+  ['notifications', '🔔'], ['alerts', '🔔'], ['activity', '🔔'],
+  ['orders', '🛒'], ['order', '🛒'], ['cart', '🛒'], ['bag', '🛒'], ['basket', '🛒'], ['checkout', '🛒'],
+  ['settings', '⚙️'], ['preferences', '⚙️'],
+  ['favorites', '❤️'], ['saved', '❤️'], ['wishlist', '❤️'], ['likes', '❤️'],
+  ['workouts', '💪'], ['fitness', '💪'], ['exercise', '💪'], ['training', '💪'],
+  ['progress', '📊'], ['stats', '📊'], ['analytics', '📊'], ['tracking', '📊'],
+  ['library', '📚'],
+  ['music', '🎵'], ['player', '🎵'], ['playlists', '🎵'],
+  ['wallet', '💳'], ['finance', '💳'], ['banking', '💳'], ['cards', '💳'],
+  ['map', '📍'], ['location', '📍'], ['nearby', '📍'],
+]
 function getTabIcon(name: string): string {
   const lower = name.toLowerCase()
-  for (const [key, icon] of Object.entries(TAB_ICONS)) {
-    if (lower.includes(key)) return icon
+  for (const [key, icon] of TAB_ICON_ENTRIES) {
+    const re = new RegExp(`\\b${key}\\b`, 'i')
+    if (re.test(lower)) return icon
   }
   return '📱'
+}
+
+/** Find the index of the home/landing screen.
+ *
+ * The planner emits an `isHome` flag but we don't currently thread it through
+ * to the client, so we detect heuristically. Without this the first-emitted
+ * screen wins tab position 0, which may be a random detail/landing variant
+ * that the LLM happened to produce first. Order of preference:
+ *   1. Exact name "Home" / "home"
+ *   2. Name contains word "home", "feed", or "dashboard"
+ *   3. Explicit param (for future homeScreenId threading)
+ *   4. First screen index. */
+function findHomeIndex(screens: GeneratedScreen[], homeScreenId?: string): number {
+  if (homeScreenId) {
+    const idx = screens.findIndex(s => s.id === homeScreenId)
+    if (idx !== -1) return idx
+  }
+  for (let i = 0; i < screens.length; i++) {
+    if (screens[i].name.trim().toLowerCase() === 'home') return i
+  }
+  for (let i = 0; i < screens.length; i++) {
+    if (/\b(home|feed|dashboard)\b/i.test(screens[i].name)) return i
+  }
+  return 0
 }
 
 function deduplicateNames(names: string[]): string[] {
@@ -232,6 +284,11 @@ export interface SnackFilesOpts {
   projectName: string
   screens: GeneratedScreen[]
   connections?: FlowConnection[]
+  /** Optional explicit home screen id from the planner. If omitted we fall back
+   *  to heuristic name-matching ("Home"/"Feed"/"Dashboard"), then index 0.
+   *  Ensures Expo Go opens to the same first screen as the Mokkoi canvas
+   *  instead of whichever screen the LLM happened to emit first. */
+  homeScreenId?: string
 }
 
 export interface SnackPayload {
@@ -241,12 +298,25 @@ export interface SnackPayload {
 }
 
 export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
-  const { projectName, screens, connections } = opts
+  const { projectName, screens, connections, homeScreenId } = opts
 
   if (screens.length === 0) throw new Error('No screens to preview')
 
-  // Build screen names
-  const rawNames = screens.map(s => toPascalCase(s.name))
+  // Bug 1: identify the home screen so App.tsx opens to it first. The planner
+  // emits an isHome flag but only the explicit id (when threaded through) is
+  // authoritative; otherwise we fall back to heuristic detection.
+  const homeIdx = findHomeIndex(screens, homeScreenId)
+
+  // Build screen names. If the first-emitted screen's name looks like the
+  // user's original prompt ("Build a food delivery app"), rewrite it to "Home"
+  // so the generated file and tab label are sensible.
+  const rewrittenScreens = screens.map((s, i) => {
+    if (i === homeIdx && looksLikePromptNotName(s.name)) {
+      return { ...s, name: 'Home' }
+    }
+    return s
+  })
+  const rawNames = rewrittenScreens.map(s => toPascalCase(s.name))
   const names = deduplicateNames(rawNames)
 
   // Pre-process trees for Snack (expand, fix images, clean) so we can check content
@@ -261,19 +331,27 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const tabIndices: number[] = []
   const detailIndices: number[] = []
   for (let i = 0; i < screens.length; i++) {
-    if (isDetailScreen(screens[i].name) || isEmptyScreen(processedTrees[i])) {
+    if (isDetailScreen(rewrittenScreens[i].name) || isEmptyScreen(processedTrees[i])) {
       detailIndices.push(i)
     } else {
       tabIndices.push(i)
     }
+  }
+  // Bug 1: promote the home screen to tab position 0 if it's a tab candidate.
+  // This is what makes Expo Go open to Home instead of whichever screen the
+  // LLM happened to emit first.
+  const homeTabPos = tabIndices.indexOf(homeIdx)
+  if (homeTabPos > 0) {
+    tabIndices.splice(homeTabPos, 1)
+    tabIndices.unshift(homeIdx)
   }
   // Cap tab screens at 5
   const finalTabIndices = tabIndices.slice(0, 5)
   // Detail screens that got bumped from tabs
   const extraDetailIndices = [...tabIndices.slice(5), ...detailIndices]
 
-  // Build ScreenInfo array for wirer (uses post-processed trees)
-  const allScreenInfos: ScreenInfo[] = screens.map((s, i) => ({
+  // Build ScreenInfo array for wirer (uses post-processed trees + rewritten names)
+  const allScreenInfos: ScreenInfo[] = rewrittenScreens.map((s, i) => ({
     id: s.id,
     name: names[i],
     tree: processedTrees[i],
@@ -300,10 +378,12 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
   const allIndices = [...finalTabIndices, ...extraDetailIndices]
   const imports = allIndices.map(i => `import ${names[i]}Screen from './screens/${names[i]}';`).join('\n')
 
-  // Tab screens array + labels + icons (only main screens)
+  // Tab screens array + labels + icons (only main screens). Use rewrittenScreens
+  // so the home tab (if its original name was the user's prompt) shows "Home"
+  // with the 🏠 icon rather than a garbled label like "Food" 📱.
   const tabScreenArray = finalTabIndices.map(i => `${names[i]}Screen`).join(', ')
-  const realLabels = finalTabIndices.map(i => toShortLabel(screens[i].name))
-  const realIcons = finalTabIndices.map(i => getTabIcon(screens[i].name))
+  const realLabels = finalTabIndices.map(i => toShortLabel(rewrittenScreens[i].name))
+  const realIcons = finalTabIndices.map(i => getTabIcon(rewrittenScreens[i].name))
 
   // FIX 3: Always render a tab bar so single-screen previews still look like a
   // real mobile app (matching the canvas). When only one real tab exists, pad
@@ -329,7 +409,7 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
 
   // All screens array (tabs first, then details) for index-based access
   const allScreenArray = allIndices.map(i => `${names[i]}Screen`).join(', ')
-  const allLabelsArray = allIndices.map(i => `'${toShortLabel(screens[i].name)}'`).join(', ')
+  const allLabelsArray = allIndices.map(i => `'${toShortLabel(rewrittenScreens[i].name)}'`).join(', ')
 
   const hasDetailScreens = extraDetailIndices.length > 0
 

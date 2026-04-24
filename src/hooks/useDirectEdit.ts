@@ -130,15 +130,31 @@ export function useDirectEdit(deps: DirectEditDeps): DirectEdit {
     target.removeAttribute('data-de-hover')
   }, [directEditMode])
 
-  // Escape key to exit direct edit
+  // Escape key:
+  //  - If something is selected, first Escape deselects (keeps direct-edit mode on
+  //    so the user can pick another element).
+  //  - If nothing is selected, Escape exits direct-edit mode.
+  //  Also skips when focus is in an editable field so we don't nuke their typing.
   useEffect(() => {
     if (!directEditMode) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') exitDirectEdit(false)
+      if (e.key !== 'Escape') return
+      const active = document.activeElement as HTMLElement | null
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+        // Let the input handle its own Escape (e.g. Ask AI popover input)
+        return
+      }
+      if (directEditSelectedEl) {
+        directEditSelectedEl.style.outline = ''
+        directEditSelectedEl.removeAttribute('data-de-selected')
+        setDirectEditSelectedEl(null)
+        return
+      }
+      exitDirectEdit(false)
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [directEditMode, exitDirectEdit])
+  }, [directEditMode, directEditSelectedEl, exitDirectEdit])
 
   return {
     directEditMode,
