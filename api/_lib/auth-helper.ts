@@ -344,7 +344,7 @@ export function logUsage(params: {
   tokensOut?: number
   cacheReadTokens?: number
   cacheCreationTokens?: number
-  generationType: 'new_screen' | 'edit' | 'flow' | 'variation' | 'regenerate'
+  generationType: 'new_screen' | 'edit' | 'flow' | 'variation' | 'regenerate' | 'app' | 'screenshot'
   promptPreview?: string
   success: boolean
 }): void {
