@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './_lib/auth-helper.js'
 import { normalizeComponentTree } from './_lib/normalizer.js'
-import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, APP_PLANNER_SYSTEM_PROMPT, buildPlannerSystem } from './_lib/design-system.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, buildPlannerSystem } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
 
 const FLOW_SYSTEM_PROMPT = `You are a world-class mobile UI designer and React Native expert. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
@@ -418,7 +418,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
 
     sendSSE(res, {
       type: 'complete',
-      screens: normalizedScreens.map(s => ({ id: s.id, name: s.name, tree: s.tree })),
+      screens: normalizedScreens.map((s: { id: string; name: string; tree: unknown }) => ({ id: s.id, name: s.name, tree: s.tree })),
       connections, homeScreenId, appName: plan.appName,
       modelUsed: genModel.includes('sonnet') ? 'Sonnet' : 'Haiku',
     })
