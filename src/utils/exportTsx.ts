@@ -2,7 +2,7 @@
 // Produces copy-pasteable React Native .tsx with StyleSheet.create().
 
 import type { ComponentNode } from '../types/mokkoi'
-import { toLucidePascal } from './iconMap'
+import { toIoniconsName } from './iconMap'
 
 function sanitize(s: string): string {
   return s.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_').slice(0, 25)
@@ -24,7 +24,7 @@ interface StyleEntry { name: string; value: Record<string, unknown> }
 interface Ctx {
   styles: StyleEntry[]
   usedComponents: Set<string>
-  lucideIcons: Set<string>
+  usesIonicons: boolean
   nameCount: Map<string, number>
 }
 
@@ -71,7 +71,7 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
   const name = screenName ? screenName.replace(/[^a-zA-Z0-9]/g, '') + 'Screen' : 'GeneratedScreen'
   const compName = name.charAt(0).toUpperCase() + name.slice(1)
 
-  const ctx: Ctx = { styles: [], usedComponents: new Set(), lucideIcons: new Set(), nameCount: new Map() }
+  const ctx: Ctx = { styles: [], usedComponents: new Set(), usesIonicons: false, nameCount: new Map() }
   const navTargets = opts?.bindings
   const usesNavigation = { value: false }
   const jsx = nodeJSXWithNav(tree, 0, 0, ctx, '    ', navTargets, usesNavigation)
@@ -83,10 +83,12 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
   const navImport = usesNavigation.value ? "\nimport { useNavigation } from '@react-navigation/native';" : ''
   const navHook = usesNavigation.value ? '\n  const navigation = useNavigation();\n' : ''
 
-  // Emit `import { Heart, User } from 'lucide-react-native';` when any Icon was used.
-  // Sorted for deterministic output (stable snapshots).
-  const lucideImport = ctx.lucideIcons.size > 0
-    ? `\nimport { ${[...ctx.lucideIcons].sort().join(', ')} } from 'lucide-react-native';`
+  // Emit `import { Ionicons } from '@expo/vector-icons';` when any Icon was used.
+  // @expo/vector-icons is pre-bundled in every Expo Snack SDK — no peer-dep
+  // resolution, no version conflicts with react-native-svg. Single import
+  // regardless of how many distinct icons appear in the tree.
+  const iconsImport = ctx.usesIonicons
+    ? `\nimport { Ionicons } from '@expo/vector-icons';`
     : ''
 
   const styleLines = ctx.styles.map(({ name: n, value }) => {
@@ -95,7 +97,7 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
   }).join('\n')
 
   return `import React from 'react';
-import { ${imports.join(', ')} } from 'react-native';${navImport}${lucideImport}
+import { ${imports.join(', ')} } from 'react-native';${navImport}${iconsImport}
 
 export default function ${compName}() {${navHook}
   return (
@@ -123,16 +125,20 @@ function nodeJSXWithNav(
   }
   if (!node || typeof node !== 'object') return ''
 
-  // --- Icon: emit a lucide-react-native component, never silently fall back to View ---
+  // --- Icon: emit an @expo/vector-icons Ionicons component, never silently
+  //     fall back to View. Ionicons is pre-bundled in Expo Snack, so no
+  //     runtime crash like we saw with lucide-react-native + react-native-svg
+  //     version mismatches ("Cannot read property 'ReactCurrentOwner' of
+  //     undefined"). Unknown icon names map to 'ellipse' (a plain circle).
   if (node.type === 'Icon') {
-    const rawName = (node.props?.name as string) ?? 'circle'
+    const rawName = (node.props?.name as string) ?? 'ellipse'
     const iconSize = (node.props?.size as number) ?? 24
     const iconColor = (node.props?.color as string) ?? '#FFFFFF'
-    const componentName = toLucidePascal(rawName)
-    ctx.lucideIcons.add(componentName)
+    const ioniconName = toIoniconsName(rawName)
+    ctx.usesIonicons = true
     const colorAttr = ` color="${iconColor.replace(/"/g, '\\"')}"`
     const sizeAttr = ` size={${iconSize}}`
-    return `${indent}<${componentName}${sizeAttr}${colorAttr} />`
+    return `${indent}<Ionicons name="${ioniconName}"${sizeAttr}${colorAttr} />`
   }
 
   let type = node.type
