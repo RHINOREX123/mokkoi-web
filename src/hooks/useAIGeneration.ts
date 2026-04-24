@@ -9,18 +9,23 @@ import { GAP } from '../components/FlowConnectors'
 import { getCanvasDimensions } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
 
-const APP_KEYWORDS = [
-  'build me', 'build an app', 'create an app', 'make me an app',
-  'full app', 'complete app', 'entire app', 'whole app',
-  'app with', 'mobile app', 'app that', 'app for',
-]
+// Intent detection regexes. The old substring lists (e.g. 'build an app', 'flow')
+// missed common phrasing like "Build a food delivery app" — 'build a X app' never
+// matched 'build an app', so a multi-screen prompt routed to single-screen generation.
+// These regexes require a create verb + article + an optional short modifier run +
+// an app-category noun (or literal 'flow'), which matches natural phrasing reliably.
 
-const FLOW_KEYWORDS = [
-  'flow', 'onboarding', 'walkthrough', 'multi-screen',
-  'series of screens', 'connected screens', 'user journey',
-  'navigation flow', 'multi screen', 'multiple screens', 'screen flow',
-  'app flow', 'checkout flow', 'signup flow', 'sign up flow',
-]
+// Short-circuit: if the user explicitly names a single-screen artifact, skip app/flow
+// routing even if they also say 'app'. Acceptable v1 edge: "todo app with a login
+// screen" will fall through to single-screen — flagged for post-YC refinement.
+const SINGLE_SCREEN_NOUN_PATTERN = /\b(screen|page|card|modal|dialog|widget|state|component|form|section|popup|tooltip|banner|header|footer|sidebar)\b/i
+
+// App-category nouns cover the common archetypes users actually ask for. Expanded
+// per product review to include podcast/music clients, wallets, reader/book apps,
+// content hubs/feeds, and studio-style tools.
+const APP_INTENT_PATTERN = /\b(build|create|make|design|generate)\s+(?:me\s+)?(?:a|an)\s+(?:\S+\s+){0,4}\b(app|tracker|dashboard|platform|tool|manager|planner|organizer|journal|diary|client|player|wallet|reader|book|hub|feed|studio)\b/i
+
+const FLOW_INTENT_PATTERN = /\b(build|create|make|design|generate)\s+(?:me\s+)?(?:a|an)\s+(?:\S+\s+){0,4}\bflow\b/i
 
 const EDIT_KEYWORDS = [
   'change the', 'update the', 'modify', 'remove', 'add to', 'make it', 'make this',
@@ -40,14 +45,17 @@ const CREATE_KEYWORDS = [
 const STRONG_CREATE_PATTERN = /\b(create|build|design|generate)\s+(a|an|me)\b/i
 const STRONG_NEW_PATTERN = /\bnew\b/i
 
-function isAppPrompt(prompt: string): boolean {
-  const lower = prompt.toLowerCase()
-  return APP_KEYWORDS.some(kw => lower.includes(kw))
+// Exported for unit testing (src/hooks/__tests__/intent-detection.test.ts).
+// Keep in lock-step with the regex patterns above.
+export function isAppPrompt(prompt: string): boolean {
+  // If the prompt names a single-screen artifact (screen/page/card/modal/…),
+  // route to single-screen generation even if 'app' appears elsewhere.
+  if (SINGLE_SCREEN_NOUN_PATTERN.test(prompt)) return false
+  return APP_INTENT_PATTERN.test(prompt)
 }
 
-function isFlowPrompt(prompt: string): boolean {
-  const lower = prompt.toLowerCase()
-  return FLOW_KEYWORDS.some(kw => lower.includes(kw))
+export function isFlowPrompt(prompt: string): boolean {
+  return FLOW_INTENT_PATTERN.test(prompt)
 }
 
 function isEditIntent(prompt: string): boolean {
