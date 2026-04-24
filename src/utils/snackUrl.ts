@@ -311,6 +311,11 @@ export default function App() {
 
   const dependencies: Record<string, { version: string }> = {
     'expo-status-bar': { version: '~1.11.1' },
+    // lucide-react-native renders Icon components; react-native-svg is its peer dep.
+    // Expo Snack pins react-native-svg to the version it bundles, but declaring it
+    // explicitly avoids "peer dep missing" warnings on some SDK versions.
+    'lucide-react-native': { version: '^0.469.0' },
+    'react-native-svg': { version: '15.2.0' },
   }
 
   return {
