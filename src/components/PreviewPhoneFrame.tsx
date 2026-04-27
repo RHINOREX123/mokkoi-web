@@ -1,6 +1,8 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { PhoneFrame } from './PhoneFrame'
 import { usePreviewNavigation } from '../hooks/usePreviewNavigation'
+import { computeFitScale } from '../utils/computeFitScale'
+import { getDevicePreset } from '../constants/devices'
 import type { FlowConnection } from './FlowConnectors'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { ComponentNode } from '../types/mokkoi'
@@ -31,16 +33,22 @@ interface PreviewPhoneFrameProps {
   isStreaming?: boolean
   /** Partial tree during streaming generation. */
   streamingTree?: ComponentNode | null
+  /** When non-null, overrides auto-fit. Driven by the PreviewToolbar zoom controls.
+   *  Auto-fit (the default) computes 0.92 × min(W/dw, H/dh), capped at 1. */
+  manualZoom?: number | null
+  /** Reports the current effective scale up so the toolbar can show "60%" etc.
+   *
+   *  CONTRACT: must be referentially stable across parent renders (use the
+   *  raw `useState` setter or wrap in `useCallback`). This is listed in an
+   *  effect's deps; an unstable callback would fire the effect every render
+   *  and — combined with state lifts in the parent — could trigger an
+   *  infinite render loop. */
+  onScaleChange?: (scale: number) => void
 }
 
-/** Single big phone frame for Preview mode. Renders the active screen's
- *  tree and intercepts button clicks to perform in-phone navigation via
- *  the project's FlowConnections.
- *
- *  Loading state is delegated to PhoneFrame, which already renders a
- *  ShimmerSkeleton when isGenerating is true. We additionally gate
- *  click-driven navigation while a generation is in progress so taps
- *  don't fire stale connections. */
+/** Single big phone frame for Preview mode. Auto-fits to container size by
+ *  default; can be overridden via the manualZoom prop. Renders the active
+ *  screen's tree and intercepts button clicks for in-phone navigation. */
 export function PreviewPhoneFrame({
   screens,
   connections,
@@ -50,13 +58,42 @@ export function PreviewPhoneFrame({
   isGenerating = false,
   isStreaming = false,
   streamingTree = null,
+  manualZoom = null,
+  onScaleChange,
 }: PreviewPhoneFrameProps) {
   const nav = usePreviewNavigation(activeScreenId, connections)
+  const observerRef = useRef<ResizeObserver | null>(null)
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
 
-  // Sync external activeScreenId → internal nav state when the parent
-  // changes it (e.g. user clicks SCREENS in the hamburger menu).
-  // Deps include nav.navigateTo (stable from useCallback []) instead of
-  // the whole nav object — that one is a fresh reference every render.
+  // Callback ref — (re-)attaches the ResizeObserver every time the wrapper
+  // div mounts. We can't use a `useEffect(() => {...}, [])` + `useRef` here
+  // because that effect runs once on mount; if the FIRST render hits the
+  // empty-state branch (no activeScreen → no wrapper rendered), the effect
+  // runs against `null` and never re-fires. When the wrapper later mounts,
+  // no observer would attach, `containerSize` would stay {0,0}, and the
+  // phone would be permanently hidden by the `visibility: hidden` guard
+  // below. A callback ref is invoked by React on every DOM mount/unmount,
+  // which avoids that dead-state. The deps `[]` keep the function reference
+  // stable so React doesn't treat each render as a new ref and thrash the
+  // observer.
+  const setWrapperRef = useCallback((el: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
+    }
+    if (el) {
+      const ro = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect
+          setContainerSize({ w: width, h: height })
+        }
+      })
+      ro.observe(el)
+      observerRef.current = ro
+    }
+  }, [])
+
+  // Sync external activeScreenId → internal nav state.
   useEffect(() => {
     if (nav.currentScreenId !== activeScreenId) {
       nav.navigateTo(activeScreenId)
@@ -73,9 +110,20 @@ export function PreviewPhoneFrame({
   }, [nav.currentScreenId, activeScreenId, onActiveScreenChange])
 
   const activeScreen = screens.find(s => s.id === nav.currentScreenId)
+  const deviceId = activeScreen?.deviceId || projectDeviceId
+  const device = getDevicePreset(deviceId || 'iphone-standard')
+  const scale = computeFitScale({
+    container: containerSize,
+    device: { w: device.width, h: device.height },
+    manualZoom,
+  })
 
-  // Intercept button clicks anywhere inside the phone frame.
-  // Disabled while generation is in progress (spec edge case).
+  // Report effective scale up so the toolbar can show "60%".
+  useEffect(() => {
+    onScaleChange?.(scale)
+  }, [scale, onScaleChange])
+
+  // Intercept button clicks for in-phone navigation.
   const onClickCapture = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (isGenerating) return
@@ -109,13 +157,25 @@ export function PreviewPhoneFrame({
 
   return (
     <div
+      ref={setWrapperRef}
       onClickCapture={onClickCapture}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: '100%', height: '100%', padding: 24, overflow: 'auto',
+        width: '100%', height: '100%', overflow: 'hidden',
       }}
     >
-      <div data-screen-id={activeScreen.id}>
+      <div
+        data-screen-id={activeScreen.id}
+        style={{
+          width: device.width,
+          height: device.height,
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          // While container hasn't been measured yet, hide to avoid a 1.0-flash
+          visibility: containerSize.w === 0 ? 'hidden' : 'visible',
+          flexShrink: 0,
+        }}
+      >
         <PhoneFrame
           mode="preview"
           generatedTree={!isImage ? activeScreen.tree : undefined}

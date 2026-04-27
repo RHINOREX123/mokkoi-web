@@ -92,6 +92,8 @@ function getUserFriendlyError(error: unknown): string {
     return 'Payment processing error. Please try again or contact support.'
   if (message.includes('Missing or invalid prompt'))
     return 'Please provide a screen description and try again.'
+  if (message.includes('AI_BRIEF_ONLY_NO_JSON') || message.includes('AI returned invalid JSON'))
+    return 'The AI got stuck mid-response. Please try regenerating.'
   if (message.includes('abort') || message.includes('cancel'))
     return 'Generation cancelled.'
 

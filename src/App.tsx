@@ -2,7 +2,8 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
 import { PreviewPhoneFrame } from './components/PreviewPhoneFrame'
-import { getCanvasDimensions } from './constants/devices'
+import { PreviewToolbar } from './components/PreviewToolbar'
+import { getCanvasDimensions, type DeviceId } from './constants/devices'
 import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
@@ -101,6 +102,25 @@ function App() {
   const toggleViewMode = useCallback(() => {
     setViewMode(m => m === 'preview' ? 'canvas-editor' : 'preview')
   }, [])
+
+  // Preview toolbar state — lifted from PreviewPhoneFrame so the toolbar can
+  // read the effective scale and override it via manual zoom controls.
+  const [previewManualZoom, setPreviewManualZoom] = useState<number | null>(null)
+  const [previewEffectiveScale, setPreviewEffectiveScale] = useState(1)
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0)
+
+  // When the user changes the device from PreviewToolbar, write to the active
+  // screen's per-screen override if there is one, otherwise to the project-level
+  // default. This keeps the toolbar's `deviceId` and the rendered phone in sync,
+  // since PreviewPhoneFrame uses `activeScreen.deviceId || projectDeviceId`.
+  const handlePreviewDeviceChange = useCallback((deviceId: DeviceId) => {
+    if (screens.activeGeneratedId) {
+      screens.setScreenDeviceId(screens.activeGeneratedId, deviceId)
+    } else {
+      screens.setProjectDeviceId(deviceId)
+    }
+    setPreviewManualZoom(null) // re-fit on device swap
+  }, [screens])
 
   // Resizable panel
   const [splitRatio, setSplitRatio] = useState(0.28)
@@ -508,9 +528,13 @@ function App() {
             onDragOver={handleCanvasDragOver} onDragLeave={handleCanvasDragLeave} onDrop={handleCanvasDrop}
             style={{
               width: `${(1 - splitRatio) * 100}%`, position: 'relative', overflow: 'hidden',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backgroundColor: '#E8E8E8', backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)',
-              backgroundSize: '24px 24px', backgroundPosition: `${canvas.panOffset.x}px ${canvas.panOffset.y}px`,
+              display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start',
+              backgroundColor: viewMode === 'preview' ? '#FAFAFA' : '#EEF0FA',
+              backgroundImage: viewMode === 'preview'
+                ? 'none'
+                : 'radial-gradient(circle, rgba(99,102,241,0.22) 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+              backgroundPosition: viewMode === 'preview' ? '0 0' : `${canvas.panOffset.x}px ${canvas.panOffset.y}px`,
               cursor: canvas.canvasCursor,
             }}>
             {canvasDragOver && (
@@ -522,50 +546,45 @@ function App() {
             )}
 
             {!screens.hasScreens && !ai.isGenerating && referenceImages.length === 0 ? (
-              <div data-canvas-bg="true" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, pointerEvents: 'none', userSelect: 'none', transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)` }}>
+              <div data-canvas-bg="true" style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, pointerEvents: 'none', userSelect: 'none', transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)` }}>
                 <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>Your designs will appear here</span>
               </div>
             ) : (
               <>
                 {viewMode === 'preview' && (
-                  <PreviewPhoneFrame
-                    screens={screens.generatedScreens.filter(s => s.tree || s.imageUrl)}
-                    connections={screens.connections}
-                    activeScreenId={screens.activeGeneratedId || ''}
-                    onActiveScreenChange={screens.setActiveGeneratedId}
-                    projectDeviceId={screens.projectDeviceId}
-                    isGenerating={ai.isGenerating}
-                    isStreaming={ai.isStreaming}
-                    streamingTree={ai.partialTree}
-                  />
+                  <>
+                    <PreviewToolbar
+                      deviceId={screens.activeDeviceId}
+                      onDeviceChange={handlePreviewDeviceChange}
+                      effectiveScale={previewEffectiveScale}
+                      manualZoom={previewManualZoom}
+                      onZoomChange={setPreviewManualZoom}
+                      onRefresh={() => setPreviewRefreshKey(k => k + 1)}
+                    />
+                    <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                      <PreviewPhoneFrame
+                        key={previewRefreshKey}
+                        screens={screens.generatedScreens.filter(s => s.tree || s.imageUrl)}
+                        connections={screens.connections}
+                        activeScreenId={screens.activeGeneratedId || ''}
+                        onActiveScreenChange={screens.setActiveGeneratedId}
+                        projectDeviceId={screens.projectDeviceId}
+                        isGenerating={ai.isGenerating}
+                        isStreaming={ai.isStreaming}
+                        streamingTree={ai.partialTree}
+                        manualZoom={previewManualZoom}
+                        onScaleChange={setPreviewEffectiveScale}
+                      />
+                    </div>
+                  </>
                 )}
                 {viewMode === 'canvas-editor' && (
-                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                    {/* Dark overlay tint — non-interactive (pointer-events: none) so it
-                        doesn't block canvas interactions underneath */}
-                    <div style={{
-                      position: 'absolute', inset: 0,
-                      background: 'rgba(0,0,0,0.18)',
-                      pointerEvents: 'none',
-                      zIndex: 1,
-                    }} />
-                    {/* EDITOR badge — top right corner of canvas area */}
-                    <div style={{
-                      position: 'absolute', top: 16, right: 16,
-                      padding: '4px 10px', borderRadius: 6,
-                      background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                      color: '#fff', fontSize: 10, fontWeight: 700,
-                      letterSpacing: 0.8, textTransform: 'uppercase',
-                      boxShadow: '0 4px 12px rgba(99,102,241,0.4)',
-                      zIndex: 2,
-                    }}>
-                      Editor
-                    </div>
                   <div data-canvas-bg="true" style={{
                     position: 'relative',
                     minWidth: 1, minHeight: 1,
                     transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px) scale(${canvas.zoomLevel / 100})`,
-                    transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current || canvas.isZooming.current) ? 'none' : 'transform 0.15s ease-out',
+                    transformOrigin: 'center center',
+                    transition: (canvas.isPanning.current || isDraggingScreen.current || canvas.isZooming.current) ? 'none' : 'transform 0.15s ease-out',
                     cursor: canvas.panActive ? 'inherit' : 'default',
                   }}>
                 {screens.generatedScreens.map((screen) => {
@@ -654,7 +673,6 @@ function App() {
                         </div>
                       </div>
                     ))}
-                  </div>
                   </div>
                 )}
               </>
