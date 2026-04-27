@@ -109,10 +109,16 @@ function App() {
   const [previewEffectiveScale, setPreviewEffectiveScale] = useState(1)
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0)
 
-  // When the user changes the device from PreviewToolbar, write to project-level
-  // device id so the next generation uses it too.
+  // When the user changes the device from PreviewToolbar, write to the active
+  // screen's per-screen override if there is one, otherwise to the project-level
+  // default. This keeps the toolbar's `deviceId` and the rendered phone in sync,
+  // since PreviewPhoneFrame uses `activeScreen.deviceId || projectDeviceId`.
   const handlePreviewDeviceChange = useCallback((deviceId: DeviceId) => {
-    screens.setProjectDeviceId(deviceId)
+    if (screens.activeGeneratedId) {
+      screens.setScreenDeviceId(screens.activeGeneratedId, deviceId)
+    } else {
+      screens.setProjectDeviceId(deviceId)
+    }
     setPreviewManualZoom(null) // re-fit on device swap
   }, [screens])
 
@@ -548,7 +554,7 @@ function App() {
                 {viewMode === 'preview' && (
                   <>
                     <PreviewToolbar
-                      deviceId={screens.projectDeviceId}
+                      deviceId={screens.activeDeviceId}
                       onDeviceChange={handlePreviewDeviceChange}
                       effectiveScale={previewEffectiveScale}
                       manualZoom={previewManualZoom}

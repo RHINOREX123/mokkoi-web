@@ -2580,7 +2580,10 @@ Rules:
         console.error('JSON repair failed on stream. Raw start:', fullText.slice(0, 500))
         // Log the cost even though generation failed — tokens were consumed
         logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: inputTokens, tokensOut: outputTokens, cacheReadTokens, cacheCreationTokens, generationType, promptPreview: prompt, success: false })
-        res.write(`data: ${JSON.stringify({ type: 'error', message: `AI returned invalid JSON. Raw start: ${fullText.slice(0, 100)}` })}\n\n`)
+        // Preserve the typed error name (e.g. AI_BRIEF_ONLY_NO_JSON) in the wire
+        // message so the client's getUserFriendlyError can match on it.
+        const errName = jsonErr instanceof Error ? jsonErr.message : String(jsonErr)
+        res.write(`data: ${JSON.stringify({ type: 'error', message: `AI returned invalid JSON (${errName}). Raw start: ${fullText.slice(0, 100)}` })}\n\n`)
       }
 
       res.write('data: [DONE]\n\n')
@@ -2641,7 +2644,10 @@ Rules:
     } catch (jsonErr) {
       console.error('JSON repair failed. Raw start:', text.slice(0, 500))
       logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, cacheReadTokens: data.usage?.cache_read_input_tokens, cacheCreationTokens: data.usage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: false })
-      return res.status(502).json({ error: `AI returned invalid JSON. Raw start: ${text.slice(0, 100)}` })
+      // Preserve the typed error name (e.g. AI_BRIEF_ONLY_NO_JSON) in the wire
+      // message so the client's getUserFriendlyError can match on it.
+      const errName = jsonErr instanceof Error ? jsonErr.message : String(jsonErr)
+      return res.status(502).json({ error: `AI returned invalid JSON (${errName}). Raw start: ${text.slice(0, 100)}` })
     }
 
     // Expand macro components (BottomNav, HeaderBar, etc.) into full subtrees

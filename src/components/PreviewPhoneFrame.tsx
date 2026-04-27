@@ -62,8 +62,36 @@ export function PreviewPhoneFrame({
   onScaleChange,
 }: PreviewPhoneFrameProps) {
   const nav = usePreviewNavigation(activeScreenId, connections)
-  const wrapperRef = useRef<HTMLDivElement>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
+
+  // Callback ref — (re-)attaches the ResizeObserver every time the wrapper
+  // div mounts. We can't use a `useEffect(() => {...}, [])` + `useRef` here
+  // because that effect runs once on mount; if the FIRST render hits the
+  // empty-state branch (no activeScreen → no wrapper rendered), the effect
+  // runs against `null` and never re-fires. When the wrapper later mounts,
+  // no observer would attach, `containerSize` would stay {0,0}, and the
+  // phone would be permanently hidden by the `visibility: hidden` guard
+  // below. A callback ref is invoked by React on every DOM mount/unmount,
+  // which avoids that dead-state. The deps `[]` keep the function reference
+  // stable so React doesn't treat each render as a new ref and thrash the
+  // observer.
+  const setWrapperRef = useCallback((el: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
+    }
+    if (el) {
+      const ro = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect
+          setContainerSize({ w: width, h: height })
+        }
+      })
+      ro.observe(el)
+      observerRef.current = ro
+    }
+  }, [])
 
   // Sync external activeScreenId → internal nav state.
   useEffect(() => {
@@ -80,20 +108,6 @@ export function PreviewPhoneFrame({
       onActiveScreenChange(nav.currentScreenId)
     }
   }, [nav.currentScreenId, activeScreenId, onActiveScreenChange])
-
-  // ResizeObserver — track the wrapper's available size for auto-fit.
-  useEffect(() => {
-    const el = wrapperRef.current
-    if (!el) return
-    const ro = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect
-        setContainerSize({ w: width, h: height })
-      }
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
 
   const activeScreen = screens.find(s => s.id === nav.currentScreenId)
   const deviceId = activeScreen?.deviceId || projectDeviceId
@@ -143,7 +157,7 @@ export function PreviewPhoneFrame({
 
   return (
     <div
-      ref={wrapperRef}
+      ref={setWrapperRef}
       onClickCapture={onClickCapture}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
