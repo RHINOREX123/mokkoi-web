@@ -15,7 +15,12 @@ interface PreviewPhoneFrameProps {
    *  hamburger SCREENS list) sync into the internal nav state. */
   activeScreenId: string
   /** Called when in-phone navigation swaps the active screen, so App.tsx can
-   *  update its activeGeneratedId for chat-scoping etc. */
+   *  update its activeGeneratedId for chat-scoping etc.
+   *
+   *  CONTRACT: must be referentially stable across parent renders (use the
+   *  raw `useState` setter or wrap in `useCallback`). The internal sync
+   *  effect lists this in its deps; an unstable callback would cause the
+   *  effect to re-run every render and risk syncing back stale state. */
   onActiveScreenChange: (screenId: string) => void
   /** Project-level fallback device id when a screen has none. */
   projectDeviceId?: DeviceId
@@ -74,7 +79,8 @@ export function PreviewPhoneFrame({
   const onClickCapture = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (isGenerating) return
-      const target = e.target as HTMLElement
+      const target = e.target
+      if (!(target instanceof Element)) return
       const button = target.closest('button, [role="button"], [data-tab]')
       if (!button) return
       const label = (button.textContent || '').trim()
