@@ -115,15 +115,17 @@ export function PreviewPhoneFrame({
         width: '100%', height: '100%', padding: 24, overflow: 'auto',
       }}
     >
-      <PhoneFrame
-        mode="preview"
-        generatedTree={!isImage ? activeScreen.tree : undefined}
-        imageUrl={isImage ? activeScreen.imageUrl : undefined}
-        isGenerating={isGenerating}
-        isStreaming={isStreaming}
-        streamingTree={streamingTree}
-        deviceId={activeScreen.deviceId || projectDeviceId}
-      />
+      <div data-screen-id={activeScreen.id}>
+        <PhoneFrame
+          mode="preview"
+          generatedTree={!isImage ? activeScreen.tree : undefined}
+          imageUrl={isImage ? activeScreen.imageUrl : undefined}
+          isGenerating={isGenerating}
+          isStreaming={isStreaming}
+          streamingTree={streamingTree}
+          deviceId={activeScreen.deviceId || projectDeviceId}
+        />
+      </div>
     </div>
   )
 }
