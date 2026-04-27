@@ -1501,13 +1501,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const cleanPrompt = isEditMode ? rawCleanPrompt : enrichVaguePrompt(rawCleanPrompt)
   const screenType = classifyScreenType(cleanPrompt)
-  // Resolve device info for prompt context
+  // Resolve device info for prompt context.
+  //
+  // Mirrors src/constants/devices.ts DEVICE_PRESETS — kept inline here so the
+  // serverless function stays self-contained without importing front-end code.
+  // Legacy IDs (iphone-standard, iphone-max, android-standard, android-large)
+  // are aliased to the same resolved dimensions used by the front-end's
+  // LEGACY_DEVICE_ID_MAP so existing projects produce identical prompts.
   const DEVICE_MAP: Record<string, { name: string; width: number; height: number; category: string }> = {
-    'iphone-standard': { name: 'iPhone Standard', width: 393, height: 852, category: 'iOS' },
-    'iphone-max': { name: 'iPhone Max', width: 430, height: 932, category: 'iOS' },
-    'iphone-se': { name: 'iPhone SE', width: 375, height: 667, category: 'iOS' },
-    'android-standard': { name: 'Android', width: 360, height: 800, category: 'Android' },
-    'android-large': { name: 'Android Large', width: 412, height: 917, category: 'Android' },
+    // iPhone 17 series
+    'iphone-17':         { name: 'iPhone 17',         width: 402, height: 874,  category: 'iOS' },
+    'iphone-17-air':     { name: 'iPhone 17 Air',     width: 420, height: 912,  category: 'iOS' },
+    'iphone-17-pro':     { name: 'iPhone 17 Pro',     width: 402, height: 873,  category: 'iOS' },
+    'iphone-17-pro-max': { name: 'iPhone 17 Pro Max', width: 440, height: 956,  category: 'iOS' },
+    // iPhone 16 series
+    'iphone-16':         { name: 'iPhone 16',         width: 393, height: 852,  category: 'iOS' },
+    'iphone-16e':        { name: 'iPhone 16e',        width: 390, height: 844,  category: 'iOS' },
+    'iphone-16-plus':    { name: 'iPhone 16 Plus',    width: 430, height: 932,  category: 'iOS' },
+    'iphone-16-pro':     { name: 'iPhone 16 Pro',     width: 402, height: 874,  category: 'iOS' },
+    'iphone-16-pro-max': { name: 'iPhone 16 Pro Max', width: 440, height: 956,  category: 'iOS' },
+    // SE
+    'iphone-se':         { name: 'iPhone SE',         width: 375, height: 667,  category: 'iOS' },
+    // Pixel
+    'pixel-10':          { name: 'Pixel 10',          width: 412, height: 915,  category: 'Android' },
+    'pixel-10-pro':      { name: 'Pixel 10 Pro',      width: 427, height: 952,  category: 'Android' },
+    // Galaxy
+    'galaxy-25':         { name: 'Galaxy 25',         width: 360, height: 780,  category: 'Android' },
+    'galaxy-25-plus':    { name: 'Galaxy 25+',        width: 480, height: 1040, category: 'Android' },
+    // iPad
+    'ipad':              { name: 'iPad',              width: 820, height: 1180, category: 'iOS' },
+    'ipad-mini':         { name: 'iPad Mini',         width: 744, height: 1133, category: 'iOS' },
+    // Legacy aliases — point to the same dimensions front-end resolves them to.
+    'iphone-standard':   { name: 'iPhone 16',         width: 393, height: 852,  category: 'iOS' },
+    'iphone-max':        { name: 'iPhone 16 Plus',    width: 430, height: 932,  category: 'iOS' },
+    'android-standard':  { name: 'Galaxy 25',         width: 360, height: 780,  category: 'Android' },
+    'android-large':     { name: 'Pixel 10',          width: 412, height: 915,  category: 'Android' },
   }
   const deviceInfo = deviceId ? DEVICE_MAP[deviceId as string] : undefined
   // Resolve dynamic color theme — only for new screens, not edits

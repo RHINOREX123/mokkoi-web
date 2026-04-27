@@ -2,7 +2,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { PhoneFrame } from './PhoneFrame'
 import { usePreviewNavigation } from '../hooks/usePreviewNavigation'
 import { computeFitScale } from '../utils/computeFitScale'
-import { getDevicePreset } from '../constants/devices'
+import { getDevicePreset, DEFAULT_DEVICE } from '../constants/devices'
 import type { FlowConnection } from './FlowConnectors'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { ComponentNode } from '../types/mokkoi'
@@ -111,7 +111,7 @@ export function PreviewPhoneFrame({
 
   const activeScreen = screens.find(s => s.id === nav.currentScreenId)
   const deviceId = activeScreen?.deviceId || projectDeviceId
-  const device = getDevicePreset(deviceId || 'iphone-standard')
+  const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const scale = computeFitScale({
     container: containerSize,
     device: { w: device.width, h: device.height },

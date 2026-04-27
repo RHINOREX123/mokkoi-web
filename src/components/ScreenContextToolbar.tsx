@@ -247,29 +247,32 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
             <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 600, color: '#555', letterSpacing: '0.3px' }}>
               Screen Device
             </div>
-            {DEVICE_PRESETS.map(preset => {
-              const isSelected = deviceId === preset.id
-              return (
-                <button
-                  key={preset.id}
-                  onClick={() => { onDeviceChange(preset.id as DeviceId); setOpenDropdown(null) }}
-                  style={{
-                    ...MENU_ITEM_STYLE,
-                    justifyContent: 'space-between',
-                    color: isSelected ? '#818CF8' : '#e2e8f0',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 14, width: 20, textAlign: 'center' }}>{preset.icon}</span>
-                    {preset.name}
-                    <span style={{ fontSize: 11, color: '#555', fontWeight: 400 }}>{preset.width}×{preset.height}</span>
-                  </span>
-                  {isSelected && <span style={{ color: '#818CF8', fontSize: 14 }}>✓</span>}
-                </button>
-              )
-            })}
+            {/* Scrollable list — 16 presets won't fit at full height. */}
+            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+              {DEVICE_PRESETS.map(preset => {
+                const isSelected = deviceId === preset.id
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => { onDeviceChange(preset.id as DeviceId); setOpenDropdown(null) }}
+                    style={{
+                      ...MENU_ITEM_STYLE,
+                      justifyContent: 'space-between',
+                      color: isSelected ? '#818CF8' : '#e2e8f0',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 14, width: 20, textAlign: 'center' }}>{preset.icon}</span>
+                      {preset.name}
+                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400 }}>{preset.width}×{preset.height}</span>
+                    </span>
+                    {isSelected && <span style={{ color: '#818CF8', fontSize: 14 }}>✓</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>

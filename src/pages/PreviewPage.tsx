@@ -5,7 +5,7 @@ import { ScreenRenderer } from '../components/ScreenRenderer'
 import { Smartphone, Tablet, LayoutGrid, Share2, ExternalLink } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
-import { DEVICE_PRESETS } from '../constants/devices'
+import { DEVICE_PRESETS, DEFAULT_DEVICE } from '../constants/devices'
 
 // ----- Preview Device Presets (includes iPad for preview-only) -----
 interface PreviewDevicePreset {
@@ -18,18 +18,18 @@ interface PreviewDevicePreset {
   deviceId?: string // maps back to DEVICE_PRESETS id if applicable
 }
 
-const PREVIEW_DEVICE_PRESETS: PreviewDevicePreset[] = [
-  ...DEVICE_PRESETS.map(d => ({
-    id: d.id,
-    width: d.width,
-    height: d.height,
-    name: d.name,
-    borderRadius: d.category === 'Android' ? 36 : 47,
-    icon: 'phone' as const,
-    deviceId: d.id,
-  })),
-  { id: 'ipad', width: 768, height: 1024, name: 'iPad', borderRadius: 20, icon: 'tablet' },
-]
+// iPad and iPad Mini live inside DEVICE_PRESETS now, so we map them to the
+// 'tablet' icon variant instead of appending a hand-rolled entry (which used
+// to collide on id once iPads were added to the canonical preset list).
+const PREVIEW_DEVICE_PRESETS: PreviewDevicePreset[] = DEVICE_PRESETS.map(d => ({
+  id: d.id,
+  width: d.width,
+  height: d.height,
+  name: d.name,
+  borderRadius: d.category === 'Android' ? 36 : 47,
+  icon: (d.id === 'ipad' || d.id === 'ipad-mini') ? 'tablet' as const : 'phone' as const,
+  deviceId: d.id,
+}))
 
 export default function PreviewPage() {
   const { projectId, screenId } = useParams<{ projectId: string; screenId: string }>()
@@ -39,7 +39,7 @@ export default function PreviewPage() {
   const [tree, setTree] = useState<ComponentNode | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeDevice, setActiveDevice] = useState('iphone-standard')
+  const [activeDevice, setActiveDevice] = useState<string>(DEFAULT_DEVICE)
   const [showAll, setShowAll] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
