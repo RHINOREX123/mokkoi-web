@@ -20,6 +20,12 @@ describe('computeFitScale', () => {
       expect(computeFitScale({ container: { w: 0, h: 600 }, device, manualZoom: null })).toBe(0)
       expect(computeFitScale({ container: { w: 600, h: 0 }, device, manualZoom: null })).toBe(0)
     })
+
+    it('selects width as the binding axis when container is taller than wide', () => {
+      // Width is the binding axis: 200/393 = 0.509 → * 0.92 = 0.468
+      const s = computeFitScale({ container: { w: 200, h: 2000 }, device, manualZoom: null })
+      expect(s).toBeCloseTo(0.468, 3)
+    })
   })
 
   describe('manual zoom override', () => {
@@ -28,11 +34,26 @@ describe('computeFitScale', () => {
       expect(s).toBe(0.5)
     })
 
-    it('clamps manual zoom to [0.25, 2.0]', () => {
+    it('clamps manual zoom below 0.25 up to MIN_ZOOM', () => {
       const lo = computeFitScale({ container: { w: 2000, h: 2000 }, device, manualZoom: 0.1 })
-      const hi = computeFitScale({ container: { w: 2000, h: 2000 }, device, manualZoom: 5 })
       expect(lo).toBe(0.25)
+    })
+
+    it('clamps manual zoom above 2 down to MAX_ZOOM', () => {
+      const hi = computeFitScale({ container: { w: 2000, h: 2000 }, device, manualZoom: 5 })
       expect(hi).toBe(2)
+    })
+
+    it('returns exact bound values when manualZoom equals MIN or MAX', () => {
+      const atMin = computeFitScale({ container: { w: 2000, h: 2000 }, device, manualZoom: 0.25 })
+      const atMax = computeFitScale({ container: { w: 2000, h: 2000 }, device, manualZoom: 2 })
+      expect(atMin).toBe(0.25)
+      expect(atMax).toBe(2)
+    })
+
+    it('clamps a manual zoom of 0 up to MIN_ZOOM (toolbar over-decrement guard)', () => {
+      const s = computeFitScale({ container: { w: 2000, h: 2000 }, device, manualZoom: 0 })
+      expect(s).toBe(0.25)
     })
   })
 })
