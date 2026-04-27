@@ -176,12 +176,15 @@ function App() {
     return map
   }, [screens.generatedScreens, screens.projectDeviceId])
 
-  // Entry-point screens for hamburger SCREENS list
+  // Entry-point screens for hamburger SCREENS list. Project to {id, name}
+  // here so the prop passed to TopNavbar is referentially stable across
+  // renders that don't change the upstream — keeps a future React.memo
+  // wrapper from being defeated by a fresh array each render.
   const entryPointScreens = useMemo(
     () => getEntryPointScreens(
       screens.generatedScreens.filter(s => s.tree),
       screens.connections,
-    ),
+    ).map(s => ({ id: s.id, name: s.name })),
     [screens.generatedScreens, screens.connections],
   )
 
@@ -443,7 +446,7 @@ function App() {
         screenCount={screens.generatedScreens.filter(s => s.tree).length}
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
-        entryPointScreens={entryPointScreens.map(s => ({ id: s.id, name: s.name }))}
+        entryPointScreens={entryPointScreens}
         activeScreenId={screens.activeGeneratedId}
         onSelectScreen={screens.setActiveGeneratedId}
       />
