@@ -455,7 +455,6 @@ function App() {
         isGenerating={ai.isGenerating}
         generatedTree={screens.generatedTree}
         activeGeneratedTree={screens.activeGenerated?.tree}
-        setActiveGeneratedId={screens.setActiveGeneratedId}
         setShowCodeExport={setShowCodeExport}
         setShowShareModal={setShowShareModal}
         setShowCommandPalette={setShowCommandPalette}

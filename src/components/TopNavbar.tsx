@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone, Layers } from 'lucide-react'
+import { Download, Share2, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone, Layers } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
@@ -32,7 +32,6 @@ interface TopNavbarProps {
   isGenerating: boolean
   generatedTree: ComponentNode | undefined
   activeGeneratedTree: ComponentNode | undefined
-  setActiveGeneratedId: (id: string | null) => void
   setShowCodeExport: (show: boolean) => void
   setShowShareModal: (show: boolean) => void
   setShowCommandPalette: (show: boolean) => void
@@ -51,7 +50,7 @@ interface TopNavbarProps {
 export function TopNavbar({
   projectName, setProjectName, saveProjectName,
   isGenerating, generatedTree, activeGeneratedTree,
-  setActiveGeneratedId, setShowCodeExport, setShowShareModal,
+  setShowCodeExport, setShowShareModal,
   setShowCommandPalette, setShowDeleteConfirm, setToastMessage,
   onExportProject, onPreviewPhone, screenCount,
   viewMode, onToggleViewMode,
@@ -354,17 +353,6 @@ export function TopNavbar({
 
       {/* Right: action buttons */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button onClick={() => { setActiveGeneratedId(null); setShowCodeExport(false) }} style={{
-          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
-          padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-          color: '#818cf8', background: 'rgba(99,102,241,0.08)',
-          border: '1px dashed rgba(99,102,241,0.3)', cursor: 'pointer', transition: 'all 0.2s',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.15)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.5)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.08)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)' }}
-          title="New screen"
-        ><Plus size={14} />New Screen</button>
-
         <button onClick={() => { if (generatedTree) setShowCodeExport(true) }} style={{
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
           padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
