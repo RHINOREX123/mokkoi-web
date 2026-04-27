@@ -247,7 +247,9 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
             <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 600, color: '#555', letterSpacing: '0.3px' }}>
               Screen Device
             </div>
-            {/* Scrollable list — 16 presets won't fit at full height. */}
+            {/* Scrollable list — 16 presets won't fit at full height.
+                Dimensions are right-aligned (Bolt-style) so the eye can
+                scan widths/heights down the column quickly. */}
             <div style={{ maxHeight: 280, overflowY: 'auto' }}>
               {DEVICE_PRESETS.map(preset => {
                 const isSelected = deviceId === preset.id
@@ -266,9 +268,13 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
                     <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 14, width: 20, textAlign: 'center' }}>{preset.icon}</span>
                       {preset.name}
-                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400 }}>{preset.width}×{preset.height}</span>
                     </span>
-                    {isSelected && <span style={{ color: '#818CF8', fontSize: 14 }}>✓</span>}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 11, color: isSelected ? '#818CF8' : '#555', fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>
+                        {preset.width}×{preset.height}
+                      </span>
+                      {isSelected && <span style={{ color: '#818CF8', fontSize: 14 }}>✓</span>}
+                    </span>
                   </button>
                 )
               })}
