@@ -184,7 +184,7 @@ function App() {
     const map = new Map<string, { x: number; y: number }>()
     let xOffset = PAD_X
     screens.generatedScreens.forEach((s) => {
-      const { CANVAS_W } = getCanvasDimensions(s.deviceId || screens.projectDeviceId)
+      const { CANVAS_W } = getCanvasDimensions(screens.projectDeviceId)
       map.set(s.id, {
         x: s.x ?? xOffset,
         y: s.y ?? PAD_Y,
@@ -353,7 +353,7 @@ function App() {
       screenId: screen.id,
       screenName: screen.name,
       tree: screen.tree,
-      deviceId: screen.deviceId || screens.projectDeviceId,
+      deviceId: screens.projectDeviceId,
       originalPrompt: screen.originalPrompt,
     }
   }, [screens.activeGenerated, screens.projectDeviceId])
@@ -366,7 +366,7 @@ function App() {
         screenId: s.id,
         screenName: s.name,
         tree: s.tree,
-        deviceId: s.deviceId || screens.projectDeviceId,
+        deviceId: screens.projectDeviceId,
         originalPrompt: s.originalPrompt,
       }))
   }, [screens.generatedScreens, screens.projectDeviceId])
@@ -590,7 +590,7 @@ function App() {
                   const isImage = screen.type === 'image'
                   const sx = screen.x ?? (screenPositions.get(screen.id)?.x ?? PAD_X)
                   const sy = screen.y ?? PAD_Y
-                  const { CANVAS_W: frameW } = getCanvasDimensions(screen.deviceId || screens.projectDeviceId)
+                  const { CANVAS_W: frameW } = getCanvasDimensions(screens.projectDeviceId)
                   return (
                     <div key={screen.id}
                       onMouseDown={(e) => handleScreenMouseDown(e, screen.id, sx, sy)}
@@ -626,7 +626,7 @@ function App() {
                           onMouseOverCapture={directEdit.directEditMode ? directEdit.handleDirectEditHover : undefined}
                           onMouseOutCapture={directEdit.directEditMode ? directEdit.handleDirectEditHoverOut : undefined}
                         >
-                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} deviceId={screen.deviceId || screens.projectDeviceId} />
+                          <PhoneFrame generatedTree={!isImage ? screen.tree : undefined} imageUrl={isImage ? screen.imageUrl : undefined} isGenerating={ai.isGenerating && isActive} isStreaming={ai.isStreaming && isActive} streamingTree={isActive ? ai.partialTree : null} deviceId={screens.projectDeviceId} />
                           {directEdit.directEditMode && isActive && directEdit.directEditSelectedEl && (
                             <div data-direct-edit-toolbar="true">
                               <DirectEditToolbar

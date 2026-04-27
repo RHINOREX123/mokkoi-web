@@ -345,8 +345,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     if (generatedScreens.length === 0) return { x: PAD_X, y: PAD_Y }
     let maxRight = 0
     generatedScreens.forEach((s, i) => {
-      const screenDevice = s.deviceId || projectDeviceId
-      const { CANVAS_W } = getCanvasDimensions(screenDevice)
+      const { CANVAS_W } = getCanvasDimensions(projectDeviceId)
       const sx = s.x ?? (PAD_X + i * (CANVAS_W + GAP))
       const right = sx + CANVAS_W
       if (right > maxRight) maxRight = right

@@ -665,7 +665,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         name: `${activeGenerated.name} v${i + 1}`,
         originalPrompt: activeGenerated.originalPrompt,
         tree: { type: 'View', style: {}, children: [] },
-        deviceId: activeGenerated.deviceId || deviceId,
+        deviceId,
         x: varPos.x + i * (getCanvasDimensions(deviceId).CANVAS_W + GAP),
         y: varPos.y,
       }
