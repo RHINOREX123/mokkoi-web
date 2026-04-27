@@ -393,6 +393,7 @@ export function TopNavbar({
 
         <button
           onClick={onToggleViewMode}
+          aria-pressed={viewMode === 'canvas-editor'}
           title={viewMode === 'canvas-editor' ? 'Back to preview' : 'Open canvas editor'}
           style={{
             flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
