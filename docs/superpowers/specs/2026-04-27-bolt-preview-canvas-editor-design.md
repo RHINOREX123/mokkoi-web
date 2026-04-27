@@ -29,12 +29,16 @@ Today, opening a project shows N screens laid out side by side. New users don't 
 
 The hamburger SCREENS list shouldn't include every screen — Cart, Checkout, Order Tracking are reached by tapping in-app buttons, not by jumping to them directly. Listing every screen reproduces the "segregated screens" feel we're moving away from.
 
-**Definition:** a screen is an entry point if **no `FlowConnection.toScreenId` points to it from a non-tab trigger**. In practice:
+**Definition:** a screen is an entry point if it satisfies ANY of:
+1. It is the target of at least one tab-trigger connection, OR
+2. It has zero incoming connections, OR
+3. It is the project's first screen (defensive: always include screen[0] as an entry point so the user is never stranded).
 
-- Bottom-tab connections (trigger ≈ "Home", "Menu", "Profile") → these targets ARE entry points
-- Deep-link button connections (trigger ≈ "Checkout", "Place Order", "Add to Cart") → these targets are NOT entry points
+**Tab-trigger detection:** a `FlowConnection.trigger` is classified as a tab trigger when its lowercased value matches one of: `home`, `menu`, `profile`, `feed`, `discover`, `search`, `cart`, `account`, `settings`, `inbox`, `notifications`, `library`, `tab`, or contains the substring `tab`. (These are the labels the wirer already produces for bottom-tab buttons; we lift them here.) Anything else (e.g. "Checkout", "Place Order", "Add to Cart") is a deep-link trigger.
 
-**Implementation:** a single helper `getEntryPointScreens(screens, connections)` walks the connection list, classifies each connection as tab-or-deep-link by inspecting the trigger string against a small set of tab-name heuristics (already partially in `wirer.ts`), and returns the set of screens that are EITHER tab targets OR have no incoming connections at all.
+**Mixed incoming edges:** if a screen receives BOTH a tab-trigger and a deep-link-trigger incoming connection, **the tab classification wins** — it is an entry point. (Reasoning: the tab makes it directly reachable from the app's nav, regardless of any deep-link path that also exists.)
+
+**Implementation:** a single pure helper `getEntryPointScreens(screens, connections)` walks the connection list once, builds a Set of `toScreenId`s reachable from tab triggers, and returns the screens whose ids satisfy any of the three criteria above. Stable order: same as `screens` input array.
 
 **Fallback:** if a project has zero connections (older projects pre-wirer or single-screen apps), all screens are treated as entry points.
 
@@ -45,12 +49,14 @@ The hamburger SCREENS list shouldn't include every screen — Cart, Checkout, Or
 - **`src/components/PreviewPhoneFrame.tsx`** — single large phone frame that renders one screen at a time. Wraps the existing tree renderer. Intercepts clicks on `<button>` and tab elements and consults `usePreviewNavigation` to decide whether to navigate.
 
 - **`src/hooks/usePreviewNavigation.ts`** — manages preview-only navigation state: which screen is currently shown, plus a small history stack so back navigation works (future). Exposes `currentScreenId`, `navigateTo(screenId)`, and `handleClick(buttonLabel)` which looks up `FlowConnection`s for the current screen and finds a match.
+  **Trigger matching:** `handleClick` normalizes both the button label and `connection.trigger` by lowercasing and collapsing whitespace, then does an exact match. No partial / fuzzy match — too risky given LLM-generated buttons can have similar labels with different destinations ("Buy" vs "Buy Now"). If multiple connections from the current screen match the same normalized label, take the first.
 
 - **`src/utils/entryPointScreens.ts`** — pure function `getEntryPointScreens(screens: GeneratedScreen[], connections: FlowConnection[]): GeneratedScreen[]`. Easily unit-tested against fixtures.
 
 ### Modified
 
 - **`src/App.tsx`** — adds `viewMode: 'preview' | 'canvas-editor'` state (default `'preview'`). Conditionally renders `<PreviewPhoneFrame>` or the existing canvas grid based on `viewMode`. Wires the new Canvas Editor button into TopNavbar via a callback.
+  **State scope:** the state lives in the project page component. When the user navigates between projects within the SPA, the project page unmounts and remounts → `viewMode` resets to `'preview'` for each project visit. There is no global mode store.
 
 - **`src/components/TopNavbar.tsx`** —
   1. Adds the **[Canvas Editor]** toggle button in the action row (between Preview and Share). Active-state styling when `viewMode === 'canvas-editor'`.
