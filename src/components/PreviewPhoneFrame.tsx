@@ -9,17 +9,40 @@ import type { ComponentNode } from '../types/mokkoi'
 import type { DeviceId } from '../constants/devices'
 
 interface PreviewPhoneFrameProps {
+  /** All screens in the project; the active one's tree is rendered. */
   screens: GeneratedScreen[]
+  /** Project flow connections (from the wirer) used for in-phone navigation. */
   connections: FlowConnection[]
+  /** Externally controlled active screen id. Changes from outside (e.g. the
+   *  hamburger SCREENS list) sync into the internal nav state. */
   activeScreenId: string
+  /** Called when in-phone navigation swaps the active screen, so App.tsx can
+   *  update its activeGeneratedId for chat-scoping etc.
+   *
+   *  CONTRACT: must be referentially stable across parent renders (use the
+   *  raw `useState` setter or wrap in `useCallback`). The internal sync
+   *  effect lists this in its deps; an unstable callback would cause the
+   *  effect to re-run every render and risk syncing back stale state. */
   onActiveScreenChange: (screenId: string) => void
+  /** Project-level fallback device id when a screen has none. */
   projectDeviceId?: DeviceId
+  /** When the active screen is being generated, click navigation is gated off
+   *  and PhoneFrame shows its existing ShimmerSkeleton. */
   isGenerating?: boolean
+  /** Streaming variant of generating (renders the streaming partial tree). */
   isStreaming?: boolean
+  /** Partial tree during streaming generation. */
   streamingTree?: ComponentNode | null
-  /** When non-null, overrides auto-fit. Driven by the PreviewToolbar zoom controls. */
+  /** When non-null, overrides auto-fit. Driven by the PreviewToolbar zoom controls.
+   *  Auto-fit (the default) computes 0.92 × min(W/dw, H/dh), capped at 1. */
   manualZoom?: number | null
-  /** Reports the current effective scale up so the toolbar can show "60%" etc. */
+  /** Reports the current effective scale up so the toolbar can show "60%" etc.
+   *
+   *  CONTRACT: must be referentially stable across parent renders (use the
+   *  raw `useState` setter or wrap in `useCallback`). This is listed in an
+   *  effect's deps; an unstable callback would fire the effect every render
+   *  and — combined with state lifts in the parent — could trigger an
+   *  infinite render loop. */
   onScaleChange?: (scale: number) => void
 }
 
