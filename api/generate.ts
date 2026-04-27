@@ -1665,11 +1665,30 @@ IMPORTANT: Do NOT recreate this screen from scratch. Modify the EXISTING tree ab
 
   // Extract design brief from two-phase generation response
   function extractDesignBrief(raw: string): { brief: string | null; jsonText: string } {
-    const briefMatch = raw.match(/<design_brief>([\s\S]*?)<\/design_brief>/)
-    const brief = briefMatch ? briefMatch[1].trim() : null
-    // Remove the design brief to isolate the JSON
-    const jsonText = raw.replace(/<design_brief>[\s\S]*?<\/design_brief>/, '').trim()
-    return { brief, jsonText }
+    // Happy path: properly closed <design_brief>...</design_brief>
+    const closed = raw.match(/<design_brief>([\s\S]*?)<\/design_brief>/)
+    if (closed) {
+      const brief = closed[1].trim()
+      const jsonText = raw.replace(/<design_brief>[\s\S]*?<\/design_brief>/, '').trim()
+      return { brief, jsonText }
+    }
+
+    // Tolerant fallback: model opened <design_brief> but never closed it.
+    // Slice everything up to the first '{' as the brief, then take from '{' on
+    // as the JSON candidate. If there's no '{' at all, jsonText is empty (caller
+    // will surface a typed BRIEF_ONLY error).
+    if (raw.includes('<design_brief>')) {
+      const firstBrace = raw.indexOf('{')
+      if (firstBrace >= 0) {
+        const briefSection = raw.slice(0, firstBrace).replace(/<design_brief>/, '').trim()
+        const jsonText = raw.slice(firstBrace).trim()
+        return { brief: briefSection || null, jsonText }
+      }
+      return { brief: raw.replace(/<design_brief>/, '').trim() || null, jsonText: '' }
+    }
+
+    // No brief tags at all — assume the model returned raw JSON.
+    return { brief: null, jsonText: raw.trim() }
   }
 
   // Robust JSON repair: strips markdown fences, extracts JSON, closes truncated structures
@@ -2522,7 +2541,12 @@ Rules:
       try {
         // Extract design brief from two-phase response
         const { brief: designBrief, jsonText } = extractDesignBrief(fullText)
-        let tree = repairJSON(jsonText || fullText)
+        if (!jsonText) {
+          // Model emitted only the brief and never started the JSON. Surface a
+          // typed error so the client can show a friendly retry message.
+          throw new Error('AI_BRIEF_ONLY_NO_JSON')
+        }
+        let tree = repairJSON(jsonText)
 
         // Expand macro components (BottomNav, HeaderBar, etc.) into full subtrees
         tree = expandComponents(tree)
@@ -2612,7 +2636,8 @@ Rules:
 
     let tree: any
     try {
-      tree = repairJSON(jsonText || text)
+      if (!jsonText) throw new Error('AI_BRIEF_ONLY_NO_JSON')
+      tree = repairJSON(jsonText)
     } catch (jsonErr) {
       console.error('JSON repair failed. Raw start:', text.slice(0, 500))
       logUsage({ userId: user.id, projectId: projectId || undefined, modelUsed: model, tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, cacheReadTokens: data.usage?.cache_read_input_tokens, cacheCreationTokens: data.usage?.cache_creation_input_tokens, generationType, promptPreview: prompt, success: false })
