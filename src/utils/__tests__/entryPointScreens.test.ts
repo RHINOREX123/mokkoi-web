@@ -41,7 +41,7 @@ describe('getEntryPointScreens', () => {
     { id: 'profile', name: 'Profile' },
   ]
 
-  it('returns tab targets and orphan screens', () => {
+  it('returns only tab targets and the first screen (excludes deep-link-only screens)', () => {
     const connections: FlowConnection[] = [
       { fromScreenId: 'home', toScreenId: 'menu', trigger: 'Menu' },
       { fromScreenId: 'home', toScreenId: 'profile', trigger: 'Profile' },

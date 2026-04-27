@@ -20,11 +20,19 @@ export function isTabTrigger(trigger: string | undefined): boolean {
  *  destinations the user should be able to jump to directly via the
  *  hamburger SCREENS list. A screen is an entry point if it satisfies any of:
  *    1. Reachable from at least one tab-trigger connection
- *    2. Has zero incoming connections (orphan / starting screen)
- *    3. Is screens[0] (defensive — never strand the user)
+ *    2. Is screens[0] (defensive — never strand the user)
+ *    3. The project has zero connections at all (pre-wirer / single-screen
+ *       fallback — every screen is treated as an entry point because we have
+ *       no nav graph evidence to classify with)
  *
  *  When a screen has BOTH tab and deep-link incoming edges, the tab
  *  classification wins and it is an entry point.
+ *
+ *  Note: in a non-empty connection graph, screens with zero incoming edges
+ *  are EXCLUDED (treated as unwired/dead screens). This is intentional —
+ *  a screen the wirer never connected has no in-app way for the user to
+ *  reach it, so surfacing it in the SCREENS list would be misleading. The
+ *  defensive screens[0] rule guarantees at least one entry point exists.
  *
  *  Output preserves the input `screens` order. */
 export function getEntryPointScreens<T extends { id: string }>(
