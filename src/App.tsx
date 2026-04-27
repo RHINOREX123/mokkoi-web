@@ -678,32 +678,34 @@ function App() {
               </>
             )}
 
-            <ScreenContextToolbar
-              visible={!!screens.activeGeneratedId && !!screens.activeGenerated?.tree}
-              screenName={screens.activeGenerated?.name || ''} screenTree={screens.activeGenerated?.tree}
-              screenId={screens.activeGeneratedId || ''}
-              onRegenerate={ai.handleRegenerate} onOpenVariations={() => setShowVariationsPanel(true)}
-              onEditViaChat={handleEditViaChat} onChangeColorScheme={handleChangeColorScheme}
-              onMakeDarker={handleMakeDarker} onMakeLighter={handleMakeLighter}
-              onPreviewNewTab={handlePreviewNewTab} onShowQrCode={handleShowQrCode}
-              onExportCode={() => { if (screens.generatedTree) setShowCodeExport(true) }}
-              onDownloadPNG={() => { const t = getExportTarget(); if (t) screenExport.downloadPNG(t) }}
-              onDownloadTSX={() => { const t = getExportTarget(); if (t) screenExport.downloadTSX(t) }}
-              onDownloadZIP={() => { const t = getExportTarget(); if (t) screenExport.downloadZIP(t) }}
-              onDownloadExpo={() => { const t = getExportTarget(); if (t) screenExport.downloadExpoProject(t, screens.projectName) }}
-              onDuplicate={() => { screens.handleDuplicateScreen(); setToastMessage('Screen duplicated!') }}
-              onRename={screens.handleRenameScreen}
-              onDelete={() => setShowDeleteScreenConfirm(true)}
-              onToast={setToastMessage} onDirectEdit={viewMode === 'canvas-editor' ? directEdit.enterDirectEdit : undefined}
-              deviceId={screens.activeDeviceId}
-              onDeviceChange={(id) => {
-                if (screens.activeGeneratedId) {
-                  screens.setScreenDeviceId(screens.activeGeneratedId, id)
-                } else {
-                  screens.setProjectDeviceId(id)
-                }
-              }}
-            />
+            {viewMode === 'canvas-editor' && (
+              <ScreenContextToolbar
+                visible={!!screens.activeGeneratedId && !!screens.activeGenerated?.tree}
+                screenName={screens.activeGenerated?.name || ''} screenTree={screens.activeGenerated?.tree}
+                screenId={screens.activeGeneratedId || ''}
+                onRegenerate={ai.handleRegenerate} onOpenVariations={() => setShowVariationsPanel(true)}
+                onEditViaChat={handleEditViaChat} onChangeColorScheme={handleChangeColorScheme}
+                onMakeDarker={handleMakeDarker} onMakeLighter={handleMakeLighter}
+                onPreviewNewTab={handlePreviewNewTab} onShowQrCode={handleShowQrCode}
+                onExportCode={() => { if (screens.generatedTree) setShowCodeExport(true) }}
+                onDownloadPNG={() => { const t = getExportTarget(); if (t) screenExport.downloadPNG(t) }}
+                onDownloadTSX={() => { const t = getExportTarget(); if (t) screenExport.downloadTSX(t) }}
+                onDownloadZIP={() => { const t = getExportTarget(); if (t) screenExport.downloadZIP(t) }}
+                onDownloadExpo={() => { const t = getExportTarget(); if (t) screenExport.downloadExpoProject(t, screens.projectName) }}
+                onDuplicate={() => { screens.handleDuplicateScreen(); setToastMessage('Screen duplicated!') }}
+                onRename={screens.handleRenameScreen}
+                onDelete={() => setShowDeleteScreenConfirm(true)}
+                onToast={setToastMessage} onDirectEdit={directEdit.enterDirectEdit}
+                deviceId={screens.activeDeviceId}
+                onDeviceChange={(id) => {
+                  if (screens.activeGeneratedId) {
+                    screens.setScreenDeviceId(screens.activeGeneratedId, id)
+                  } else {
+                    screens.setProjectDeviceId(id)
+                  }
+                }}
+              />
+            )}
 
             {directEdit.directEditMode && (
               <div style={{ position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: 'rgba(59,130,246,0.12)', borderRadius: 10, border: '1px solid rgba(59,130,246,0.3)', zIndex: 60, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
