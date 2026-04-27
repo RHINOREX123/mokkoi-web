@@ -49,6 +49,16 @@ export function useCanvasState(): CanvasState {
     if (!el) return
     const handleWheel = (e: WheelEvent) => {
       const target = e.target as HTMLElement
+
+      // Always let native scroll happen inside the device-picker dropdowns.
+      // Both PreviewToolbar (.mokkoi-device-menu) and ScreenContextToolbar
+      // (.mokkoi-screen-device-list) render their listbox INSIDE canvas-side,
+      // so wheel events bubble through here. Without this guard the
+      // preventDefault below kills the dropdown's overflow:auto scroll —
+      // users see "Scroll for Pixel · Galaxy · iPad" but the wheel does
+      // nothing, making the dropdown feel frozen.
+      if (target.closest('.mokkoi-device-menu, .mokkoi-screen-device-list')) return
+
       if (!e.ctrlKey && !e.metaKey) {
         const phoneFrame = target.closest('.phone-screen, [class*="phone"], [class*="phoneFrame"]')
         if (phoneFrame) return
