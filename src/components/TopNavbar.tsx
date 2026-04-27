@@ -359,15 +359,30 @@ export function TopNavbar({
           onClick={onToggleViewMode}
           title={viewMode === 'canvas-editor' ? 'Back to preview' : 'Open canvas editor'}
           style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '7px 12px', borderRadius: 8,
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
             background: viewMode === 'canvas-editor'
               ? 'linear-gradient(135deg, #6366f1, #818cf8)'
               : 'transparent',
             border: viewMode === 'canvas-editor' ? 'none' : '1px solid rgba(255,255,255,0.12)',
-            color: viewMode === 'canvas-editor' ? '#fff' : '#e2e8f0',
-            fontSize: 13, fontWeight: 500, cursor: 'pointer',
-            transition: 'background 0.15s',
+            color: viewMode === 'canvas-editor' ? '#fff' : '#94a3b8',
+            cursor: 'pointer', transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => {
+            if (viewMode === 'canvas-editor') {
+              e.currentTarget.style.filter = 'brightness(1.1)'
+            } else {
+              e.currentTarget.style.color = '#e2e8f0'
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
+            }
+          }}
+          onMouseLeave={e => {
+            if (viewMode === 'canvas-editor') {
+              e.currentTarget.style.filter = 'none'
+            } else {
+              e.currentTarget.style.color = '#94a3b8'
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+            }
           }}
         >
           <Layers size={14} />
