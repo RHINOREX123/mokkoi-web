@@ -540,6 +540,27 @@ function App() {
                   />
                 )}
                 {viewMode === 'canvas-editor' && (
+                  <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    {/* Dark overlay tint — non-interactive (pointer-events: none) so it
+                        doesn't block canvas interactions underneath */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'rgba(0,0,0,0.18)',
+                      pointerEvents: 'none',
+                      zIndex: 1,
+                    }} />
+                    {/* EDITOR badge — top right corner of canvas area */}
+                    <div style={{
+                      position: 'absolute', top: 16, right: 16,
+                      padding: '4px 10px', borderRadius: 6,
+                      background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                      color: '#fff', fontSize: 10, fontWeight: 700,
+                      letterSpacing: 0.8, textTransform: 'uppercase',
+                      boxShadow: '0 4px 12px rgba(99,102,241,0.4)',
+                      zIndex: 2,
+                    }}>
+                      Editor
+                    </div>
                   <div data-canvas-bg="true" style={{
                     position: 'relative',
                     minWidth: 1, minHeight: 1,
@@ -633,6 +654,7 @@ function App() {
                         </div>
                       </div>
                     ))}
+                  </div>
                   </div>
                 )}
               </>
