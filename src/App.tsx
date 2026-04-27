@@ -540,7 +540,7 @@ function App() {
             )}
 
             {!screens.hasScreens && !ai.isGenerating && referenceImages.length === 0 ? (
-              <div data-canvas-bg="true" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, pointerEvents: 'none', userSelect: 'none', transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)` }}>
+              <div data-canvas-bg="true" style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, pointerEvents: 'none', userSelect: 'none', transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)` }}>
                 <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>Your designs will appear here</span>
               </div>
             ) : (
