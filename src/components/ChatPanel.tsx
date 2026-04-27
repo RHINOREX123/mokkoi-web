@@ -49,10 +49,10 @@ interface ChatPanelProps {
 }
 
 const PLACEHOLDERS = [
-  "What's on your mind?",
-  'Describe your dream screen...',
-  "Let's build something cool...",
-  'What screen do you need?',
+  'Ask Mokkoi to build any app or screen...',
+  'Ask Mokkoi to add, edit, or restyle anything...',
+  'Ask Mokkoi for a redesign, theme change, or new flow...',
+  'Ask Mokkoi: "Make it darker", "Add a settings screen"...',
 ]
 
 const EXAMPLE_CARDS = [
@@ -731,6 +731,33 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             </button>
           </div>
         )}
+
+        {/* Ask Mokkoi header — sits just above the input bar so users see what
+            this box does at a glance. The branded verb keeps Mokkoi front-of-mind. */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          marginBottom: 6, padding: '0 4px',
+        }}>
+          <div style={{
+            width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 9, fontWeight: 800, color: '#fff',
+            boxShadow: '0 1px 4px rgba(99,102,241,0.4)',
+          }}>
+            M
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 600,
+            background: 'linear-gradient(135deg, #818cf8, #c4b5fd)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            letterSpacing: 0.2,
+          }}>
+            Ask Mokkoi
+          </span>
+        </div>
 
         <div className="chat-input-bar relative transition-all duration-200">
           <div className="flex items-center gap-2 px-4" style={{ height: 56 }}>
