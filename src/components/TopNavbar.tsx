@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone } from 'lucide-react'
+import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone, Layers } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
@@ -41,6 +41,11 @@ interface TopNavbarProps {
   onExportProject: () => void
   onPreviewPhone?: () => void
   screenCount: number
+  viewMode: 'preview' | 'canvas-editor'
+  onToggleViewMode: () => void
+  entryPointScreens: Array<{ id: string; name: string }>
+  activeScreenId: string | null
+  onSelectScreen: (screenId: string) => void
 }
 
 export function TopNavbar({
@@ -49,6 +54,8 @@ export function TopNavbar({
   setActiveGeneratedId, setShowCodeExport, setShowShareModal,
   setShowCommandPalette, setShowDeleteConfirm, setToastMessage,
   onExportProject, onPreviewPhone, screenCount,
+  viewMode, onToggleViewMode,
+  entryPointScreens, activeScreenId, onSelectScreen,
 }: TopNavbarProps) {
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
@@ -173,6 +180,38 @@ export function TopNavbar({
             border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 4,
             boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100, minWidth: 220,
           }}>
+            {entryPointScreens.length > 0 && (
+              <>
+                <div style={{
+                  padding: '8px 12px 4px',
+                  fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+                  color: '#94a3b8', textTransform: 'uppercase',
+                }}>
+                  Screens
+                </div>
+                {entryPointScreens.map(s => {
+                  const isActive = s.id === activeScreenId
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => { onSelectScreen(s.id); setShowHamburgerMenu(false) }}
+                      style={{
+                        ...hamburgerItemStyle,
+                        background: isActive ? 'rgba(129,140,248,0.15)' : undefined,
+                        color: isActive ? '#a5b4fc' : '#e2e8f0',
+                        fontWeight: isActive ? 600 : 500,
+                      }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      {isActive && <span style={{ marginRight: 6 }}>►</span>}
+                      {s.name}
+                    </button>
+                  )
+                })}
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '6px 8px' }} />
+              </>
+            )}
             <button onClick={() => { navigate('/'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
@@ -351,6 +390,41 @@ export function TopNavbar({
             onMouseLeave={e => { if (screenCount > 0) { e.currentTarget.style.background = 'rgba(20,184,166,0.1)'; e.currentTarget.style.color = '#14B8A6' } }}
           ><Smartphone size={14} />Preview</button>
         )}
+
+        <button
+          onClick={onToggleViewMode}
+          aria-pressed={viewMode === 'canvas-editor'}
+          title={viewMode === 'canvas-editor' ? 'Back to preview' : 'Open canvas editor'}
+          style={{
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+            background: viewMode === 'canvas-editor'
+              ? 'linear-gradient(135deg, #6366f1, #818cf8)'
+              : 'transparent',
+            border: viewMode === 'canvas-editor' ? 'none' : '1px solid rgba(255,255,255,0.12)',
+            color: viewMode === 'canvas-editor' ? '#fff' : '#94a3b8',
+            cursor: 'pointer', transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => {
+            if (viewMode === 'canvas-editor') {
+              e.currentTarget.style.filter = 'brightness(1.1)'
+            } else {
+              e.currentTarget.style.color = '#e2e8f0'
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
+            }
+          }}
+          onMouseLeave={e => {
+            if (viewMode === 'canvas-editor') {
+              e.currentTarget.style.filter = 'none'
+            } else {
+              e.currentTarget.style.color = '#94a3b8'
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+            }
+          }}
+        >
+          <Layers size={14} />
+          Canvas Editor
+        </button>
 
         <button onClick={() => setShowShareModal(true)} style={{
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
