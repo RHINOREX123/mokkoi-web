@@ -217,7 +217,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
         </button>
         {openDropdown === 'modify' && (
           <div style={DROPDOWN_STYLE}>
-            {menuItem(<PenTool size={16} color="#94a3b8" />, 'Direct Edit', onDirectEdit ?? (() => onToast('Coming soon')))}
+            {onDirectEdit && menuItem(<PenTool size={16} color="#94a3b8" />, 'Direct Edit', onDirectEdit)}
             {menuItem(<MessageSquare size={16} color="#94a3b8" />, 'Edit via chat', onEditViaChat)}
             {menuItem(<Palette size={16} color="#94a3b8" />, 'Change color scheme', onChangeColorScheme)}
             {divider}

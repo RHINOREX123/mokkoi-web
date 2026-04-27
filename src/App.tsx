@@ -676,7 +676,7 @@ function App() {
               onDuplicate={() => { screens.handleDuplicateScreen(); setToastMessage('Screen duplicated!') }}
               onRename={screens.handleRenameScreen}
               onDelete={() => setShowDeleteScreenConfirm(true)}
-              onToast={setToastMessage} onDirectEdit={directEdit.enterDirectEdit}
+              onToast={setToastMessage} onDirectEdit={viewMode === 'canvas-editor' ? directEdit.enterDirectEdit : undefined}
               deviceId={screens.activeDeviceId}
               onDeviceChange={(id) => {
                 if (screens.activeGeneratedId) {
@@ -708,11 +708,13 @@ function App() {
               </div>
             )}
 
-            <CanvasToolbar activeTool={canvas.activeTool} zoomLevel={canvas.zoomLevel} directEditMode={directEdit.directEditMode}
-              setActiveTool={canvas.setActiveTool} zoomIn={canvas.zoomIn} zoomOut={canvas.zoomOut} resetZoom={canvas.resetZoom}
-              enterDirectEdit={directEdit.enterDirectEdit} exitDirectEdit={directEdit.exitDirectEdit}
-              onScreenshotModal={() => setShowScreenshotModal(true)} onUploadRef={() => fileInputRef.current?.click()}
-              onImportHtml={() => setShowImportHtmlModal(true)} />
+            {viewMode === 'canvas-editor' && (
+              <CanvasToolbar activeTool={canvas.activeTool} zoomLevel={canvas.zoomLevel} directEditMode={directEdit.directEditMode}
+                setActiveTool={canvas.setActiveTool} zoomIn={canvas.zoomIn} zoomOut={canvas.zoomOut} resetZoom={canvas.resetZoom}
+                enterDirectEdit={directEdit.enterDirectEdit} exitDirectEdit={directEdit.exitDirectEdit}
+                onScreenshotModal={() => setShowScreenshotModal(true)} onUploadRef={() => fileInputRef.current?.click()}
+                onImportHtml={() => setShowImportHtmlModal(true)} />
+            )}
 
           </div>
         </ErrorBoundary>
