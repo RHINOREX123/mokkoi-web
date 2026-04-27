@@ -1,46 +1,31 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { PhoneFrame } from './PhoneFrame'
 import { usePreviewNavigation } from '../hooks/usePreviewNavigation'
+import { computeFitScale } from '../utils/computeFitScale'
+import { getDevicePreset } from '../constants/devices'
 import type { FlowConnection } from './FlowConnectors'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { ComponentNode } from '../types/mokkoi'
 import type { DeviceId } from '../constants/devices'
 
 interface PreviewPhoneFrameProps {
-  /** All screens in the project; the active one's tree is rendered. */
   screens: GeneratedScreen[]
-  /** Project flow connections (from the wirer) used for in-phone navigation. */
   connections: FlowConnection[]
-  /** Externally controlled active screen id. Changes from outside (e.g. the
-   *  hamburger SCREENS list) sync into the internal nav state. */
   activeScreenId: string
-  /** Called when in-phone navigation swaps the active screen, so App.tsx can
-   *  update its activeGeneratedId for chat-scoping etc.
-   *
-   *  CONTRACT: must be referentially stable across parent renders (use the
-   *  raw `useState` setter or wrap in `useCallback`). The internal sync
-   *  effect lists this in its deps; an unstable callback would cause the
-   *  effect to re-run every render and risk syncing back stale state. */
   onActiveScreenChange: (screenId: string) => void
-  /** Project-level fallback device id when a screen has none. */
   projectDeviceId?: DeviceId
-  /** When the active screen is being generated, click navigation is gated off
-   *  and PhoneFrame shows its existing ShimmerSkeleton. */
   isGenerating?: boolean
-  /** Streaming variant of generating (renders the streaming partial tree). */
   isStreaming?: boolean
-  /** Partial tree during streaming generation. */
   streamingTree?: ComponentNode | null
+  /** When non-null, overrides auto-fit. Driven by the PreviewToolbar zoom controls. */
+  manualZoom?: number | null
+  /** Reports the current effective scale up so the toolbar can show "60%" etc. */
+  onScaleChange?: (scale: number) => void
 }
 
-/** Single big phone frame for Preview mode. Renders the active screen's
- *  tree and intercepts button clicks to perform in-phone navigation via
- *  the project's FlowConnections.
- *
- *  Loading state is delegated to PhoneFrame, which already renders a
- *  ShimmerSkeleton when isGenerating is true. We additionally gate
- *  click-driven navigation while a generation is in progress so taps
- *  don't fire stale connections. */
+/** Single big phone frame for Preview mode. Auto-fits to container size by
+ *  default; can be overridden via the manualZoom prop. Renders the active
+ *  screen's tree and intercepts button clicks for in-phone navigation. */
 export function PreviewPhoneFrame({
   screens,
   connections,
@@ -50,13 +35,14 @@ export function PreviewPhoneFrame({
   isGenerating = false,
   isStreaming = false,
   streamingTree = null,
+  manualZoom = null,
+  onScaleChange,
 }: PreviewPhoneFrameProps) {
   const nav = usePreviewNavigation(activeScreenId, connections)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
 
-  // Sync external activeScreenId → internal nav state when the parent
-  // changes it (e.g. user clicks SCREENS in the hamburger menu).
-  // Deps include nav.navigateTo (stable from useCallback []) instead of
-  // the whole nav object — that one is a fresh reference every render.
+  // Sync external activeScreenId → internal nav state.
   useEffect(() => {
     if (nav.currentScreenId !== activeScreenId) {
       nav.navigateTo(activeScreenId)
@@ -72,10 +58,35 @@ export function PreviewPhoneFrame({
     }
   }, [nav.currentScreenId, activeScreenId, onActiveScreenChange])
 
-  const activeScreen = screens.find(s => s.id === nav.currentScreenId)
+  // ResizeObserver — track the wrapper's available size for auto-fit.
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        setContainerSize({ w: width, h: height })
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
-  // Intercept button clicks anywhere inside the phone frame.
-  // Disabled while generation is in progress (spec edge case).
+  const activeScreen = screens.find(s => s.id === nav.currentScreenId)
+  const deviceId = activeScreen?.deviceId || projectDeviceId
+  const device = getDevicePreset(deviceId || 'iphone-standard')
+  const scale = computeFitScale({
+    container: containerSize,
+    device: { w: device.width, h: device.height },
+    manualZoom,
+  })
+
+  // Report effective scale up so the toolbar can show "60%".
+  useEffect(() => {
+    onScaleChange?.(scale)
+  }, [scale, onScaleChange])
+
+  // Intercept button clicks for in-phone navigation.
   const onClickCapture = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (isGenerating) return
@@ -109,13 +120,25 @@ export function PreviewPhoneFrame({
 
   return (
     <div
+      ref={wrapperRef}
       onClickCapture={onClickCapture}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: '100%', height: '100%', padding: 24, overflow: 'auto',
+        width: '100%', height: '100%', overflow: 'hidden',
       }}
     >
-      <div data-screen-id={activeScreen.id}>
+      <div
+        data-screen-id={activeScreen.id}
+        style={{
+          width: device.width,
+          height: device.height,
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          // While container hasn't been measured yet, hide to avoid a 1.0-flash
+          visibility: containerSize.w === 0 ? 'hidden' : 'visible',
+          flexShrink: 0,
+        }}
+      >
         <PhoneFrame
           mode="preview"
           generatedTree={!isImage ? activeScreen.tree : undefined}
