@@ -58,6 +58,19 @@ function DeviceDropdown({
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
+      {/* Webkit scrollbar styling for the dropdown. The inline
+       *  scrollbarWidth/scrollbarColor on the listbox covers Firefox;
+       *  Chrome/Edge/Safari ignore those properties, so we provide
+       *  ::-webkit-scrollbar rules here. Without this, Windows Chrome
+       *  hides the scrollbar by default and users can't tell the list
+       *  scrolls past the visible window — they'd think iPhone SE was
+       *  the last device when in fact 6 more (Pixel/Galaxy/iPad) follow. */}
+      <style>{`
+        .mokkoi-device-menu::-webkit-scrollbar { width: 8px; }
+        .mokkoi-device-menu::-webkit-scrollbar-track { background: transparent; }
+        .mokkoi-device-menu::-webkit-scrollbar-thumb { background: rgba(15,23,42,0.22); border-radius: 4px; }
+        .mokkoi-device-menu::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,0.38); }
+      `}</style>
       <button
         type="button"
         aria-label="Device"
@@ -77,19 +90,31 @@ function DeviceDropdown({
         <div
           role="listbox"
           aria-label="Device"
+          className="mokkoi-device-menu"
           style={{
             position: 'absolute',
             top: 'calc(100% + 6px)',
             left: 0,
             minWidth: 240,
-            maxHeight: 360,
+            // 320px ≈ 9 items at ~36px each. Below this, the gradient hint
+            // and the always-visible scrollbar make it obvious the list is
+            // longer than the visible window. (We have 16 devices total.)
+            maxHeight: 320,
             overflowY: 'auto',
+            // overscrollBehavior keeps wheel scrolls inside the dropdown so
+            // page-level scrolls don't leak through once the user scrolls
+            // past the top/bottom of the menu.
+            overscrollBehavior: 'contain',
             background: '#ffffff',
             border: '1px solid rgba(0,0,0,0.08)',
             borderRadius: 8,
             boxShadow: '0 12px 32px rgba(15,23,42,0.14)',
             padding: 4,
             zIndex: 200,
+            // Firefox: thin scrollbar with custom colors. Webkit overrides
+            // come from the <style> block below.
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(15,23,42,0.28) transparent',
           }}
         >
           {DEVICE_PRESETS.map(d => {
