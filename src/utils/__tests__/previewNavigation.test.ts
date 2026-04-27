@@ -56,4 +56,13 @@ describe('findNavigationTarget', () => {
     expect(findNavigationTarget(connections, 'home', '')).toBeNull()
     expect(findNavigationTarget(connections, 'home', undefined)).toBeNull()
   })
+
+  it('skips connections that have no trigger defined', () => {
+    // FlowConnection.trigger is optional; the wirer occasionally produces
+    // connections without one. They must not match any non-empty label.
+    const noTrigger: FlowConnection[] = [
+      { fromScreenId: 'a', toScreenId: 'b' },
+    ]
+    expect(findNavigationTarget(noTrigger, 'a', 'anything')).toBeNull()
+  })
 })
