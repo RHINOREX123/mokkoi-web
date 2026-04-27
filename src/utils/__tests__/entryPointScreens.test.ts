@@ -54,12 +54,16 @@ describe('getEntryPointScreens', () => {
   })
 
   it('always includes the first screen (defensive)', () => {
-    // home has only deep-link incoming — but it's screen[0], so include it
+    // home has only deep-link incoming — but it's screen[0], so include it.
+    // menu is the only other screen with a connection, but as a source-only
+    // node in a non-empty graph it has no incoming and is excluded as orphan.
+    // The result must be exactly ['home'] — anything else means the
+    // defensive-first-screen rule didn't fire correctly.
     const connections: FlowConnection[] = [
       { fromScreenId: 'menu', toScreenId: 'home', trigger: 'Back' },
     ]
     const result = getEntryPointScreens(screens, connections)
-    expect(result.map(s => s.id)).toContain('home')
+    expect(result.map(s => s.id)).toEqual(['home'])
   })
 
   it('treats screens with mixed incoming as entry points (tab wins)', () => {

@@ -43,10 +43,8 @@ export function getEntryPointScreens<T extends { id: string }>(
 
   const tabTargets = new Set<string>()
   const allTargets = new Set<string>()
-  const allSources = new Set<string>()
   for (const c of connections) {
     allTargets.add(c.toScreenId)
-    allSources.add(c.fromScreenId)
     if (isTabTrigger(c.trigger)) tabTargets.add(c.toScreenId)
   }
 
