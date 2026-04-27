@@ -116,6 +116,8 @@ function App() {
   // and the two could disagree). Single source of truth now: the dropdown
   // in PreviewToolbar always writes the project default.
   const handlePreviewDeviceChange = useCallback((deviceId: DeviceId) => {
+    // TEMP DIAGNOSTIC — remove after verifying device picker fires
+    console.log('🔥 MOKKOI DEVICE CHANGE FIRED:', deviceId, '| projectDeviceId before:', screens.projectDeviceId)
     screens.setProjectDeviceId(deviceId)
     setPreviewManualZoom(null) // re-fit on device swap
   }, [screens])
