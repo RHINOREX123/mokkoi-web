@@ -13,7 +13,13 @@ export interface PreviewNavigation {
 
 /** Manages which screen is currently shown in the Preview-mode phone
  *  frame, and turns in-phone button clicks into screen swaps via the
- *  project's FlowConnection list. */
+ *  project's FlowConnection list.
+ *
+ *  `initialScreenId` is read ONLY on mount — later changes to the prop
+ *  are ignored. To change the active screen imperatively (e.g. from the
+ *  hamburger SCREENS list), call `navigateTo`. The consumer component
+ *  is responsible for syncing external screen-id state into this hook
+ *  via `navigateTo` if it needs that behavior. */
 export function usePreviewNavigation(
   initialScreenId: string,
   connections: FlowConnection[],
@@ -24,6 +30,10 @@ export function usePreviewNavigation(
     setCurrentScreenId(screenId)
   }, [])
 
+  // Rebuilds when currentScreenId changes — intentional, since
+  // findNavigationTarget needs the live screen to match connections.
+  // Do NOT remove currentScreenId from deps; a stale closure here would
+  // make navigation always look up from the initial screen.
   const handleClick = useCallback(
     (label: string | undefined): boolean => {
       const target = findNavigationTarget(connections, currentScreenId, label)
