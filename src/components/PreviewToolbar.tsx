@@ -61,15 +61,22 @@ function DeviceDropdown({
       {/* Webkit scrollbar styling for the dropdown. The inline
        *  scrollbarWidth/scrollbarColor on the listbox covers Firefox;
        *  Chrome/Edge/Safari ignore those properties, so we provide
-       *  ::-webkit-scrollbar rules here. Without this, Windows Chrome
-       *  hides the scrollbar by default and users can't tell the list
-       *  scrolls past the visible window — they'd think iPhone SE was
-       *  the last device when in fact 6 more (Pixel/Galaxy/iPad) follow. */}
+       *  ::-webkit-scrollbar rules here. Without obvious styling, Windows
+       *  Chrome hides the scrollbar by default and users can't tell the
+       *  list scrolls past the visible window — they'd think iPhone 16
+       *  Pro Max was the last device when in fact 7 more (SE, Pixel,
+       *  Galaxy, iPad) follow.
+       *
+       *  Use brand purple (#818CF8) at 0.55 opacity for the thumb so it
+       *  reads as a real scrollbar against the white dropdown surface.
+       *  A subtle filled track makes the channel obvious even when the
+       *  thumb is at the extreme top/bottom. Width: 10px (vs 8) so it's
+       *  easy to grab. */}
       <style>{`
-        .mokkoi-device-menu::-webkit-scrollbar { width: 8px; }
-        .mokkoi-device-menu::-webkit-scrollbar-track { background: transparent; }
-        .mokkoi-device-menu::-webkit-scrollbar-thumb { background: rgba(15,23,42,0.22); border-radius: 4px; }
-        .mokkoi-device-menu::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,0.38); }
+        .mokkoi-device-menu::-webkit-scrollbar { width: 10px; }
+        .mokkoi-device-menu::-webkit-scrollbar-track { background: rgba(15,23,42,0.05); border-radius: 4px; }
+        .mokkoi-device-menu::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.55); border-radius: 4px; border: 2px solid #ffffff; background-clip: padding-box; }
+        .mokkoi-device-menu::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.85); border: 2px solid #ffffff; background-clip: padding-box; }
       `}</style>
       <button
         type="button"
@@ -87,34 +94,42 @@ function DeviceDropdown({
         />
       </button>
       {open && (
+        // Outer wrapper holds the scrollable list AND a sticky fade-gradient
+        // overlay that signals "more below." Without the overlay, users on
+        // Windows Chrome who don't notice the scrollbar (even when styled)
+        // assume the visible iPhones are the entire list and miss the
+        // visually-different devices (Pixel/Galaxy/iPad) below.
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 6px)',
+          left: 0,
+          minWidth: 240,
+          background: '#ffffff',
+          border: '1px solid rgba(0,0,0,0.08)',
+          borderRadius: 8,
+          boxShadow: '0 12px 32px rgba(15,23,42,0.14)',
+          padding: 4,
+          zIndex: 200,
+          // Reserve a slim strip below the list for the "more devices" hint.
+          paddingBottom: 0,
+        }}>
         <div
           role="listbox"
           aria-label="Device"
           className="mokkoi-device-menu"
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
-            minWidth: 240,
-            // 320px ≈ 9 items at ~36px each. Below this, the gradient hint
-            // and the always-visible scrollbar make it obvious the list is
-            // longer than the visible window. (We have 16 devices total.)
-            maxHeight: 320,
+            // 240px ≈ 6-7 items. Smaller than 320 so the cropping is OBVIOUS;
+            // the user can see they're not at the bottom of the list.
+            maxHeight: 240,
             overflowY: 'auto',
             // overscrollBehavior keeps wheel scrolls inside the dropdown so
             // page-level scrolls don't leak through once the user scrolls
             // past the top/bottom of the menu.
             overscrollBehavior: 'contain',
-            background: '#ffffff',
-            border: '1px solid rgba(0,0,0,0.08)',
-            borderRadius: 8,
-            boxShadow: '0 12px 32px rgba(15,23,42,0.14)',
-            padding: 4,
-            zIndex: 200,
-            // Firefox: thin scrollbar with custom colors. Webkit overrides
-            // come from the <style> block below.
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(15,23,42,0.28) transparent',
+            // Firefox: prominent scrollbar with brand-purple thumb. Webkit
+            // overrides come from the <style> block above.
+            scrollbarWidth: 'auto',
+            scrollbarColor: 'rgba(99,102,241,0.6) rgba(15,23,42,0.05)',
           }}
         >
           {DEVICE_PRESETS.map(d => {
@@ -163,6 +178,28 @@ function DeviceDropdown({
               </button>
             )
           })}
+        </div>
+        {/* "More devices below" hint — sits below the scrollable list inside
+         *  the dropdown frame. Visible at all times so it's clear the list
+         *  is longer than the visible window, even when the user hasn't
+         *  scrolled yet. The arrow + text make this far more obvious than
+         *  a scrollbar alone (which Windows Chrome users frequently miss). */}
+        <div
+          aria-hidden="true"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '6px 8px 8px',
+            borderTop: '1px solid rgba(15,23,42,0.06)',
+            marginTop: 4,
+            fontSize: 11, fontWeight: 500, color: '#64748b',
+            letterSpacing: 0.2,
+            userSelect: 'none' as const,
+          }}
+        >
+          <span>Scroll for Pixel · Galaxy · iPad</span>
+          <span style={{ animation: 'mokkoi-bounce-y 1.6s ease-in-out infinite', display: 'inline-block' }}>↓</span>
+        </div>
+        <style>{`@keyframes mokkoi-bounce-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }`}</style>
         </div>
       )}
     </div>

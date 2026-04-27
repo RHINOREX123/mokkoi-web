@@ -260,11 +260,15 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
             <div
               className="mokkoi-screen-device-list"
               style={{
-                maxHeight: 280,
+                // 220px ≈ 6 items. Smaller than 280 so the cropping is OBVIOUS.
+                maxHeight: 220,
                 overflowY: 'auto',
                 overscrollBehavior: 'contain',
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'rgba(255,255,255,0.28) transparent',
+                // Firefox: prominent scrollbar with brand-purple thumb on a
+                // visible dark track. Webkit overrides come from the <style>
+                // block at the bottom of the toolbar.
+                scrollbarWidth: 'auto',
+                scrollbarColor: 'rgba(129,140,248,0.7) rgba(255,255,255,0.06)',
               }}
             >
               {DEVICE_PRESETS.map(preset => {
@@ -294,6 +298,27 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
                   </button>
                 )
               })}
+            </div>
+            {/* "More devices below" hint — see PreviewToolbar for rationale.
+             *  Without this, Windows Chrome users miss the scrollbar entirely
+             *  and assume the visible iPhones are all there is. Color is
+             *  slate-400 (#94a3b8) so it reads on the dark dropdown surface;
+             *  the muted #64748b used in the light-theme PreviewToolbar
+             *  variant disappears against #1A1A1A. */}
+            <div
+              aria-hidden="true"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '6px 8px 4px',
+                borderTop: '1px solid rgba(255,255,255,0.06)',
+                marginTop: 4,
+                fontSize: 10, fontWeight: 500, color: '#94a3b8',
+                letterSpacing: 0.2,
+                userSelect: 'none' as const,
+              }}
+            >
+              <span>Scroll for Pixel · Galaxy · iPad</span>
+              <span style={{ animation: 'mokkoi-bounce-y 1.6s ease-in-out infinite', display: 'inline-block' }}>↓</span>
             </div>
           </div>
         )}
@@ -404,20 +429,29 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
       </button>
 
       {/* Fade-in animation + scrollbar styling for the device list inside
-       *  the Preview dropdown. The dropdown is dark (#1A1A1A) so the
-       *  thumb uses a light translucent color. Firefox uses the
-       *  scrollbarWidth/scrollbarColor inline styles on the list div;
-       *  these ::-webkit-scrollbar rules cover Chrome/Edge/Safari, where
-       *  the bar is hidden by default on Windows. */}
+       *  the Preview dropdown. The dropdown is dark (#1A1A1A), so:
+       *
+       *  - Thumb uses brand purple at 0.7 opacity — reads as a real
+       *    scrollbar against the dark surface (the previous 0.18 white
+       *    was almost invisible on Windows Chrome).
+       *  - Filled track at 0.06 white makes the channel obvious even
+       *    when the thumb is at the extreme top/bottom.
+       *  - Width 10px (vs 8) so it's easy to grab.
+       *
+       *  mokkoi-bounce-y powers the ↓ arrow next to the "Scroll for
+       *  Pixel · Galaxy · iPad" footer hint. The hint is shared with
+       *  PreviewToolbar but each component defines the keyframes
+       *  locally — they aren't mounted at the same time. */}
       <style>{`
         @keyframes fadeInToolbar {
           from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
           to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
-        .mokkoi-screen-device-list::-webkit-scrollbar { width: 8px; }
-        .mokkoi-screen-device-list::-webkit-scrollbar-track { background: transparent; }
-        .mokkoi-screen-device-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 4px; }
-        .mokkoi-screen-device-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.32); }
+        @keyframes mokkoi-bounce-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
+        .mokkoi-screen-device-list::-webkit-scrollbar { width: 10px; }
+        .mokkoi-screen-device-list::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 4px; }
+        .mokkoi-screen-device-list::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.7); border-radius: 4px; border: 2px solid #1A1A1A; background-clip: padding-box; }
+        .mokkoi-screen-device-list::-webkit-scrollbar-thumb:hover { background: rgba(129,140,248,0.9); border: 2px solid #1A1A1A; background-clip: padding-box; }
       `}</style>
     </div>
   )
