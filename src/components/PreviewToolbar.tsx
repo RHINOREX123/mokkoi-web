@@ -1,5 +1,6 @@
 import { ChevronDown, Minus, Plus, RotateCw } from 'lucide-react'
 import { DEVICE_PRESETS, getDevicePreset } from '../constants/devices'
+import { MIN_ZOOM, MAX_ZOOM } from '../utils/computeFitScale'
 import type { DeviceId } from '../constants/devices'
 
 interface PreviewToolbarProps {
@@ -15,6 +16,13 @@ interface PreviewToolbarProps {
 
 const ZOOM_STEP = 0.1
 
+const BASE_BTN_STYLE: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  height: 28, padding: '0 8px', borderRadius: 6,
+  background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)',
+  color: '#334155', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+}
+
 export function PreviewToolbar({
   deviceId, onDeviceChange,
   effectiveScale, manualZoom, onZoomChange,
@@ -22,13 +30,6 @@ export function PreviewToolbar({
 }: PreviewToolbarProps) {
   const device = getDevicePreset(deviceId)
   const pct = Math.round(effectiveScale * 100)
-
-  const baseBtn: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    height: 28, padding: '0 8px', borderRadius: 6,
-    background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.08)',
-    color: '#334155', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-  }
 
   return (
     <div
@@ -44,13 +45,13 @@ export function PreviewToolbar({
       }}
     >
       {/* Device dropdown */}
-      <label style={{ position: 'relative', display: 'inline-flex' }}>
-        <span style={{ position: 'absolute', left: -9999 }}>Device</span>
+      <span style={{ position: 'relative', display: 'inline-flex' }}>
         <select
+          aria-label="Device"
           value={deviceId}
           onChange={e => onDeviceChange(e.target.value as DeviceId)}
           style={{
-            ...baseBtn,
+            ...BASE_BTN_STYLE,
             appearance: 'none', paddingRight: 26, cursor: 'pointer',
           }}
         >
@@ -62,7 +63,7 @@ export function PreviewToolbar({
           size={14}
           style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b' }}
         />
-      </label>
+      </span>
 
       {/* Dimensions */}
       <span style={{ fontSize: 12, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
@@ -77,25 +78,25 @@ export function PreviewToolbar({
         <button
           type="button"
           aria-label="Zoom out"
-          onClick={() => onZoomChange((manualZoom ?? effectiveScale) - ZOOM_STEP)}
-          style={{ ...baseBtn, width: 28, padding: 0 }}
+          onClick={() => onZoomChange(Math.max(MIN_ZOOM, (manualZoom ?? effectiveScale) - ZOOM_STEP))}
+          style={{ ...BASE_BTN_STYLE, width: 28, padding: 0 }}
         >
           <Minus size={14} />
         </button>
         <button
           type="button"
           aria-label="Reset to auto-fit"
-          title="Click to auto-fit"
+          title="Reset to auto-fit"
           onClick={() => onZoomChange(null)}
-          style={{ ...baseBtn, minWidth: 56, fontVariantNumeric: 'tabular-nums' }}
+          style={{ ...BASE_BTN_STYLE, minWidth: 56, fontVariantNumeric: 'tabular-nums' }}
         >
           {pct}%
         </button>
         <button
           type="button"
           aria-label="Zoom in"
-          onClick={() => onZoomChange((manualZoom ?? effectiveScale) + ZOOM_STEP)}
-          style={{ ...baseBtn, width: 28, padding: 0 }}
+          onClick={() => onZoomChange(Math.min(MAX_ZOOM, (manualZoom ?? effectiveScale) + ZOOM_STEP))}
+          style={{ ...BASE_BTN_STYLE, width: 28, padding: 0 }}
         >
           <Plus size={14} />
         </button>
@@ -106,7 +107,7 @@ export function PreviewToolbar({
         type="button"
         aria-label="Refresh preview"
         onClick={onRefresh}
-        style={{ ...baseBtn, width: 28, padding: 0 }}
+        style={{ ...BASE_BTN_STYLE, width: 28, padding: 0 }}
       >
         <RotateCw size={14} />
       </button>
