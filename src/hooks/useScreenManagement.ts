@@ -3,7 +3,7 @@ import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
 import type { ChatMessage } from '../components/ChatPanel'
 import { GAP, PAD_X, PAD_Y, type FlowConnection } from '../components/FlowConnectors'
-import { DEFAULT_DEVICE, getCanvasDimensions } from '../constants/devices'
+import { DEFAULT_DEVICE, getCanvasDimensions, resolveDeviceId } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
 
 export interface GeneratedScreen {
@@ -108,7 +108,10 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
         .single()
       if (project) {
         setProjectName(project.name || 'Untitled Project')
-        setProjectDeviceIdState((project.device_id as DeviceId) || DEFAULT_DEVICE)
+        // Resolve legacy IDs (e.g. "iphone-standard" → "iphone-16") at read
+        // time so the device dropdown's `d.id === deviceId` highlight check
+        // works for old projects. Writes always go out as canonical IDs.
+        setProjectDeviceIdState(resolveDeviceId(project.device_id || DEFAULT_DEVICE) as DeviceId)
         if (Array.isArray(project.connections)) {
           setConnections(project.connections as FlowConnection[])
         }
@@ -120,16 +123,20 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
         .eq('project_id', projectId)
         .order('order_index', { ascending: true })
       if (screens && screens.length > 0) {
-        const loaded: GeneratedScreen[] = screens.map(s => ({
-          id: s.id,
-          name: s.name,
-          tree: s.component_tree as ComponentNode,
-          originalPrompt: s.original_prompt ?? s.prompt ?? undefined,
-          source: (s.source as 'web' | 'mcp') ?? 'web',
-          x: (s as Record<string, unknown>).x_pos as number | undefined,
-          y: (s as Record<string, unknown>).y_pos as number | undefined,
-          deviceId: ((s as Record<string, unknown>).device_id as DeviceId) || undefined,
-        }))
+        const loaded: GeneratedScreen[] = screens.map(s => {
+          const rawDeviceId = (s as Record<string, unknown>).device_id as string | undefined
+          return {
+            id: s.id,
+            name: s.name,
+            tree: s.component_tree as ComponentNode,
+            originalPrompt: s.original_prompt ?? s.prompt ?? undefined,
+            source: (s.source as 'web' | 'mcp') ?? 'web',
+            x: (s as Record<string, unknown>).x_pos as number | undefined,
+            y: (s as Record<string, unknown>).y_pos as number | undefined,
+            // Resolve legacy IDs at load (see project.device_id load above).
+            deviceId: rawDeviceId ? (resolveDeviceId(rawDeviceId) as DeviceId) : undefined,
+          }
+        })
         setGeneratedScreens(loaded)
         setActiveGeneratedId(loaded[0].id)
       }
@@ -243,6 +250,12 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
           source: s.source ?? 'web',
           x_pos: s.x ?? null,
           y_pos: s.y ?? null,
+          // Per-screen device override (writes canonical IDs only — legacy
+          // values are resolved at read time in the load effect above).
+          // Without this, picking a different phone in the toolbar would
+          // update local state but never persist; refresh would revert
+          // to the project default.
+          device_id: s.deviceId ?? null,
           updated_at: new Date().toISOString(),
         })
         if (error) {

@@ -62,8 +62,14 @@ const LEGACY_DEVICE_ID_MAP: Record<string, string> = {
   'android-large':    'pixel-10',
 }
 
-/** Resolve a (possibly legacy) device ID to its current canonical ID. */
-function resolveDeviceId(deviceId: string): string {
+/** Resolve a (possibly legacy) device ID to its current canonical ID. Exported
+ *  so callers loading data from Supabase can normalize legacy IDs to canonical
+ *  ones BEFORE handing the value off to UI that compares against preset IDs
+ *  (e.g. the dropdown's `isSelected = d.id === deviceId` check). Without this,
+ *  a project saved with the legacy "iphone-standard" string would render fine
+ *  in PhoneFrame (which calls getDevicePreset internally), but the dropdown
+ *  would show no item highlighted because no preset has that raw id. */
+export function resolveDeviceId(deviceId: string): string {
   return LEGACY_DEVICE_ID_MAP[deviceId] ?? deviceId
 }
 
