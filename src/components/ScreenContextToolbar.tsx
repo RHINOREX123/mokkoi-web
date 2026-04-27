@@ -79,6 +79,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [showDownloadSub, setShowDownloadSub] = useState(false)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const previewDropdownRef = useRef<HTMLDivElement>(null)
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -90,6 +91,18 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // Stop wheel events from bubbling out of the Preview dropdown (which contains
+  // the device picker). Defense in depth — see the equivalent block in
+  // PreviewToolbar's DeviceDropdown for the full rationale.
+  useEffect(() => {
+    if (openDropdown !== 'preview') return
+    const dropdown = previewDropdownRef.current
+    if (!dropdown) return
+    const onWheel = (e: WheelEvent) => { e.stopPropagation() }
+    dropdown.addEventListener('wheel', onWheel, { passive: false })
+    return () => dropdown.removeEventListener('wheel', onWheel)
+  }, [openDropdown])
 
   // Close dropdown when toolbar hides
   useEffect(() => {
@@ -240,7 +253,7 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
           <ChevronDown size={12} style={{ opacity: 0.5 }} />
         </button>
         {openDropdown === 'preview' && (
-          <div style={DROPDOWN_STYLE}>
+          <div ref={previewDropdownRef} style={DROPDOWN_STYLE}>
             {menuItem(<ExternalLink size={16} color="#94a3b8" />, 'Preview in new tab', onPreviewNewTab)}
             {menuItem(<QrCode size={16} color="#94a3b8" />, 'Show QR Code', onShowQrCode)}
             {divider}

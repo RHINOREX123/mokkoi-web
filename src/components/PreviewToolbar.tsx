@@ -40,6 +40,7 @@ function DeviceDropdown({
 }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const device = getDevicePreset(deviceId)
 
   useEffect(() => {
@@ -50,9 +51,23 @@ function DeviceDropdown({
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDocMouseDown)
     document.addEventListener('keydown', onKey)
+
+    // Stop wheel events from bubbling out of the dropdown. The canvas-side div
+    // higher up the tree has a non-passive wheel listener that preventDefaults
+    // every wheel event outside `.phone-screen` to drive canvas pan/zoom — that
+    // killed scrolling inside this dropdown. A class-based exception in the
+    // canvas wheel handler should already cover us, but stopPropagation here
+    // is defense in depth: wheel events simply don't reach canvas-side, so
+    // there's no way for it to interfere. Native scroll on the inner listbox
+    // proceeds because we never call preventDefault.
+    const dropdown = dropdownRef.current
+    const onWheel = (e: WheelEvent) => { e.stopPropagation() }
+    if (dropdown) dropdown.addEventListener('wheel', onWheel, { passive: false })
+
     return () => {
       document.removeEventListener('mousedown', onDocMouseDown)
       document.removeEventListener('keydown', onKey)
+      if (dropdown) dropdown.removeEventListener('wheel', onWheel)
     }
   }, [open])
 
@@ -99,7 +114,7 @@ function DeviceDropdown({
         // Windows Chrome who don't notice the scrollbar (even when styled)
         // assume the visible iPhones are the entire list and miss the
         // visually-different devices (Pixel/Galaxy/iPad) below.
-        <div style={{
+        <div ref={dropdownRef} style={{
           position: 'absolute',
           top: 'calc(100% + 6px)',
           left: 0,
