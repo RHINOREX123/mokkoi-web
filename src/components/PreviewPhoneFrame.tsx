@@ -110,7 +110,10 @@ export function PreviewPhoneFrame({
   }, [nav.currentScreenId, activeScreenId, onActiveScreenChange])
 
   const activeScreen = screens.find(s => s.id === nav.currentScreenId)
-  const deviceId = activeScreen?.deviceId || projectDeviceId
+  // Device is project-level only; per-screen overrides used to be supported
+  // but caused state-sync bugs when the toolbar's selected device disagreed
+  // with the rendered phone. Single source of truth now.
+  const deviceId = projectDeviceId
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const scale = computeFitScale({
     container: containerSize,
@@ -183,7 +186,7 @@ export function PreviewPhoneFrame({
           isGenerating={isGenerating}
           isStreaming={isStreaming}
           streamingTree={streamingTree}
-          deviceId={activeScreen.deviceId || projectDeviceId}
+          deviceId={projectDeviceId}
         />
       </div>
     </div>

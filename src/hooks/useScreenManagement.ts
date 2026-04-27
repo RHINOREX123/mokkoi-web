@@ -93,8 +93,12 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   hasTreeRef.current = !!generatedTree
   const hasScreens = generatedScreens.length > 0
 
-  // Active screen's device, falling back to project default
-  const activeDeviceId: DeviceId = (activeGenerated?.deviceId as DeviceId) || projectDeviceId
+  // Device is a project-level setting; per-screen overrides (legacy) are
+  // ignored at read time so all screens render at the same device. The
+  // `screens.device_id` column stays in the DB schema for backward-compat
+  // but the UI no longer surfaces a per-screen picker — there's a single
+  // source of truth in PreviewToolbar.
+  const activeDeviceId: DeviceId = projectDeviceId
 
   // Load project data from Supabase
   useEffect(() => {

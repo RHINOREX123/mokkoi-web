@@ -6,8 +6,6 @@ import {
   ImagePlus, FileCode, Package, ChevronRight,
 } from 'lucide-react'
 import type { ComponentNode } from '../types/mokkoi'
-import { DEVICE_PRESETS } from '../constants/devices'
-import type { DeviceId } from '../constants/devices'
 
 interface ScreenContextToolbarProps {
   visible: boolean
@@ -32,8 +30,6 @@ interface ScreenContextToolbarProps {
   onDelete: () => void
   onToast: (msg: string) => void
   onDirectEdit?: () => void
-  deviceId: DeviceId
-  onDeviceChange: (id: DeviceId) => void
 }
 
 const DROPDOWN_STYLE: React.CSSProperties = {
@@ -73,13 +69,12 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
     onChangeColorScheme, onMakeDarker, onMakeLighter,
     onPreviewNewTab, onShowQrCode,
     onExportCode, onDownloadPNG, onDownloadTSX, onDownloadZIP, onDownloadExpo, onDuplicate, onRename, onDelete,
-    onToast, onDirectEdit, deviceId, onDeviceChange,
+    onToast, onDirectEdit,
   } = props
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [showDownloadSub, setShowDownloadSub] = useState(false)
   const toolbarRef = useRef<HTMLDivElement>(null)
-  const previewDropdownRef = useRef<HTMLDivElement>(null)
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -91,18 +86,6 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
-
-  // Stop wheel events from bubbling out of the Preview dropdown (which contains
-  // the device picker). Defense in depth — see the equivalent block in
-  // PreviewToolbar's DeviceDropdown for the full rationale.
-  useEffect(() => {
-    if (openDropdown !== 'preview') return
-    const dropdown = previewDropdownRef.current
-    if (!dropdown) return
-    const onWheel = (e: WheelEvent) => { e.stopPropagation() }
-    dropdown.addEventListener('wheel', onWheel, { passive: false })
-    return () => dropdown.removeEventListener('wheel', onWheel)
-  }, [openDropdown])
 
   // Close dropdown when toolbar hides
   useEffect(() => {
@@ -253,86 +236,9 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
           <ChevronDown size={12} style={{ opacity: 0.5 }} />
         </button>
         {openDropdown === 'preview' && (
-          <div ref={previewDropdownRef} style={DROPDOWN_STYLE}>
+          <div style={DROPDOWN_STYLE}>
             {menuItem(<ExternalLink size={16} color="#94a3b8" />, 'Preview in new tab', onPreviewNewTab)}
             {menuItem(<QrCode size={16} color="#94a3b8" />, 'Show QR Code', onShowQrCode)}
-            {divider}
-            <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 600, color: '#555', letterSpacing: '0.3px' }}>
-              Screen Device
-            </div>
-            {/* Scrollable list — 16 presets won't fit at full height.
-                Dimensions are right-aligned (Bolt-style) so the eye can
-                scan widths/heights down the column quickly.
-
-                The scrollbar must be visible: the list extends past
-                iPhone SE to Pixel/Galaxy/iPad, and Windows Chrome
-                hides scrollbars by default. Inline scrollbarWidth/
-                scrollbarColor covers Firefox; ::-webkit-scrollbar rules
-                in the <style> block at the bottom of the toolbar cover
-                Chrome/Edge/Safari. Dark dropdown → light thumb. */}
-            <div
-              className="mokkoi-screen-device-list"
-              style={{
-                // 220px ≈ 6 items. Smaller than 280 so the cropping is OBVIOUS.
-                maxHeight: 220,
-                overflowY: 'auto',
-                overscrollBehavior: 'contain',
-                // Firefox: prominent scrollbar with brand-purple thumb on a
-                // visible dark track. Webkit overrides come from the <style>
-                // block at the bottom of the toolbar.
-                scrollbarWidth: 'auto',
-                scrollbarColor: 'rgba(129,140,248,0.7) rgba(255,255,255,0.06)',
-              }}
-            >
-              {DEVICE_PRESETS.map(preset => {
-                const isSelected = deviceId === preset.id
-                return (
-                  <button
-                    key={preset.id}
-                    onClick={() => { onDeviceChange(preset.id as DeviceId); setOpenDropdown(null) }}
-                    style={{
-                      ...MENU_ITEM_STYLE,
-                      justifyContent: 'space-between',
-                      color: isSelected ? '#818CF8' : '#e2e8f0',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 14, width: 20, textAlign: 'center' }}>{preset.icon}</span>
-                      {preset.name}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 11, color: isSelected ? '#818CF8' : '#555', fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>
-                        {preset.width}×{preset.height}
-                      </span>
-                      {isSelected && <span style={{ color: '#818CF8', fontSize: 14 }}>✓</span>}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            {/* "More devices below" hint — see PreviewToolbar for rationale.
-             *  Without this, Windows Chrome users miss the scrollbar entirely
-             *  and assume the visible iPhones are all there is. Color is
-             *  slate-400 (#94a3b8) so it reads on the dark dropdown surface;
-             *  the muted #64748b used in the light-theme PreviewToolbar
-             *  variant disappears against #1A1A1A. */}
-            <div
-              aria-hidden="true"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                padding: '6px 8px 4px',
-                borderTop: '1px solid rgba(255,255,255,0.06)',
-                marginTop: 4,
-                fontSize: 10, fontWeight: 500, color: '#94a3b8',
-                letterSpacing: 0.2,
-                userSelect: 'none' as const,
-              }}
-            >
-              <span>Scroll for Pixel · Galaxy · iPad</span>
-              <span style={{ animation: 'mokkoi-bounce-y 1.6s ease-in-out infinite', display: 'inline-block' }}>↓</span>
-            </div>
           </div>
         )}
       </div>
@@ -441,30 +347,11 @@ export function ScreenContextToolbar(props: ScreenContextToolbarProps) {
         <ThumbsDown size={14} />
       </button>
 
-      {/* Fade-in animation + scrollbar styling for the device list inside
-       *  the Preview dropdown. The dropdown is dark (#1A1A1A), so:
-       *
-       *  - Thumb uses brand purple at 0.7 opacity — reads as a real
-       *    scrollbar against the dark surface (the previous 0.18 white
-       *    was almost invisible on Windows Chrome).
-       *  - Filled track at 0.06 white makes the channel obvious even
-       *    when the thumb is at the extreme top/bottom.
-       *  - Width 10px (vs 8) so it's easy to grab.
-       *
-       *  mokkoi-bounce-y powers the ↓ arrow next to the "Scroll for
-       *  Pixel · Galaxy · iPad" footer hint. The hint is shared with
-       *  PreviewToolbar but each component defines the keyframes
-       *  locally — they aren't mounted at the same time. */}
       <style>{`
         @keyframes fadeInToolbar {
           from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
           to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
-        @keyframes mokkoi-bounce-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
-        .mokkoi-screen-device-list::-webkit-scrollbar { width: 10px; }
-        .mokkoi-screen-device-list::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 4px; }
-        .mokkoi-screen-device-list::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.7); border-radius: 4px; border: 2px solid #1A1A1A; background-clip: padding-box; }
-        .mokkoi-screen-device-list::-webkit-scrollbar-thumb:hover { background: rgba(129,140,248,0.9); border: 2px solid #1A1A1A; background-clip: padding-box; }
       `}</style>
     </div>
   )

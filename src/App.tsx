@@ -109,16 +109,14 @@ function App() {
   const [previewEffectiveScale, setPreviewEffectiveScale] = useState(1)
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0)
 
-  // When the user changes the device from PreviewToolbar, write to the active
-  // screen's per-screen override if there is one, otherwise to the project-level
-  // default. This keeps the toolbar's `deviceId` and the rendered phone in sync,
-  // since PreviewPhoneFrame uses `activeScreen.deviceId || projectDeviceId`.
+  // Device is a project-level setting — every screen in the project renders
+  // at the same dimensions. Per-screen overrides used to exist but caused
+  // a class of state-sync bugs (the phone wouldn't visibly resize because
+  // the active-screen device tracked separately from the project device,
+  // and the two could disagree). Single source of truth now: the dropdown
+  // in PreviewToolbar always writes the project default.
   const handlePreviewDeviceChange = useCallback((deviceId: DeviceId) => {
-    if (screens.activeGeneratedId) {
-      screens.setScreenDeviceId(screens.activeGeneratedId, deviceId)
-    } else {
-      screens.setProjectDeviceId(deviceId)
-    }
+    screens.setProjectDeviceId(deviceId)
     setPreviewManualZoom(null) // re-fit on device swap
   }, [screens])
 
@@ -696,14 +694,6 @@ function App() {
                 onRename={screens.handleRenameScreen}
                 onDelete={() => setShowDeleteScreenConfirm(true)}
                 onToast={setToastMessage} onDirectEdit={directEdit.enterDirectEdit}
-                deviceId={screens.activeDeviceId}
-                onDeviceChange={(id) => {
-                  if (screens.activeGeneratedId) {
-                    screens.setScreenDeviceId(screens.activeGeneratedId, id)
-                  } else {
-                    screens.setProjectDeviceId(id)
-                  }
-                }}
               />
             )}
 
