@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { PhoneFrame } from './components/PhoneFrame'
+import { PreviewPhoneFrame } from './components/PreviewPhoneFrame'
 import { getCanvasDimensions } from './constants/devices'
 import { ChatPanel } from './components/ChatPanel'
 import { CodeExportModal } from './components/CodeExportModal'
@@ -92,6 +93,16 @@ function App() {
   const [showExpoPreview, setShowExpoPreview] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 'preview' = single Bolt-style phone (default).
+  // 'canvas-editor' = existing grid-of-phones view.
+  const [viewMode, setViewMode] = useState<'preview' | 'canvas-editor'>('preview')
+  const toggleViewMode = useCallback(() => {
+    setViewMode(m => m === 'preview' ? 'canvas-editor' : 'preview')
+  }, [])
+  // toggleViewMode is wired into the TopNavbar button in Task 6. Reference it
+  // here so noUnusedLocals doesn't complain in the meantime.
+  void toggleViewMode
 
   // Resizable panel
   const [splitRatio, setSplitRatio] = useState(0.28)
@@ -484,13 +495,27 @@ function App() {
                 <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>Your designs will appear here</span>
               </div>
             ) : (
-              <div data-canvas-bg="true" style={{
-                position: 'relative',
-                minWidth: 1, minHeight: 1,
-                transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px) scale(${canvas.zoomLevel / 100})`,
-                transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current || canvas.isZooming.current) ? 'none' : 'transform 0.15s ease-out',
-                cursor: canvas.panActive ? 'inherit' : 'default',
-              }}>
+              <>
+                {viewMode === 'preview' && (
+                  <PreviewPhoneFrame
+                    screens={screens.generatedScreens.filter(s => s.tree || s.imageUrl)}
+                    connections={screens.connections}
+                    activeScreenId={screens.activeGeneratedId || ''}
+                    onActiveScreenChange={screens.setActiveGeneratedId}
+                    projectDeviceId={screens.projectDeviceId}
+                    isGenerating={ai.isGenerating}
+                    isStreaming={ai.isStreaming}
+                    streamingTree={ai.partialTree}
+                  />
+                )}
+                {viewMode === 'canvas-editor' && (
+                  <div data-canvas-bg="true" style={{
+                    position: 'relative',
+                    minWidth: 1, minHeight: 1,
+                    transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px) scale(${canvas.zoomLevel / 100})`,
+                    transformOrigin: 'center center', transition: (canvas.isPanning.current || isDraggingScreen.current || canvas.isZooming.current) ? 'none' : 'transform 0.15s ease-out',
+                    cursor: canvas.panActive ? 'inherit' : 'default',
+                  }}>
                 {screens.generatedScreens.map((screen) => {
                   const isActive = screen.id === screens.activeGeneratedId
                   const isImage = screen.type === 'image'
@@ -564,20 +589,22 @@ function App() {
                   )
                 })}
 
-                {referenceImages.map(img => (
-                  <div key={img.id} onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0, position: 'relative' }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#888', padding: '2px 8px', borderRadius: 6 }}>Ref: {img.name}</span>
-                    <div style={{ position: 'relative' }}>
-                      <img src={img.url} alt={img.name} style={{ maxWidth: 280, maxHeight: 500, borderRadius: 12, border: '2px solid rgba(0,0,0,0.15)', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', objectFit: 'contain', background: '#fff' }} />
-                      <button onClick={() => setReferenceImages(prev => prev.filter(i => i.id !== img.id))} style={{ position: 'absolute', top: -8, right: -8, width: 22, height: 22, borderRadius: '50%', background: '#1a1a1a', color: '#fff', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.3)', transition: 'all 0.15s' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#f87171'; e.currentTarget.style.borderColor = '#f87171' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#1a1a1a'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
-                        title="Remove reference image"
-                      ><X size={12} /></button>
-                    </div>
+                    {referenceImages.map(img => (
+                      <div key={img.id} onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0, position: 'relative' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#888', padding: '2px 8px', borderRadius: 6 }}>Ref: {img.name}</span>
+                        <div style={{ position: 'relative' }}>
+                          <img src={img.url} alt={img.name} style={{ maxWidth: 280, maxHeight: 500, borderRadius: 12, border: '2px solid rgba(0,0,0,0.15)', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', objectFit: 'contain', background: '#fff' }} />
+                          <button onClick={() => setReferenceImages(prev => prev.filter(i => i.id !== img.id))} style={{ position: 'absolute', top: -8, right: -8, width: 22, height: 22, borderRadius: '50%', background: '#1a1a1a', color: '#fff', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.3)', transition: 'all 0.15s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#f87171'; e.currentTarget.style.borderColor = '#f87171' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#1a1a1a'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+                            title="Remove reference image"
+                          ><X size={12} /></button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
 
             <ScreenContextToolbar
