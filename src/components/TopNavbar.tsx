@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone } from 'lucide-react'
+import { Download, Share2, Plus, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone, Layers } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
@@ -41,6 +41,8 @@ interface TopNavbarProps {
   onExportProject: () => void
   onPreviewPhone?: () => void
   screenCount: number
+  viewMode: 'preview' | 'canvas-editor'
+  onToggleViewMode: () => void
 }
 
 export function TopNavbar({
@@ -49,6 +51,7 @@ export function TopNavbar({
   setActiveGeneratedId, setShowCodeExport, setShowShareModal,
   setShowCommandPalette, setShowDeleteConfirm, setToastMessage,
   onExportProject, onPreviewPhone, screenCount,
+  viewMode, onToggleViewMode,
 }: TopNavbarProps) {
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
@@ -351,6 +354,25 @@ export function TopNavbar({
             onMouseLeave={e => { if (screenCount > 0) { e.currentTarget.style.background = 'rgba(20,184,166,0.1)'; e.currentTarget.style.color = '#14B8A6' } }}
           ><Smartphone size={14} />Preview</button>
         )}
+
+        <button
+          onClick={onToggleViewMode}
+          title={viewMode === 'canvas-editor' ? 'Back to preview' : 'Open canvas editor'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 12px', borderRadius: 8,
+            background: viewMode === 'canvas-editor'
+              ? 'linear-gradient(135deg, #6366f1, #818cf8)'
+              : 'transparent',
+            border: viewMode === 'canvas-editor' ? 'none' : '1px solid rgba(255,255,255,0.12)',
+            color: viewMode === 'canvas-editor' ? '#fff' : '#e2e8f0',
+            fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            transition: 'background 0.15s',
+          }}
+        >
+          <Layers size={14} />
+          Canvas Editor
+        </button>
 
         <button onClick={() => setShowShareModal(true)} style={{
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,

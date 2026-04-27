@@ -100,9 +100,6 @@ function App() {
   const toggleViewMode = useCallback(() => {
     setViewMode(m => m === 'preview' ? 'canvas-editor' : 'preview')
   }, [])
-  // toggleViewMode is wired into the TopNavbar button in Task 6. Reference it
-  // here so noUnusedLocals doesn't complain in the meantime.
-  void toggleViewMode
 
   // Resizable panel
   const [splitRatio, setSplitRatio] = useState(0.28)
@@ -146,6 +143,22 @@ function App() {
     setPanOffset: canvas.setPanOffset,
     hasTreeRef: screens.hasTreeRef,
   })
+
+  // ESC exits canvas-editor mode back to preview
+  useEffect(() => {
+    if (viewMode !== 'canvas-editor') return
+    // If direct-edit is active, useDirectEdit handles Escape itself
+    // (deselect → exit edit mode). Don't double-handle.
+    if (directEdit.directEditMode) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const active = document.activeElement as HTMLElement | null
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return
+      setViewMode('preview')
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [viewMode, directEdit.directEditMode])
 
   // Build screen positions map for layout
   const screenPositions = useMemo(() => {
@@ -418,6 +431,8 @@ function App() {
         onExportProject={handleExportProject}
         onPreviewPhone={() => setShowExpoPreview(true)}
         screenCount={screens.generatedScreens.filter(s => s.tree).length}
+        viewMode={viewMode}
+        onToggleViewMode={toggleViewMode}
       />
 
       {/* Toast */}
