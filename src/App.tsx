@@ -22,6 +22,7 @@ import { NoCreditsModal } from './components/PricingPage'
 import { ExportProjectModal } from './components/ExportProjectModal'
 import { ExpoPreviewModal } from './components/ExpoPreviewModal'
 import { useScreenExport } from './hooks/useScreenExport'
+import { getEntryPointScreens } from './utils/entryPointScreens'
 
 import { supabase } from './lib/supabase'
 import { resetAnalytics } from './lib/analytics'
@@ -174,6 +175,15 @@ function App() {
     })
     return map
   }, [screens.generatedScreens, screens.projectDeviceId])
+
+  // Entry-point screens for hamburger SCREENS list
+  const entryPointScreens = useMemo(
+    () => getEntryPointScreens(
+      screens.generatedScreens.filter(s => s.tree),
+      screens.connections,
+    ),
+    [screens.generatedScreens, screens.connections],
+  )
 
   // Screen drag handlers (global mousemove/mouseup)
   useEffect(() => {
@@ -433,6 +443,9 @@ function App() {
         screenCount={screens.generatedScreens.filter(s => s.tree).length}
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
+        entryPointScreens={entryPointScreens.map(s => ({ id: s.id, name: s.name }))}
+        activeScreenId={screens.activeGeneratedId}
+        onSelectScreen={screens.setActiveGeneratedId}
       />
 
       {/* Toast */}

@@ -43,6 +43,9 @@ interface TopNavbarProps {
   screenCount: number
   viewMode: 'preview' | 'canvas-editor'
   onToggleViewMode: () => void
+  entryPointScreens: Array<{ id: string; name: string }>
+  activeScreenId: string | null
+  onSelectScreen: (screenId: string) => void
 }
 
 export function TopNavbar({
@@ -52,6 +55,7 @@ export function TopNavbar({
   setShowCommandPalette, setShowDeleteConfirm, setToastMessage,
   onExportProject, onPreviewPhone, screenCount,
   viewMode, onToggleViewMode,
+  entryPointScreens, activeScreenId, onSelectScreen,
 }: TopNavbarProps) {
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
@@ -176,6 +180,38 @@ export function TopNavbar({
             border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 4,
             boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100, minWidth: 220,
           }}>
+            {entryPointScreens.length > 0 && (
+              <>
+                <div style={{
+                  padding: '8px 12px 4px',
+                  fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+                  color: '#94a3b8', textTransform: 'uppercase',
+                }}>
+                  Screens
+                </div>
+                {entryPointScreens.map(s => {
+                  const isActive = s.id === activeScreenId
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => { onSelectScreen(s.id); setShowHamburgerMenu(false) }}
+                      style={{
+                        ...hamburgerItemStyle,
+                        background: isActive ? 'rgba(129,140,248,0.15)' : undefined,
+                        color: isActive ? '#a5b4fc' : '#e2e8f0',
+                        fontWeight: isActive ? 600 : 500,
+                      }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      {isActive && <span style={{ marginRight: 6 }}>►</span>}
+                      {s.name}
+                    </button>
+                  )
+                })}
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '6px 8px' }} />
+              </>
+            )}
             <button onClick={() => { navigate('/'); setShowHamburgerMenu(false) }} style={hamburgerItemStyle}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
