@@ -22,6 +22,7 @@ import { TopNavbar } from './components/TopNavbar'
 import { NoCreditsModal } from './components/PricingPage'
 import { ExportProjectModal } from './components/ExportProjectModal'
 import { ExpoPreviewModal } from './components/ExpoPreviewModal'
+import { InlineSnackPreview } from './components/InlineSnackPreview'
 import { useScreenExport } from './hooks/useScreenExport'
 import { getEntryPointScreens } from './utils/entryPointScreens'
 
@@ -559,8 +560,12 @@ function App() {
                       manualZoom={previewManualZoom}
                       onZoomChange={setPreviewManualZoom}
                       onRefresh={() => setPreviewRefreshKey(k => k + 1)}
+                      onTestOnPhone={() => setShowExpoPreview(true)}
                     />
                     <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                      {/* Static tree render — always mounted. Acts as the
+                          immediate-feedback view (paints in <100ms) and the
+                          fallback if Snack fails / times out. */}
                       <PreviewPhoneFrame
                         key={previewRefreshKey}
                         screens={screens.generatedScreens.filter(s => s.tree || s.imageUrl)}
@@ -573,6 +578,21 @@ function App() {
                         streamingTree={ai.partialTree}
                         manualZoom={previewManualZoom}
                         onScaleChange={setPreviewEffectiveScale}
+                      />
+                      {/* Live running app — overlays the static phone via
+                          position:absolute, fades in once Snack acknowledges
+                          the postMessage handshake (~5–10s). Tap targets and
+                          navigation are handled by the running app. Disabled
+                          while generation is in progress (avoids booting
+                          Snack on a partial tree). */}
+                      <InlineSnackPreview
+                        key={previewRefreshKey}
+                        screens={screens.generatedScreens.filter(s => s.tree)}
+                        connections={screens.connections}
+                        projectName={screens.projectName}
+                        deviceId={screens.projectDeviceId}
+                        manualZoom={previewManualZoom}
+                        disabled={ai.isGenerating || ai.isStreaming}
                       />
                     </div>
                   </>

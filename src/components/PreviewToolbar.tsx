@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Minus, Plus, RotateCw } from 'lucide-react'
+import { ChevronDown, Minus, Plus, RotateCw, Smartphone } from 'lucide-react'
 import { DEVICE_PRESETS, getDevicePreset } from '../constants/devices'
 import { MIN_ZOOM, MAX_ZOOM } from '../utils/computeFitScale'
 import type { DeviceId } from '../constants/devices'
@@ -13,6 +13,10 @@ interface PreviewToolbarProps {
   onZoomChange: (manualZoom: number | null) => void
   manualZoom: number | null
   onRefresh: () => void
+  /** Open the Expo phone-preview modal (QR + Snack Open in browser). The
+   *  inline Snack iframe is the primary preview; this button is the
+   *  demoted "test on a real phone" entry point. */
+  onTestOnPhone?: () => void
 }
 
 const ZOOM_STEP = 0.1
@@ -224,7 +228,7 @@ function DeviceDropdown({
 export function PreviewToolbar({
   deviceId, onDeviceChange,
   effectiveScale, manualZoom, onZoomChange,
-  onRefresh,
+  onRefresh, onTestOnPhone,
 }: PreviewToolbarProps) {
   const device = getDevicePreset(deviceId)
   const pct = Math.round(effectiveScale * 100)
@@ -291,6 +295,23 @@ export function PreviewToolbar({
       >
         <RotateCw size={14} />
       </button>
+
+      {/* Test on phone — opens the Expo modal (QR + Snack mobile entry). The
+       *  inline Snack iframe in the main pane is the primary preview; this
+       *  button is the demoted "scan with Expo Go" path. Only renders when
+       *  the parent passes a handler. */}
+      {onTestOnPhone && (
+        <button
+          type="button"
+          aria-label="Test on phone"
+          title="Test on phone (Expo Go)"
+          onClick={onTestOnPhone}
+          style={{ ...BASE_BTN_STYLE, gap: 6 }}
+        >
+          <Smartphone size={14} />
+          <span style={{ fontSize: 12 }}>Phone</span>
+        </button>
+      )}
     </div>
   )
 }
