@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { Snack } from 'snack-sdk'
 import { buildSnackPayload } from '../utils/snackUrl'
 import { computeFitScale } from '../utils/computeFitScale'
 import { getDevicePreset, DEFAULT_DEVICE } from '../constants/devices'
@@ -20,26 +21,29 @@ interface InlineSnackPreviewProps {
   disabled?: boolean
 }
 
-/** Inline Bolt-style preview: overlays the rendered Expo Snack web iframe
- *  on top of `<PreviewPhoneFrame>` so the user sees the actual running RN
- *  app instead of a static tree render.
+/** Inline Bolt-style preview: overlays the rendered Expo Snack web-player
+ *  iframe on top of `<PreviewPhoneFrame>` so the user sees the actual
+ *  running RN app instead of a static tree render.
  *
  *  Architecture:
  *  - This component is `position: absolute; inset: 0` over the same container
  *    that holds `<PreviewPhoneFrame>`. Static stays mounted underneath.
- *  - We embed `snack.expo.dev/embedded?platform=web&...` (the same URL the
- *    `<ExpoPreviewModal>` already uses — web platform is supported out of
- *    the box). The handshake is the same `expoFrameLoaded` / `expoDataEvent`
- *    postMessage protocol — see ExpoPreviewModal.tsx for the original.
+ *  - Uses the official `snack-sdk` package. We construct a `Snack` instance
+ *    with our generated files+dependencies and pass an `iframe.contentWindow`
+ *    reference via `webPreviewRef`. The SDK handles the socket.io transport
+ *    and exposes `state.webPreviewURL` — the chrome-free web-player URL we
+ *    set as the iframe's src.
+ *  - The previous home-rolled `/embedded` postMessage approach put us on
+ *    Snack's IDE view (code editor visible). The SDK's web player URL is
+ *    a separate runtime endpoint that renders only the running app.
  *  - While Snack boots (~5–10s) the iframe is opacity:0 / pointerEvents:none,
  *    so the static phone underneath is fully visible/interactive.
- *  - On `expoFrameLoaded`, we send the payload, mark ready, and fade in.
  *  - On 15s timeout or build error, we keep the iframe hidden and the
  *    static fallback remains visible.
  *
- *  No SDK package — uses raw postMessage. Generated code uses a state-based
- *  tab switcher (no React Navigation), all RN core imports — works on
- *  react-native-web inside Snack with no compatibility shims. */
+ *  `<ExpoPreviewModal>` is unchanged — it still uses the manual postMessage
+ *  protocol for its mobile/QR flow. The SDK is only used here in the inline
+ *  web preview where its web-player URL is what we need. */
 export function InlineSnackPreview({
   screens,
   connections,
@@ -51,16 +55,20 @@ export function InlineSnackPreview({
   const [snackReady, setSnackReady] = useState(false)
   const [snackErrored, setSnackErrored] = useState(false)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
+  const [webPreviewURL, setWebPreviewURL] = useState<string | null>(null)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const iframeIdRef = useRef(`mokkoi-inline-${Date.now()}`)
-  const payloadSentRef = useRef(false)
+  // The SDK reads `webPreviewRef.current` (a Window) on every postMessage
+  // dispatch. The SDK's SnackWindowRef type is `{ current: Window | null }`
+  // (NOT a React RefObject of that — directly the object). We keep one
+  // stable instance for the SDK and mutate `.current` when the iframe mounts.
+  const webPreviewRefObjRef = useRef<{ current: Window | null }>({ current: null })
   const observerRef = useRef<ResizeObserver | null>(null)
 
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const isAndroid = device.category === 'Android'
 
-  // Build payload once — same call the modal uses.
+  // Build the same files+dependencies payload the modal uses.
   const payload = useMemo(() => {
     if (screens.length === 0) return null
     try {
@@ -73,9 +81,8 @@ export function InlineSnackPreview({
 
   const shouldRunSnack = !disabled && payload !== null && !snackErrored
 
-  // ResizeObserver — measure the available container so we can scale the
-  // phone-shaped wrapper to fit. Mirrors PreviewPhoneFrame's pattern (callback
-  // ref so we (re-)attach on every wrapper mount, not just first paint).
+  // ResizeObserver — mirrors PreviewPhoneFrame's pattern (callback ref so we
+  // (re-)attach on every wrapper mount, not just first paint).
   const setWrapperRef = useCallback((el: HTMLDivElement | null) => {
     if (observerRef.current) {
       observerRef.current.disconnect()
@@ -93,58 +100,73 @@ export function InlineSnackPreview({
     }
   }, [])
 
-  // postMessage handshake. Identical to ExpoPreviewModal's protocol:
-  //   1. Snack iframe sends ['expoFrameLoaded', { iframeId }]
-  //   2. We reply with ['expoDataEvent', { iframeId, files, dependencies }]
-  //   3. Snack builds + renders the code on web
+  // Snack SDK lifecycle. One Snack instance per payload. The SDK will:
+  //   1. Connect to Snack's runtime endpoint (socket.io).
+  //   2. Build the project and produce a `webPreviewURL`.
+  //   3. Use `webPreviewRef.current` to postMessage the iframe contentWindow.
+  // We treat a non-null webPreviewURL as the readiness signal.
   useEffect(() => {
     if (!shouldRunSnack || !payload) return
-    const iframeId = iframeIdRef.current
 
-    function handleMessage(event: MessageEvent) {
-      if (!Array.isArray(event.data) || event.data.length < 2) return
-      const [eventName, data] = event.data
-      if (eventName === 'expoFrameLoaded' && data?.iframeId === iframeId) {
-        // Convert dependencies map → "pkg@x,pkg2@y" string format Snack expects.
-        const depsString = Object.entries(payload!.dependencies)
-          .map(([name, val]) => {
-            const v = (val as { version: string }).version
-            return v && v !== '*' ? `${name}@${v}` : name
-          })
-          .join(',')
+    setSnackReady(false)
+    setWebPreviewURL(null)
 
-        iframeRef.current?.contentWindow?.postMessage(
-          ['expoDataEvent', {
-            iframeId,
-            files: JSON.stringify(payload!.files),
-            dependencies: depsString,
-          }],
-          '*',
-        )
-        payloadSentRef.current = true
-        setSnackReady(true)
+    // Convert `buildSnackPayload`'s file shape (`{type, contents}`) to the
+    // SDK's expected SnackFiles type, which requires `type: 'CODE' | 'ASSET'`.
+    const sdkFiles: Record<string, { type: 'CODE' | 'ASSET'; contents: string }> = {}
+    for (const [path, file] of Object.entries(payload.files)) {
+      sdkFiles[path] = {
+        type: file.type === 'ASSET' ? 'ASSET' : 'CODE',
+        contents: file.contents,
       }
     }
 
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
+    let unsub: (() => void) | undefined
+    let snack: Snack | undefined
+    try {
+      snack = new Snack({
+        name: payload.name,
+        files: sdkFiles,
+        dependencies: payload.dependencies,
+        webPreviewRef: webPreviewRefObjRef.current,
+        online: true,
+        // Default SDK version for new snacks (lines up with what the modal
+        // payload assumes — RN core only, no expo-router).
+      })
+
+      // Pull the URL out of the initial state and subscribe to changes —
+      // the URL becomes available after the first Snack server roundtrip.
+      const initial = snack.getState()
+      if (initial.webPreviewURL) setWebPreviewURL(initial.webPreviewURL)
+
+      unsub = snack.addStateListener(state => {
+        if (state.webPreviewURL && state.webPreviewURL !== webPreviewURL) {
+          setWebPreviewURL(state.webPreviewURL)
+        }
+      })
+    } catch (err) {
+      console.error('[InlineSnackPreview] Snack SDK init failed', err)
+      setSnackErrored(true)
+    }
+
+    return () => {
+      try { unsub?.() } catch { /* ignore */ }
+      try { snack?.setOnline?.(false) } catch { /* ignore */ }
+    }
   }, [shouldRunSnack, payload])
 
-  // 15-second boot timeout. If Snack hasn't acknowledged by then, fall back
-  // to static (set errored flag → component returns null → static visible).
-  // Same threshold as ExpoPreviewModal.
+  // 15-second boot timeout — same threshold as ExpoPreviewModal. If the
+  // iframe never loads / Snack never produces content, fall back to static.
   useEffect(() => {
     if (!shouldRunSnack) return
-    payloadSentRef.current = false
-    setSnackReady(false)
     const timer = setTimeout(() => {
-      if (!payloadSentRef.current) {
-        console.warn('[InlineSnackPreview] Snack did not respond within 15s — falling back to static')
+      if (!snackReady) {
+        console.warn('[InlineSnackPreview] Snack did not become ready within 15s — falling back to static')
         setSnackErrored(true)
       }
     }, 15000)
     return () => clearTimeout(timer)
-  }, [shouldRunSnack])
+  }, [shouldRunSnack, snackReady])
 
   // Reset error state when payload changes (e.g. new generation) so we can
   // try Snack again after a successful regen following a failed attempt.
@@ -152,24 +174,21 @@ export function InlineSnackPreview({
     setSnackErrored(false)
   }, [payload])
 
+  // Wire the iframe.contentWindow into webPreviewRef so the SDK can postMessage
+  // into it. The SDK handles the rest of the protocol.
+  const setIframeRef = useCallback((el: HTMLIFrameElement | null) => {
+    iframeRef.current = el
+    webPreviewRefObjRef.current.current = el?.contentWindow ?? null
+  }, [])
+
   // No payload, disabled, or errored → render nothing; static fallback shows.
-  if (!shouldRunSnack || !payload) return null
+  if (!shouldRunSnack || !payload || !webPreviewURL) return null
 
   const scale = computeFitScale({
     container: containerSize,
     device: { w: device.width, h: device.height },
     manualZoom,
   })
-
-  const iframeId = iframeIdRef.current
-  // Build the Snack embed URL. Two key differences from ExpoPreviewModal's
-  // mobile-targeted URL:
-  //   - `supportedPlatforms=web` (only): forces Snack to render the web
-  //     player. The modal uses `mydevice,ios,android` (no web), which makes
-  //     the embed default to its IDE view with the code panel visible.
-  //   - `preview=true&code=false`: show only the preview pane, no code
-  //     editor — we want this to look like a running app, not a sandbox.
-  const iframeSrc = `https://snack.expo.dev/embedded?iframeId=${iframeId}&preview=true&code=false&platform=web&supportedPlatforms=web&theme=dark&waitForData=true`
 
   return (
     <div
@@ -179,9 +198,7 @@ export function InlineSnackPreview({
         inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         // While Snack is booting, let clicks fall through to the static
-        // PreviewPhoneFrame underneath (so the user can still scroll, tap,
-        // navigate via the in-static button capture). After ready, take
-        // over so taps go to the running app.
+        // PreviewPhoneFrame underneath. After ready, take over.
         pointerEvents: snackReady ? 'auto' : 'none',
         opacity: snackReady ? 1 : 0,
         transition: 'opacity 0.25s ease',
@@ -205,8 +222,9 @@ export function InlineSnackPreview({
         }}
       >
         <iframe
-          ref={iframeRef}
-          src={iframeSrc}
+          ref={setIframeRef}
+          src={webPreviewURL}
+          onLoad={() => setSnackReady(true)}
           style={{
             width: '100%',
             height: '100%',
