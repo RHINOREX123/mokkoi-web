@@ -162,7 +162,14 @@ export function InlineSnackPreview({
   })
 
   const iframeId = iframeIdRef.current
-  const iframeSrc = `https://snack.expo.dev/embedded?iframeId=${iframeId}&preview=true&platform=web&supportedPlatforms=mydevice,ios,android&theme=dark&waitForData=true`
+  // Build the Snack embed URL. Two key differences from ExpoPreviewModal's
+  // mobile-targeted URL:
+  //   - `supportedPlatforms=web` (only): forces Snack to render the web
+  //     player. The modal uses `mydevice,ios,android` (no web), which makes
+  //     the embed default to its IDE view with the code panel visible.
+  //   - `preview=true&code=false`: show only the preview pane, no code
+  //     editor — we want this to look like a running app, not a sandbox.
+  const iframeSrc = `https://snack.expo.dev/embedded?iframeId=${iframeId}&preview=true&code=false&platform=web&supportedPlatforms=web&theme=dark&waitForData=true`
 
   return (
     <div
