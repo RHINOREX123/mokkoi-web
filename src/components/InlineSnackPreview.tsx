@@ -143,14 +143,17 @@ export function InlineSnackPreview({
     let unsub: (() => void) | undefined
     let snack: Snack | undefined
     try {
+      // Match Expo's official snack-sdk example pattern (no `online: true`).
+      // The SDK doesn't require online mode for web preview — webPreviewRef +
+      // postMessage handle the runtime communication directly. Setting
+      // online: true was causing the runtime to wait for a snackpub
+      // websocket connection that was never used, leaving the iframe in
+      // an indefinite "Connecting..." state.
       snack = new Snack({
         name: payload.name,
         files: sdkFiles,
         dependencies: payload.dependencies,
         webPreviewRef: webPreviewRefObjRef.current,
-        online: true,
-        // Default SDK version for new snacks (lines up with what the modal
-        // payload assumes — RN core only, no expo-router).
       })
 
       // Pull the URL out of the initial state and subscribe to changes —
