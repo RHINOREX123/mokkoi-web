@@ -268,8 +268,14 @@ export function InlineSnackPreview({
             display: 'block',
           }}
           title="Mokkoi Live Preview"
-          allow="accelerometer; encrypted-media; gyroscope; payment"
-          sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+          // Match the official Expo snack-sdk example
+          // (github.com/expo/snack/blob/main/packages/snack-sdk/example/pages/index.tsx)
+          // — no sandbox, only an `allow` permissions list. The previous
+          // sandbox attribute was blocking the runtime's CONNECT postMessage
+          // (which the SDK's webPlayer transport gates by `event.origin`),
+          // so the runtime never registered as a connected client and the
+          // SDK never sent the user's code, leaving the iframe blank.
+          allow="geolocation; camera; microphone"
         />
       </div>
     </div>
