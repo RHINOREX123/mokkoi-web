@@ -354,6 +354,21 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
           return [...withoutPlaceholder, ...appScreens]
         })
 
+        // Delete the placeholder row from Supabase. The auto-save effect
+        // persists it during the (multi-second) generation, so removing it
+        // from local state isn't enough — without this, on the next page
+        // load the empty-tree row gets fetched back as `loaded[0]` and
+        // selected as the active screen, leaving the user with a blank
+        // phone preview. Best-effort: log on failure; the load-time filter
+        // in useScreenManagement is the safety net.
+        if (projectId && supabase) {
+          try {
+            await supabase.from('screens').delete().eq('id', placeholderId)
+          } catch (err) {
+            console.error('[mokkoi] failed to delete placeholder screen', placeholderId, err)
+          }
+        }
+
         // Select home screen
         const homeScreen = appScreens.find(s => s.id === homeScreenId) || appScreens[0]
         setActiveGeneratedId(homeScreen.id)
@@ -445,6 +460,16 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
           return [...withoutPlaceholder, ...newFlowScreens]
         })
         setActiveGeneratedId(newFlowScreens[0].id)
+
+        // Delete the placeholder row from Supabase (see app-generation
+        // path above for the rationale).
+        if (projectId && supabase) {
+          try {
+            await supabase.from('screens').delete().eq('id', placeholderId)
+          } catch (err) {
+            console.error('[mokkoi] failed to delete placeholder screen', placeholderId, err)
+          }
+        }
 
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),

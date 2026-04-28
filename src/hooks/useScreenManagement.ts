@@ -129,6 +129,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       if (screens && screens.length > 0) {
         const loaded: GeneratedScreen[] = screens.map(s => {
           const rawDeviceId = (s as Record<string, unknown>).device_id as string | undefined
+          const imageUrl = (s as Record<string, unknown>).image_url as string | undefined
           return {
             id: s.id,
             name: s.name,
@@ -139,10 +140,44 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
             y: (s as Record<string, unknown>).y_pos as number | undefined,
             // Resolve legacy IDs at load (see project.device_id load above).
             deviceId: rawDeviceId ? (resolveDeviceId(rawDeviceId) as DeviceId) : undefined,
+            imageUrl: imageUrl ?? undefined,
           }
         })
-        setGeneratedScreens(loaded)
-        setActiveGeneratedId(loaded[0].id)
+
+        // Defensive filter: drop orphaned placeholder rows. AI generation
+        // creates a placeholder screen with an empty `{type:'View',children:[]}`
+        // tree that the auto-save effect persists to Supabase before
+        // generation completes. On success, the placeholder is removed
+        // from local state AND deleted from Supabase (see useAIGeneration).
+        // But projects generated before that delete shipped — or projects
+        // where the post-success delete failed — still have orphan rows.
+        // Without this filter, the orphan ends up at order_index 0 and
+        // gets selected as the active screen, leaving the user with a
+        // blank phone preview.
+        const isOrphanPlaceholder = (s: GeneratedScreen) => {
+          if (s.type === 'image' || s.imageUrl) return false
+          const t = s.tree
+          if (!t) return true
+          if (t.type !== 'View') return false
+          return !t.children || t.children.length === 0
+        }
+        const realScreens = loaded.filter(s => !isOrphanPlaceholder(s))
+        const orphanIds = loaded.filter(s => isOrphanPlaceholder(s)).map(s => s.id)
+
+        setGeneratedScreens(realScreens)
+        setActiveGeneratedId(realScreens[0]?.id ?? null)
+
+        // Cleanup pass: delete the orphan rows so they don't accumulate.
+        // Best-effort — log on failure; the filter above keeps the UI
+        // clean either way.
+        if (orphanIds.length > 0 && supabase) {
+          try {
+            const { error } = await supabase.from('screens').delete().in('id', orphanIds)
+            if (error) console.error('[mokkoi] orphan cleanup failed:', error.message)
+          } catch (err) {
+            console.error('[mokkoi] orphan cleanup threw:', err)
+          }
+        }
       }
 
       const { data: msgs } = await supabase
