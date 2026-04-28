@@ -68,16 +68,35 @@ export function InlineSnackPreview({
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const isAndroid = device.category === 'Android'
 
-  // Build the same files+dependencies payload the modal uses.
+  // Stable content fingerprint. The parent passes `screens` and `connections`
+  // as freshly-allocated arrays on every render (App.tsx does `.filter(...)`
+  // inline). If we keyed the payload memo on those arrays directly, every
+  // parent render would recompute the payload AND retrigger the SDK init
+  // effect — resetting snackReady to false in a tight loop, so the iframe
+  // never finished its 0→1 opacity transition. Hash the inputs to a stable
+  // string and key both memos off of that.
+  const fingerprint = useMemo(() => {
+    if (screens.length === 0) return ''
+    const screensKey = screens
+      .map(s => `${s.id}:${s.name}:${s.tree ? JSON.stringify(s.tree).length : 0}`)
+      .join('|')
+    const connKey = connections.map(c => `${c.fromScreenId}>${c.toScreenId}`).join(',')
+    return `${projectName}::${screensKey}::${connKey}`
+  }, [projectName, screens, connections])
+
+  // Build the same files+dependencies payload the modal uses. Memoized on the
+  // fingerprint so identity stays stable across re-renders when content is
+  // unchanged.
   const payload = useMemo(() => {
-    if (screens.length === 0) return null
+    if (!fingerprint) return null
     try {
       return buildSnackPayload({ projectName, screens, connections })
     } catch (err) {
       console.error('[InlineSnackPreview] failed to build snack payload', err)
       return null
     }
-  }, [projectName, screens, connections])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fingerprint])
 
   const shouldRunSnack = !disabled && payload !== null && !snackErrored
 
