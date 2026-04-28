@@ -201,7 +201,7 @@ export function InlineSnackPreview({
   }, [])
 
   // No payload, disabled, or errored → render nothing; static fallback shows.
-  if (!shouldRunSnack || !payload || !webPreviewURL) return null
+  if (!shouldRunSnack || !payload) return null
 
   const scale = computeFitScale({
     container: containerSize,
@@ -209,6 +209,16 @@ export function InlineSnackPreview({
     manualZoom,
   })
 
+  // CRITICAL: always render the iframe element (with `src=undefined` until
+  // webPreviewURL arrives), so `contentWindow` is wired into webPreviewRef
+  // BEFORE the SDK starts trying to postMessage into it. Conditionally
+  // rendering the iframe (only after the URL is set) creates a race —
+  // the SDK can call its update method on the same render that the iframe
+  // first mounts, see webPreviewRef.current === null, and never retry,
+  // leaving the iframe stuck on "Connecting..." indefinitely. The iframe
+  // gets `src=undefined` initially (renders an empty document with a live
+  // contentWindow), then `src=webPreviewURL` once the URL is available.
+  // This matches the official Expo snack-sdk example pattern.
   return (
     <div
       ref={setWrapperRef}
@@ -242,8 +252,12 @@ export function InlineSnackPreview({
       >
         <iframe
           ref={setIframeRef}
-          src={webPreviewURL}
-          onLoad={() => setSnackReady(true)}
+          // src is undefined until the SDK produces a webPreviewURL. Without
+          // this gate the iframe loads about:blank then tries to navigate,
+          // breaking the contentWindow reference the SDK is holding. Per
+          // Expo snack-sdk's official example.
+          src={webPreviewURL || undefined}
+          onLoad={() => { if (webPreviewURL) setSnackReady(true) }}
           style={{
             width: '100%',
             height: '100%',
