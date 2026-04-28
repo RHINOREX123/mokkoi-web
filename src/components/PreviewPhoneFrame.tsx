@@ -61,7 +61,7 @@ export function PreviewPhoneFrame({
   manualZoom = null,
   onScaleChange,
 }: PreviewPhoneFrameProps) {
-  const nav = usePreviewNavigation(activeScreenId, connections)
+  const nav = usePreviewNavigation(activeScreenId, onActiveScreenChange, connections)
   const observerRef = useRef<ResizeObserver | null>(null)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
 
@@ -93,23 +93,12 @@ export function PreviewPhoneFrame({
     }
   }, [])
 
-  // Sync external activeScreenId → internal nav state.
-  useEffect(() => {
-    if (nav.currentScreenId !== activeScreenId) {
-      nav.navigateTo(activeScreenId)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeScreenId, nav.navigateTo])
-
-  // Sync internal nav state → external (so chat scoping etc. follows
-  // when the user navigates by tapping inside the phone).
-  useEffect(() => {
-    if (nav.currentScreenId !== activeScreenId) {
-      onActiveScreenChange(nav.currentScreenId)
-    }
-  }, [nav.currentScreenId, activeScreenId, onActiveScreenChange])
-
-  const activeScreen = screens.find(s => s.id === nav.currentScreenId)
+  // Single source of truth: parent owns activeScreenId; the hook is a
+  // stateless wrapper that calls onActiveScreenChange when the user taps
+  // a button inside the phone. The previous bidirectional sync effects
+  // produced an infinite ping-pong (each effect set the OTHER side's
+  // value, swapping them every render) — gone now.
+  const activeScreen = screens.find(s => s.id === activeScreenId)
   // Device is project-level only; per-screen overrides used to be supported
   // but caused state-sync bugs when the toolbar's selected device disagreed
   // with the rendered phone. Single source of truth now.
