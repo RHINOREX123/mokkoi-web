@@ -275,7 +275,14 @@ export function InlineSnackPreview({
           // (which the SDK's webPlayer transport gates by `event.origin`),
           // so the runtime never registered as a connected client and the
           // SDK never sent the user's code, leaving the iframe blank.
-          allow="geolocation; camera; microphone"
+          // Permissions delegated to the Snack runtime. screen-wake-lock is
+          // critical: expo-keep-awake's activateKeepAwake() calls
+          // navigator.wakeLock.request() in componentDidMount of a runtime
+          // component. Without the permission delegation, that promise
+          // rejects with NotAllowedError — the unhandled rejection in
+          // componentDidMount short-circuits the rest of the runtime's
+          // render tree, producing a blank iframe.
+          allow="geolocation; camera; microphone; screen-wake-lock"
         />
       </div>
     </div>
