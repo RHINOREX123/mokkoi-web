@@ -1,0 +1,90 @@
+# "Create a food deliv...  (id=f6a22a5d project=6cd8e600 nodes=247 macros=0)
+
+SafeAreaView [bg=#1A1010]
+  View
+    View [row=row]
+      View
+        Text ["Deliver to" fs=12 fw=400]
+        View [row=row]
+          Icon [name="location_on"]
+          Text ["Downtown" fs=14 fw=600]
+      View [row=row]
+        TouchableOpacity [bg=#2E2020 br=8 40x40]
+          Icon [name="notifications"]
+        TouchableOpacity [bg=#2E2020 br=8 40x40]
+          Image [br=8 40x40 avatar="Alex"]
+    View [row=row bg=#241818 br=12]
+      Icon [name="search"]
+      TextInput [fs=14]
+  ScrollView
+    View
+      ScrollView
+        View [bg=#2E2020 br=12]
+          Image [br=8 searchQuery="delicious pizza pepperoni fres"]
+          Text ["Flash Deal" fs=14 fw=600]
+          Text ["30% off pizza" fs=12]
+          View [row=row]
+            Icon [name="schedule"]
+            Text ["2h left" fs=11 fw=500]
+        View [bg=#2E2020 br=12]
+          Image [br=8 searchQuery="sushi rolls salmon avocado fre"]
+          Text ["Free Delivery" fs=14 fw=600]
+          Text ["All sushi orders" fs=12]
+          View [row=row]
+            Icon [name="schedule"]
+            Text ["5h left" fs=11 fw=500]
+    View
+      View [row=row]
+        Text ["Categories" fs=16 fw=600]
+        TouchableOpacity
+          Text ["View all" fs=13 fw=500]
+      View [row=row]
+        TouchableOpacity [bg=#2E2020 br=12]
+          View [bg=#FF695C br=12 44x44]
+            Icon [name="restaurant"]
+          Text ["Burgers" fs=12 fw=500]
+        TouchableOpacity [bg=#2E2020 br=12]
+          View [bg=#FF8C7C br=12 44x44]
+            Icon [name="rice_bowl"]
+          Text ["Asian" fs=12 fw=500]
+        TouchableOpacity [bg=#2E2020 br=12]
+          View [bg=#FF441F br=12 44x44]
+            Icon [name="local_pizza"]
+          Text ["Pizza" fs=12 fw=500]
+        TouchableOpacity [bg=#2E2020 br=12]
+          View [bg=#FF695C br=12 44x44]
+            Icon [name="local_cafe"]
+          Text ["Dessert" fs=12 fw=500]
+    View
+      View [row=row]
+        Text ["Popular Near You" fs=16 fw=600]
+      View
+        TouchableOpacity [bg=#241818 br=12]
+          Image [bg=#2E2020 searchQuery="gourmet burger restaurant inte"]
+          View
+            View [row=row]
+            View [row=row]
+        TouchableOpacity [bg=#241818 br=12]
+          Image [bg=#2E2020 searchQuery="authentic mexican tacos vibran"]
+          View
+            View [row=row]
+            View [row=row]
+        TouchableOpacity [bg=#241818 br=12]
+          Image [bg=#2E2020 searchQuery="fresh sushi rolls platter eleg"]
+          View
+            View [row=row]
+            View [row=row]
+    View
+  View [row=row bg=#241818]
+    View
+      Icon [name="home"]
+      Text ["Home" fs=11 fw=500]
+    View
+      Icon [name="search"]
+      Text ["Search" fs=11 fw=500]
+    View
+      Icon [name="shopping_cart"]
+      Text ["Orders" fs=11 fw=500]
+    View
+      Icon [name="person"]
+      Text ["Profile" fs=11 fw=500]

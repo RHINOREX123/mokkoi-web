@@ -1,0 +1,62 @@
+# Create a real estate...  (id=8b377bbd project=0b5c2c4f nodes=269 macros=0)
+
+SafeAreaView [bg=#1A0814]
+  View [bg=#1A0814]
+    View [row=row]
+      View
+        Text ["Discover" fs=12]
+        Text ["LuxeStay" fs=24 fw=700]
+      TouchableOpacity [bg=#24101C br=8 40x40]
+        Icon [name="favorite"]
+    ScrollView
+      View
+        Image [br=16 searchQuery="luxury modern apartment interi"]
+        LinearGradient [br=16]
+        View
+          Text ["Marina Bay Penthouse" fs=20 fw=700]
+          View [row=row]
+            Icon [name="location_on"]
+            Text ["Downtown, 2.4 km away" fs=12]
+      View [row=row]
+        View [bg=#FC2779 br=9999 8x8]
+        View [bg=#B0809888 br=9999 8x8]
+        View [bg=#B0809888 br=9999 8x8]
+      View
+        View [row=row bg=#24101C br=12]
+          Icon [name="search"]
+          TextInput [fs=14]
+      View
+        View [row=row]
+          Text ["Featured Listings" fs=16 fw=600]
+          Text ["See All" fs=13]
+        View
+          TouchableOpacity [bg=#2E1826 br=12]
+            View
+          TouchableOpacity [bg=#2E1826 br=12]
+            View
+          TouchableOpacity [bg=#2E1826 br=12]
+            View
+      View
+        View [row=row]
+          Text ["Recommended For You" fs=16 fw=600]
+          Text ["See All" fs=13]
+        View
+          View [row=row bg=#2E1826 br=12]
+            Image [100x100 searchQuery="luxury penthouse exterior city"]
+            View
+          View [row=row bg=#2E1826 br=12]
+            Image [100x100 searchQuery="luxury apartment balcony garde"]
+            View
+  View [row=row bg=#24101C]
+    TouchableOpacity
+      Icon [name="home"]
+      Text ["Home" fs=11]
+    TouchableOpacity
+      Icon [name="search"]
+      Text ["Search" fs=11]
+    TouchableOpacity
+      Icon [name="favorite"]
+      Text ["Saved" fs=11]
+    TouchableOpacity
+      Icon [name="person"]
+      Text ["Profile" fs=11]

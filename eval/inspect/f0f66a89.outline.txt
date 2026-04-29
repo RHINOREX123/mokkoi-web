@@ -1,0 +1,109 @@
+# "Create a settings p...  (id=f0f66a89 project=68ff0fa9 nodes=213 macros=0)
+
+View [bg=#0A0A0A]
+  View [row=row]
+    Text ["Settings" fs=28 fw=700]
+    TouchableOpacity [44x44]
+      Icon [name="more_vert"]
+  ScrollView
+    View
+      View [row=row]
+        View
+          View [br=9999 72x72]
+            Image [br=9999 64x64 avatar="Jordan Lee"]
+          View [bg=#F97316 br=9999 22x22]
+            Icon [name="photo_camera"]
+        View
+          Text ["Jordan Lee" fs=20 fw=700]
+          Text ["jordan.lee@gmail.com" fs=14]
+          TouchableOpacity [bg=#1C1C1C br=9999]
+            Text ["Edit Profile" fs=13 fw=500]
+    View
+      Text ["Appearance" fs=11 fw=600]
+      View [bg=#141414 br=16]
+        View [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="dark_mode"]
+          View
+            Text ["Dark Mode" fs=16 fw=500]
+            Text ["Always on dark theme" fs=12]
+          Switch
+        View [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="contrast"]
+          View
+            Text ["High Contrast" fs=16 fw=500]
+            Text ["Increase text visibility" fs=12]
+          Switch
+        View [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="text_fields"]
+          View
+            Text ["Bold Text" fs=16 fw=500]
+            Text ["Use bold font weight" fs=12]
+          Switch
+    View
+      Text ["Notifications" fs=11 fw=600]
+      View [bg=#141414 br=16]
+        View [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="notifications"]
+          View
+            Text ["Push Notifications" fs=16 fw=500]
+            Text ["Alerts, badges, banners" fs=12]
+          Switch
+        View [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="mark_email_read"]
+          View
+            Text ["Email Digest" fs=16 fw=500]
+            Text ["Weekly summary emails" fs=12]
+          Switch
+        View [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="vibration"]
+          View
+            Text ["Haptic Feedback" fs=16 fw=500]
+            Text ["Vibration on actions" fs=12]
+          Switch
+    View
+      Text ["Privacy & Security" fs=11 fw=600]
+      View [bg=#141414 br=16]
+        TouchableOpacity [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="lock"]
+          Text ["Change Password" fs=16 fw=500]
+          Icon [name="chevron_right"]
+        TouchableOpacity [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="fingerprint"]
+          View
+            Text ["Biometric Login" fs=16 fw=500]
+            Text ["Face ID / Touch ID" fs=12]
+          Switch
+        TouchableOpacity [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="shield"]
+          Text ["Privacy Policy" fs=16 fw=500]
+          Icon [name="chevron_right"]
+    View
+      Text ["Aura" fs=11 fw=600]
+      View [bg=#141414 br=16]
+        TouchableOpacity [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="star"]
+          Text ["Rate Aura" fs=16 fw=500]
+          Icon [name="chevron_right"]
+        TouchableOpacity [row=row]
+          View [bg=#1C1C1C br=8 36x36]
+            Icon [name="info"]
+          View
+            Text ["App Version" fs=16 fw=500]
+            Text ["v3.2.1 (Build 204)" fs=12]
+          View [bg=#1C1C1C br=9999]
+            Text ["Up to date" fs=11 fw=600]
+    View
+      TouchableOpacity [bg=#141414 br=16]
+        Text ["Log Out" fs=16 fw=600]
+    View
+      Text ["© 2024 Aura. All rights reserved." fs=12]

@@ -1,0 +1,1355 @@
+{
+  "id": "8b377bbd-f5be-4392-bdde-22f9329cf19d",
+  "name": "Create a real estate...",
+  "tree": {
+    "type": "SafeAreaView",
+    "style": {
+      "flex": 1,
+      "backgroundColor": "#1A0814"
+    },
+    "children": [
+      {
+        "type": "View",
+        "style": {
+          "flex": 1,
+          "backgroundColor": "#1A0814"
+        },
+        "children": [
+          {
+            "type": "View",
+            "style": {
+              "height": 48,
+              "alignItems": "center",
+              "paddingTop": 12,
+              "flexDirection": "row",
+              "justifyContent": "space-between",
+              "paddingHorizontal": 20
+            },
+            "children": [
+              {
+                "type": "View",
+                "children": [
+                  {
+                    "type": "Text",
+                    "style": {
+                      "color": "#B08098",
+                      "fontSize": 12
+                    },
+                    "children": [
+                      "Discover"
+                    ]
+                  },
+                  {
+                    "type": "Text",
+                    "style": {
+                      "color": "#FFFFFF",
+                      "fontSize": 24,
+                      "marginTop": 0,
+                      "fontWeight": "700"
+                    },
+                    "children": [
+                      "LuxeStay"
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "TouchableOpacity",
+                "style": {
+                  "width": 40,
+                  "height": 40,
+                  "minHeight": 44,
+                  "alignItems": "center",
+                  "borderRadius": 8,
+                  "justifyContent": "center",
+                  "backgroundColor": "#24101C"
+                },
+                "children": [
+                  {
+                    "type": "Icon",
+                    "props": {
+                      "name": "favorite",
+                      "size": 20,
+                      "color": "#FC2779"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "ScrollView",
+            "props": {
+              "showsVerticalScrollIndicator": false
+            },
+            "style": {
+              "flex": 1
+            },
+            "children": [
+              {
+                "type": "View",
+                "style": {
+                  "height": 280,
+                  "marginBottom": 20
+                },
+                "children": [
+                  {
+                    "type": "Image",
+                    "props": {
+                      "searchQuery": "luxury modern apartment interior bright minimalist design"
+                    },
+                    "style": {
+                      "width": "100%",
+                      "height": "100%",
+                      "borderRadius": 16
+                    }
+                  },
+                  {
+                    "type": "LinearGradient",
+                    "props": {
+                      "end": {
+                        "x": 1,
+                        "y": 1
+                      },
+                      "start": {
+                        "x": 0,
+                        "y": 0
+                      },
+                      "colors": [
+                        "rgba(252, 39, 121, 0.1)",
+                        "rgba(233, 30, 140, 0.3)"
+                      ]
+                    },
+                    "style": {
+                      "top": 0,
+                      "left": 0,
+                      "right": 0,
+                      "bottom": 0,
+                      "position": "absolute",
+                      "borderRadius": 16
+                    }
+                  },
+                  {
+                    "type": "View",
+                    "style": {
+                      "left": 16,
+                      "right": 16,
+                      "bottom": 16,
+                      "position": "absolute"
+                    },
+                    "children": [
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 20,
+                          "fontWeight": "700"
+                        },
+                        "children": [
+                          "Marina Bay Penthouse"
+                        ]
+                      },
+                      {
+                        "type": "View",
+                        "style": {
+                          "marginTop": 8,
+                          "alignItems": "center",
+                          "flexDirection": "row"
+                        },
+                        "children": [
+                          {
+                            "type": "Icon",
+                            "props": {
+                              "name": "location_on",
+                              "size": 14,
+                              "color": "#FF69B4"
+                            }
+                          },
+                          {
+                            "type": "Text",
+                            "style": {
+                              "color": "#FFFFFF",
+                              "fontSize": 12,
+                              "marginLeft": 4
+                            },
+                            "children": [
+                              "Downtown, 2.4 km away"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "View",
+                "style": {
+                  "gap": 4,
+                  "marginBottom": 24,
+                  "flexDirection": "row",
+                  "justifyContent": "center",
+                  "paddingHorizontal": 20
+                },
+                "children": [
+                  {
+                    "type": "View",
+                    "style": {
+                      "width": 8,
+                      "height": 8,
+                      "borderRadius": 9999,
+                      "backgroundColor": "#FC2779"
+                    }
+                  },
+                  {
+                    "type": "View",
+                    "style": {
+                      "width": 8,
+                      "height": 8,
+                      "borderRadius": 9999,
+                      "backgroundColor": "#B0809888"
+                    }
+                  },
+                  {
+                    "type": "View",
+                    "style": {
+                      "width": 8,
+                      "height": 8,
+                      "borderRadius": 9999,
+                      "backgroundColor": "#B0809888"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "View",
+                "style": {
+                  "marginBottom": 20,
+                  "paddingHorizontal": 20
+                },
+                "children": [
+                  {
+                    "type": "View",
+                    "style": {
+                      "height": 44,
+                      "alignItems": "center",
+                      "borderRadius": 12,
+                      "flexDirection": "row",
+                      "backgroundColor": "#24101C",
+                      "paddingHorizontal": 12
+                    },
+                    "children": [
+                      {
+                        "type": "Icon",
+                        "props": {
+                          "name": "search",
+                          "size": 18,
+                          "color": "#B08098"
+                        }
+                      },
+                      {
+                        "type": "TextInput",
+                        "props": {
+                          "placeholder": "Search properties...",
+                          "placeholderTextColor": "#B0809888"
+                        },
+                        "style": {
+                          "flex": 1,
+                          "color": "#FFFFFF",
+                          "fontSize": 14,
+                          "marginLeft": 8
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "View",
+                "style": {
+                  "marginBottom": 16,
+                  "paddingHorizontal": 20
+                },
+                "children": [
+                  {
+                    "type": "View",
+                    "style": {
+                      "alignItems": "center",
+                      "marginBottom": 12,
+                      "flexDirection": "row",
+                      "justifyContent": "space-between"
+                    },
+                    "children": [
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 16,
+                          "fontWeight": "600"
+                        },
+                        "children": [
+                          "Featured Listings"
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FC2779",
+                          "fontSize": 13
+                        },
+                        "children": [
+                          "See All"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "View",
+                    "style": {
+                      "gap": 12
+                    },
+                    "children": [
+                      {
+                        "type": "TouchableOpacity",
+                        "style": {
+                          "overflow": "hidden",
+                          "minHeight": 44,
+                          "borderRadius": 12,
+                          "backgroundColor": "#2E1826"
+                        },
+                        "children": [
+                          {
+                            "type": "View",
+                            "children": [
+                              {
+                                "type": "Image",
+                                "props": {
+                                  "searchQuery": "luxury apartment master bedroom modern white minimalist"
+                                },
+                                "style": {
+                                  "width": "100%",
+                                  "height": 160,
+                                  "backgroundColor": "#24101C"
+                                }
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "top": 12,
+                                  "right": 12,
+                                  "width": 36,
+                                  "height": 36,
+                                  "position": "absolute",
+                                  "alignItems": "center",
+                                  "borderRadius": 8,
+                                  "justifyContent": "center",
+                                  "backgroundColor": "#1A0814"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "favorite_border",
+                                      "size": 18,
+                                      "color": "#FC2779"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "padding": 12
+                                },
+                                "children": [
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "alignItems": "center",
+                                      "marginBottom": 8,
+                                      "flexDirection": "row",
+                                      "justifyContent": "space-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#FFFFFF",
+                                          "fontSize": 16,
+                                          "fontWeight": "600"
+                                        },
+                                        "children": [
+                                          "Skyline Vista"
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "borderRadius": 4,
+                                          "backgroundColor": "#FC2779",
+                                          "paddingVertical": 4,
+                                          "paddingHorizontal": 8
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#FFFFFF",
+                                              "fontSize": 12,
+                                              "fontWeight": "700"
+                                            },
+                                            "children": [
+                                              "$2.5M"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "alignItems": "center",
+                                      "marginBottom": 8,
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Icon",
+                                        "props": {
+                                          "name": "location_on",
+                                          "size": 12,
+                                          "color": "#FF69B4"
+                                        }
+                                      },
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#B08098",
+                                          "fontSize": 12,
+                                          "marginLeft": 4
+                                        },
+                                        "children": [
+                                          "Midtown District"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "gap": 16,
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "bed",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "3 beds"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "shower",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "2 baths"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "square_foot",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "1,850 sqft"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "TouchableOpacity",
+                        "style": {
+                          "overflow": "hidden",
+                          "minHeight": 44,
+                          "borderRadius": 12,
+                          "backgroundColor": "#2E1826"
+                        },
+                        "children": [
+                          {
+                            "type": "View",
+                            "children": [
+                              {
+                                "type": "Image",
+                                "props": {
+                                  "searchQuery": "luxury apartment living room bright natural light modern"
+                                },
+                                "style": {
+                                  "width": "100%",
+                                  "height": 160,
+                                  "backgroundColor": "#24101C"
+                                }
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "top": 12,
+                                  "right": 12,
+                                  "width": 36,
+                                  "height": 36,
+                                  "position": "absolute",
+                                  "alignItems": "center",
+                                  "borderRadius": 8,
+                                  "justifyContent": "center",
+                                  "backgroundColor": "#1A0814"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "favorite",
+                                      "size": 18,
+                                      "color": "#FC2779"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "padding": 12
+                                },
+                                "children": [
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "alignItems": "center",
+                                      "marginBottom": 8,
+                                      "flexDirection": "row",
+                                      "justifyContent": "space-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#FFFFFF",
+                                          "fontSize": 16,
+                                          "fontWeight": "600"
+                                        },
+                                        "children": [
+                                          "Elegance Tower"
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "borderRadius": 4,
+                                          "backgroundColor": "#FC2779",
+                                          "paddingVertical": 4,
+                                          "paddingHorizontal": 8
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#FFFFFF",
+                                              "fontSize": 12,
+                                              "fontWeight": "700"
+                                            },
+                                            "children": [
+                                              "$1.8M"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "alignItems": "center",
+                                      "marginBottom": 8,
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Icon",
+                                        "props": {
+                                          "name": "location_on",
+                                          "size": 12,
+                                          "color": "#FF69B4"
+                                        }
+                                      },
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#B08098",
+                                          "fontSize": 12,
+                                          "marginLeft": 4
+                                        },
+                                        "children": [
+                                          "Harbor View"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "gap": 16,
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "bed",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "4 beds"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "shower",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "3 baths"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "square_foot",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "2,340 sqft"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "TouchableOpacity",
+                        "style": {
+                          "overflow": "hidden",
+                          "minHeight": 44,
+                          "borderRadius": 12,
+                          "backgroundColor": "#2E1826"
+                        },
+                        "children": [
+                          {
+                            "type": "View",
+                            "children": [
+                              {
+                                "type": "Image",
+                                "props": {
+                                  "searchQuery": "luxury apartment kitchen modern stainless steel appliances"
+                                },
+                                "style": {
+                                  "width": "100%",
+                                  "height": 160,
+                                  "backgroundColor": "#24101C"
+                                }
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "top": 12,
+                                  "right": 12,
+                                  "width": 36,
+                                  "height": 36,
+                                  "position": "absolute",
+                                  "alignItems": "center",
+                                  "borderRadius": 8,
+                                  "justifyContent": "center",
+                                  "backgroundColor": "#1A0814"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "favorite_border",
+                                      "size": 18,
+                                      "color": "#FC2779"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "padding": 12
+                                },
+                                "children": [
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "alignItems": "center",
+                                      "marginBottom": 8,
+                                      "flexDirection": "row",
+                                      "justifyContent": "space-between"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#FFFFFF",
+                                          "fontSize": 16,
+                                          "fontWeight": "600"
+                                        },
+                                        "children": [
+                                          "Grand Central"
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "borderRadius": 4,
+                                          "backgroundColor": "#FC2779",
+                                          "paddingVertical": 4,
+                                          "paddingHorizontal": 8
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#FFFFFF",
+                                              "fontSize": 12,
+                                              "fontWeight": "700"
+                                            },
+                                            "children": [
+                                              "$3.2M"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "alignItems": "center",
+                                      "marginBottom": 8,
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Icon",
+                                        "props": {
+                                          "name": "location_on",
+                                          "size": 12,
+                                          "color": "#FF69B4"
+                                        }
+                                      },
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#B08098",
+                                          "fontSize": 12,
+                                          "marginLeft": 4
+                                        },
+                                        "children": [
+                                          "Financial District"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "gap": 16,
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "bed",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "5 beds"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "shower",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "4 baths"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "View",
+                                        "style": {
+                                          "gap": 4,
+                                          "alignItems": "center",
+                                          "flexDirection": "row"
+                                        },
+                                        "children": [
+                                          {
+                                            "type": "Icon",
+                                            "props": {
+                                              "name": "square_foot",
+                                              "size": 14,
+                                              "color": "#FC2779"
+                                            }
+                                          },
+                                          {
+                                            "type": "Text",
+                                            "style": {
+                                              "color": "#B08098",
+                                              "fontSize": 11
+                                            },
+                                            "children": [
+                                              "3,120 sqft"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "View",
+                "style": {
+                  "marginTop": 8,
+                  "marginBottom": 32,
+                  "paddingBottom": 34,
+                  "paddingHorizontal": 20
+                },
+                "children": [
+                  {
+                    "type": "View",
+                    "style": {
+                      "alignItems": "center",
+                      "marginBottom": 12,
+                      "flexDirection": "row",
+                      "justifyContent": "space-between"
+                    },
+                    "children": [
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 16,
+                          "fontWeight": "600"
+                        },
+                        "children": [
+                          "Recommended For You"
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FC2779",
+                          "fontSize": 13
+                        },
+                        "children": [
+                          "See All"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "View",
+                    "style": {
+                      "gap": 12
+                    },
+                    "children": [
+                      {
+                        "type": "View",
+                        "style": {
+                          "overflow": "hidden",
+                          "borderRadius": 12,
+                          "flexDirection": "row",
+                          "backgroundColor": "#2E1826"
+                        },
+                        "children": [
+                          {
+                            "type": "Image",
+                            "props": {
+                              "searchQuery": "luxury penthouse exterior city lights night"
+                            },
+                            "style": {
+                              "width": 100,
+                              "height": 100
+                            }
+                          },
+                          {
+                            "type": "View",
+                            "style": {
+                              "flex": 1,
+                              "padding": 12,
+                              "justifyContent": "space-between"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "children": [
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 14,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "Prestige Heights"
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "marginTop": 4,
+                                      "alignItems": "center",
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Icon",
+                                        "props": {
+                                          "name": "location_on",
+                                          "size": 11,
+                                          "color": "#FF69B4"
+                                        }
+                                      },
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#B08098",
+                                          "fontSize": 11,
+                                          "marginLeft": 0
+                                        },
+                                        "children": [
+                                          "Riverside"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "Text",
+                                "style": {
+                                  "color": "#FC2779",
+                                  "fontSize": 14,
+                                  "fontWeight": "700"
+                                },
+                                "children": [
+                                  "$2.1M"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "View",
+                        "style": {
+                          "overflow": "hidden",
+                          "borderRadius": 12,
+                          "flexDirection": "row",
+                          "backgroundColor": "#2E1826"
+                        },
+                        "children": [
+                          {
+                            "type": "Image",
+                            "props": {
+                              "searchQuery": "luxury apartment balcony garden plants city view"
+                            },
+                            "style": {
+                              "width": 100,
+                              "height": 100
+                            }
+                          },
+                          {
+                            "type": "View",
+                            "style": {
+                              "flex": 1,
+                              "padding": 12,
+                              "justifyContent": "space-between"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "children": [
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 14,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "Royal Gardens"
+                                    ]
+                                  },
+                                  {
+                                    "type": "View",
+                                    "style": {
+                                      "marginTop": 4,
+                                      "alignItems": "center",
+                                      "flexDirection": "row"
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "Icon",
+                                        "props": {
+                                          "name": "location_on",
+                                          "size": 11,
+                                          "color": "#FF69B4"
+                                        }
+                                      },
+                                      {
+                                        "type": "Text",
+                                        "style": {
+                                          "color": "#B08098",
+                                          "fontSize": 11,
+                                          "marginLeft": 0
+                                        },
+                                        "children": [
+                                          "Park Avenue"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "Text",
+                                "style": {
+                                  "color": "#FC2779",
+                                  "fontSize": 14,
+                                  "fontWeight": "700"
+                                },
+                                "children": [
+                                  "$1.6M"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "View",
+        "style": {
+          "alignItems": "center",
+          "paddingTop": 8,
+          "borderColor": "#24101C",
+          "flexDirection": "row",
+          "paddingBottom": 34,
+          "borderTopWidth": 1,
+          "justifyContent": "space-around",
+          "backgroundColor": "#24101C",
+          "paddingHorizontal": 20
+        },
+        "children": [
+          {
+            "type": "TouchableOpacity",
+            "style": {
+              "minHeight": 44,
+              "alignItems": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "home",
+                  "size": 20,
+                  "color": "#FC2779"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#FC2779",
+                  "fontSize": 11,
+                  "marginTop": 4
+                },
+                "children": [
+                  "Home"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "TouchableOpacity",
+            "style": {
+              "minHeight": 44,
+              "alignItems": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "search",
+                  "size": 20,
+                  "color": "#B08098"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#B08098",
+                  "fontSize": 11,
+                  "marginTop": 4
+                },
+                "children": [
+                  "Search"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "TouchableOpacity",
+            "style": {
+              "minHeight": 44,
+              "alignItems": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "favorite",
+                  "size": 20,
+                  "color": "#B08098"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#B08098",
+                  "fontSize": 11,
+                  "marginTop": 4
+                },
+                "children": [
+                  "Saved"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "TouchableOpacity",
+            "style": {
+              "minHeight": 44,
+              "alignItems": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "person",
+                  "size": 20,
+                  "color": "#B08098"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#B08098",
+                  "fontSize": 11,
+                  "marginTop": 4
+                },
+                "children": [
+                  "Profile"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "project_id": "0b5c2c4f-c719-4e44-a664-007fdec32291",
+  "macro_count": 0,
+  "macros_used": [],
+  "total_nodes": 269,
+  "macro_density": 0
+}

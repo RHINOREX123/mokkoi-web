@@ -1,0 +1,1303 @@
+{
+  "id": "f6a22a5d-ac59-42f4-b31c-08fc7ee83c49",
+  "name": "\"Create a food deliv...",
+  "tree": {
+    "type": "SafeAreaView",
+    "style": {
+      "flex": 1,
+      "backgroundColor": "#1A1010"
+    },
+    "children": [
+      {
+        "type": "View",
+        "style": {
+          "paddingTop": 12,
+          "paddingBottom": 12,
+          "paddingHorizontal": 16
+        },
+        "children": [
+          {
+            "type": "View",
+            "style": {
+              "alignItems": "center",
+              "marginBottom": 16,
+              "flexDirection": "row",
+              "justifyContent": "space-between"
+            },
+            "children": [
+              {
+                "type": "View",
+                "children": [
+                  {
+                    "type": "Text",
+                    "style": {
+                      "color": "#B0909088",
+                      "fontSize": 12,
+                      "fontWeight": "400"
+                    },
+                    "children": [
+                      "Deliver to"
+                    ]
+                  },
+                  {
+                    "type": "View",
+                    "style": {
+                      "marginTop": 4,
+                      "alignItems": "center",
+                      "flexDirection": "row"
+                    },
+                    "children": [
+                      {
+                        "type": "Icon",
+                        "props": {
+                          "name": "location_on",
+                          "size": 16,
+                          "color": "#FF695C"
+                        }
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 14,
+                          "fontWeight": "600",
+                          "marginLeft": 4
+                        },
+                        "children": [
+                          "Downtown"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "View",
+                "style": {
+                  "gap": 8,
+                  "flexDirection": "row"
+                },
+                "children": [
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "width": 40,
+                      "height": 40,
+                      "minHeight": 44,
+                      "alignItems": "center",
+                      "borderRadius": 8,
+                      "justifyContent": "center",
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "Icon",
+                        "props": {
+                          "name": "notifications",
+                          "size": 20,
+                          "color": "#FF695C"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "width": 40,
+                      "height": 40,
+                      "minHeight": 44,
+                      "alignItems": "center",
+                      "borderRadius": 8,
+                      "justifyContent": "center",
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "Image",
+                        "props": {
+                          "avatar": "Alex"
+                        },
+                        "style": {
+                          "width": 40,
+                          "height": 40,
+                          "borderRadius": 8
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "View",
+            "style": {
+              "gap": 8,
+              "height": 48,
+              "alignItems": "center",
+              "borderRadius": 12,
+              "flexDirection": "row",
+              "backgroundColor": "#241818",
+              "paddingHorizontal": 12
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "search",
+                  "size": 20,
+                  "color": "#B09090"
+                }
+              },
+              {
+                "type": "TextInput",
+                "props": {
+                  "placeholder": "Restaurants, dishes, brands...",
+                  "placeholderTextColor": "#B0909088"
+                },
+                "style": {
+                  "flex": 1,
+                  "color": "#FFFFFF",
+                  "fontSize": 14
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "ScrollView",
+        "props": {
+          "showsVerticalScrollIndicator": false
+        },
+        "style": {
+          "flex": 1
+        },
+        "children": [
+          {
+            "type": "View",
+            "style": {
+              "marginTop": 16,
+              "paddingHorizontal": 0
+            },
+            "children": [
+              {
+                "type": "ScrollView",
+                "props": {
+                  "horizontal": true,
+                  "scrollEventThrottle": 16,
+                  "showsHorizontalScrollIndicator": false
+                },
+                "style": {
+                  "paddingHorizontal": 16
+                },
+                "children": [
+                  {
+                    "type": "View",
+                    "style": {
+                      "width": 160,
+                      "padding": 12,
+                      "overflow": "hidden",
+                      "marginRight": 12,
+                      "borderRadius": 12,
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "Image",
+                        "props": {
+                          "searchQuery": "delicious pizza pepperoni fresh mozzarella"
+                        },
+                        "style": {
+                          "width": "100%",
+                          "height": 100,
+                          "borderRadius": 8,
+                          "marginBottom": 8
+                        }
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        "children": [
+                          "Flash Deal"
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#B09090",
+                          "fontSize": 12,
+                          "marginTop": 4
+                        },
+                        "children": [
+                          "30% off pizza"
+                        ]
+                      },
+                      {
+                        "type": "View",
+                        "style": {
+                          "gap": 4,
+                          "marginTop": 8,
+                          "alignItems": "center",
+                          "flexDirection": "row"
+                        },
+                        "children": [
+                          {
+                            "type": "Icon",
+                            "props": {
+                              "name": "schedule",
+                              "size": 12,
+                              "color": "#FF695C"
+                            }
+                          },
+                          {
+                            "type": "Text",
+                            "style": {
+                              "color": "#FF695C",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            },
+                            "children": [
+                              "2h left"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "View",
+                    "style": {
+                      "width": 160,
+                      "padding": 12,
+                      "overflow": "hidden",
+                      "marginRight": 12,
+                      "borderRadius": 12,
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "Image",
+                        "props": {
+                          "searchQuery": "sushi rolls salmon avocado fresh"
+                        },
+                        "style": {
+                          "width": "100%",
+                          "height": 100,
+                          "borderRadius": 8,
+                          "marginBottom": 8
+                        }
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        "children": [
+                          "Free Delivery"
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#B09090",
+                          "fontSize": 12,
+                          "marginTop": 4
+                        },
+                        "children": [
+                          "All sushi orders"
+                        ]
+                      },
+                      {
+                        "type": "View",
+                        "style": {
+                          "gap": 4,
+                          "marginTop": 8,
+                          "alignItems": "center",
+                          "flexDirection": "row"
+                        },
+                        "children": [
+                          {
+                            "type": "Icon",
+                            "props": {
+                              "name": "schedule",
+                              "size": 12,
+                              "color": "#FF695C"
+                            }
+                          },
+                          {
+                            "type": "Text",
+                            "style": {
+                              "color": "#FF695C",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            },
+                            "children": [
+                              "5h left"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "View",
+            "style": {
+              "marginTop": 20,
+              "paddingHorizontal": 16
+            },
+            "children": [
+              {
+                "type": "View",
+                "style": {
+                  "alignItems": "center",
+                  "marginBottom": 12,
+                  "flexDirection": "row",
+                  "justifyContent": "space-between"
+                },
+                "children": [
+                  {
+                    "type": "Text",
+                    "style": {
+                      "color": "#FFFFFF",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    },
+                    "children": [
+                      "Categories"
+                    ]
+                  },
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "minHeight": 44
+                    },
+                    "children": [
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FF695C",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        "children": [
+                          "View all"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "View",
+                "style": {
+                  "gap": 12,
+                  "flexWrap": "wrap",
+                  "flexDirection": "row"
+                },
+                "children": [
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "width": "23%",
+                      "minHeight": 44,
+                      "alignItems": "center",
+                      "aspectRatio": 1,
+                      "borderRadius": 12,
+                      "justifyContent": "center",
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "View",
+                        "style": {
+                          "width": 44,
+                          "height": 44,
+                          "alignItems": "center",
+                          "borderRadius": 12,
+                          "marginBottom": 8,
+                          "justifyContent": "center",
+                          "backgroundColor": "#FF695C"
+                        },
+                        "children": [
+                          {
+                            "type": "Icon",
+                            "props": {
+                              "name": "restaurant",
+                              "size": 24,
+                              "color": "#FFFFFF"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 12,
+                          "textAlign": "center",
+                          "fontWeight": "500"
+                        },
+                        "children": [
+                          "Burgers"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "width": "23%",
+                      "minHeight": 44,
+                      "alignItems": "center",
+                      "aspectRatio": 1,
+                      "borderRadius": 12,
+                      "justifyContent": "center",
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "View",
+                        "style": {
+                          "width": 44,
+                          "height": 44,
+                          "alignItems": "center",
+                          "borderRadius": 12,
+                          "marginBottom": 8,
+                          "justifyContent": "center",
+                          "backgroundColor": "#FF8C7C"
+                        },
+                        "children": [
+                          {
+                            "type": "Icon",
+                            "props": {
+                              "name": "rice_bowl",
+                              "size": 24,
+                              "color": "#FFFFFF"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 12,
+                          "textAlign": "center",
+                          "fontWeight": "500"
+                        },
+                        "children": [
+                          "Asian"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "width": "23%",
+                      "minHeight": 44,
+                      "alignItems": "center",
+                      "aspectRatio": 1,
+                      "borderRadius": 12,
+                      "justifyContent": "center",
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "View",
+                        "style": {
+                          "width": 44,
+                          "height": 44,
+                          "alignItems": "center",
+                          "borderRadius": 12,
+                          "marginBottom": 8,
+                          "justifyContent": "center",
+                          "backgroundColor": "#FF441F"
+                        },
+                        "children": [
+                          {
+                            "type": "Icon",
+                            "props": {
+                              "name": "local_pizza",
+                              "size": 24,
+                              "color": "#FFFFFF"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 12,
+                          "textAlign": "center",
+                          "fontWeight": "500"
+                        },
+                        "children": [
+                          "Pizza"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "width": "23%",
+                      "minHeight": 44,
+                      "alignItems": "center",
+                      "aspectRatio": 1,
+                      "borderRadius": 12,
+                      "justifyContent": "center",
+                      "backgroundColor": "#2E2020"
+                    },
+                    "children": [
+                      {
+                        "type": "View",
+                        "style": {
+                          "width": 44,
+                          "height": 44,
+                          "alignItems": "center",
+                          "borderRadius": 12,
+                          "marginBottom": 8,
+                          "justifyContent": "center",
+                          "backgroundColor": "#FF695C"
+                        },
+                        "children": [
+                          {
+                            "type": "Icon",
+                            "props": {
+                              "name": "local_cafe",
+                              "size": 24,
+                              "color": "#FFFFFF"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "type": "Text",
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 12,
+                          "textAlign": "center",
+                          "fontWeight": "500"
+                        },
+                        "children": [
+                          "Dessert"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "View",
+            "style": {
+              "marginTop": 20,
+              "paddingHorizontal": 16
+            },
+            "children": [
+              {
+                "type": "View",
+                "style": {
+                  "alignItems": "center",
+                  "marginBottom": 12,
+                  "flexDirection": "row",
+                  "justifyContent": "space-between"
+                },
+                "children": [
+                  {
+                    "type": "Text",
+                    "style": {
+                      "color": "#FFFFFF",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    },
+                    "children": [
+                      "Popular Near You"
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "View",
+                "style": {
+                  "gap": 12
+                },
+                "children": [
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "overflow": "hidden",
+                      "minHeight": 44,
+                      "borderRadius": 12,
+                      "backgroundColor": "#241818"
+                    },
+                    "children": [
+                      {
+                        "type": "Image",
+                        "props": {
+                          "searchQuery": "gourmet burger restaurant interior modern"
+                        },
+                        "style": {
+                          "width": "100%",
+                          "height": 120,
+                          "backgroundColor": "#2E2020"
+                        }
+                      },
+                      {
+                        "type": "View",
+                        "style": {
+                          "gap": 4,
+                          "padding": 12
+                        },
+                        "children": [
+                          {
+                            "type": "View",
+                            "style": {
+                              "alignItems": "flex-start",
+                              "flexDirection": "row",
+                              "justifyContent": "space-between"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "style": {
+                                  "flex": 1
+                                },
+                                "children": [
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 16,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "Burger King"
+                                    ]
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B09090",
+                                      "fontSize": 12,
+                                      "marginTop": 0
+                                    },
+                                    "children": [
+                                      "American • Fast Food"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "borderRadius": 4,
+                                  "flexDirection": "row",
+                                  "backgroundColor": "#2E2020",
+                                  "paddingVertical": 4,
+                                  "paddingHorizontal": 8
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "star",
+                                      "size": 14,
+                                      "color": "#FF695C"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "4.8"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "View",
+                            "style": {
+                              "gap": 12,
+                              "marginTop": 4,
+                              "alignItems": "center",
+                              "flexDirection": "row"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "flexDirection": "row"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "schedule",
+                                      "size": 14,
+                                      "color": "#B0909088"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B0909088",
+                                      "fontSize": 12
+                                    },
+                                    "children": [
+                                      "25-35 min"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "flexDirection": "row"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "local_shipping",
+                                      "size": 14,
+                                      "color": "#B0909088"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B0909088",
+                                      "fontSize": 12
+                                    },
+                                    "children": [
+                                      "$2.50"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "overflow": "hidden",
+                      "minHeight": 44,
+                      "borderRadius": 12,
+                      "backgroundColor": "#241818"
+                    },
+                    "children": [
+                      {
+                        "type": "Image",
+                        "props": {
+                          "searchQuery": "authentic mexican tacos vibrant fresh lime"
+                        },
+                        "style": {
+                          "width": "100%",
+                          "height": 120,
+                          "backgroundColor": "#2E2020"
+                        }
+                      },
+                      {
+                        "type": "View",
+                        "style": {
+                          "gap": 4,
+                          "padding": 12
+                        },
+                        "children": [
+                          {
+                            "type": "View",
+                            "style": {
+                              "alignItems": "flex-start",
+                              "flexDirection": "row",
+                              "justifyContent": "space-between"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "style": {
+                                  "flex": 1
+                                },
+                                "children": [
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 16,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "El Mariachi"
+                                    ]
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B09090",
+                                      "fontSize": 12,
+                                      "marginTop": 0
+                                    },
+                                    "children": [
+                                      "Mexican • Authentic"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "borderRadius": 4,
+                                  "flexDirection": "row",
+                                  "backgroundColor": "#2E2020",
+                                  "paddingVertical": 4,
+                                  "paddingHorizontal": 8
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "star",
+                                      "size": 14,
+                                      "color": "#FF695C"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "4.9"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "View",
+                            "style": {
+                              "gap": 12,
+                              "marginTop": 4,
+                              "alignItems": "center",
+                              "flexDirection": "row"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "flexDirection": "row"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "schedule",
+                                      "size": 14,
+                                      "color": "#B0909088"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B0909088",
+                                      "fontSize": 12
+                                    },
+                                    "children": [
+                                      "20-30 min"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "flexDirection": "row"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "local_shipping",
+                                      "size": 14,
+                                      "color": "#B0909088"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B0909088",
+                                      "fontSize": 12
+                                    },
+                                    "children": [
+                                      "$1.99"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "TouchableOpacity",
+                    "style": {
+                      "overflow": "hidden",
+                      "minHeight": 44,
+                      "borderRadius": 12,
+                      "backgroundColor": "#241818"
+                    },
+                    "children": [
+                      {
+                        "type": "Image",
+                        "props": {
+                          "searchQuery": "fresh sushi rolls platter elegant presentation"
+                        },
+                        "style": {
+                          "width": "100%",
+                          "height": 120,
+                          "backgroundColor": "#2E2020"
+                        }
+                      },
+                      {
+                        "type": "View",
+                        "style": {
+                          "gap": 4,
+                          "padding": 12
+                        },
+                        "children": [
+                          {
+                            "type": "View",
+                            "style": {
+                              "alignItems": "flex-start",
+                              "flexDirection": "row",
+                              "justifyContent": "space-between"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "style": {
+                                  "flex": 1
+                                },
+                                "children": [
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 16,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "Koi Sushi"
+                                    ]
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B09090",
+                                      "fontSize": 12,
+                                      "marginTop": 0
+                                    },
+                                    "children": [
+                                      "Japanese • Premium"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "borderRadius": 4,
+                                  "flexDirection": "row",
+                                  "backgroundColor": "#2E2020",
+                                  "paddingVertical": 4,
+                                  "paddingHorizontal": 8
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "star",
+                                      "size": 14,
+                                      "color": "#FF695C"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#FFFFFF",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    },
+                                    "children": [
+                                      "4.7"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "View",
+                            "style": {
+                              "gap": 12,
+                              "marginTop": 4,
+                              "alignItems": "center",
+                              "flexDirection": "row"
+                            },
+                            "children": [
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "flexDirection": "row"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "schedule",
+                                      "size": 14,
+                                      "color": "#B0909088"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B0909088",
+                                      "fontSize": 12
+                                    },
+                                    "children": [
+                                      "30-40 min"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "View",
+                                "style": {
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "flexDirection": "row"
+                                },
+                                "children": [
+                                  {
+                                    "type": "Icon",
+                                    "props": {
+                                      "name": "local_shipping",
+                                      "size": 14,
+                                      "color": "#B0909088"
+                                    }
+                                  },
+                                  {
+                                    "type": "Text",
+                                    "style": {
+                                      "color": "#B0909088",
+                                      "fontSize": 12
+                                    },
+                                    "children": [
+                                      "$3.50"
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "View",
+            "style": {
+              "height": 40
+            }
+          }
+        ]
+      },
+      {
+        "type": "View",
+        "style": {
+          "height": 83,
+          "alignItems": "center",
+          "borderColor": "#2E2020",
+          "flexDirection": "row",
+          "paddingBottom": 34,
+          "borderTopWidth": 1,
+          "justifyContent": "space-around",
+          "backgroundColor": "#241818"
+        },
+        "children": [
+          {
+            "type": "View",
+            "style": {
+              "alignItems": "center",
+              "justifyContent": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "home",
+                  "size": 24,
+                  "color": "#FF695C"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#FF695C",
+                  "fontSize": 11,
+                  "marginTop": 4,
+                  "fontWeight": "500"
+                },
+                "children": [
+                  "Home"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "View",
+            "style": {
+              "alignItems": "center",
+              "justifyContent": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "search",
+                  "size": 24,
+                  "color": "#B09090"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#B09090",
+                  "fontSize": 11,
+                  "marginTop": 4,
+                  "fontWeight": "500"
+                },
+                "children": [
+                  "Search"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "View",
+            "style": {
+              "alignItems": "center",
+              "justifyContent": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "shopping_cart",
+                  "size": 24,
+                  "color": "#B09090"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#B09090",
+                  "fontSize": 11,
+                  "marginTop": 4,
+                  "fontWeight": "500"
+                },
+                "children": [
+                  "Orders"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "View",
+            "style": {
+              "alignItems": "center",
+              "justifyContent": "center"
+            },
+            "children": [
+              {
+                "type": "Icon",
+                "props": {
+                  "name": "person",
+                  "size": 24,
+                  "color": "#B09090"
+                }
+              },
+              {
+                "type": "Text",
+                "style": {
+                  "color": "#B09090",
+                  "fontSize": 11,
+                  "marginTop": 4,
+                  "fontWeight": "500"
+                },
+                "children": [
+                  "Profile"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "project_id": "6cd8e600-30e4-42b9-96b8-5121ec7e8fb5",
+  "macro_count": 0,
+  "macros_used": [],
+  "total_nodes": 247,
+  "macro_density": 0
+}
