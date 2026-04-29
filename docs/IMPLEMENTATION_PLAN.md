@@ -66,12 +66,13 @@ Macro usage rate (averaged across 30 fresh harness generations) ≥ 50%. `FormIn
 - [x] **Day 2 — Build harness.** Created `eval/harness.mjs` (plus `eval/scoring.mjs`, `eval/test-set.mjs`, `eval/_load-prompts.mjs`, `eval/load-icon-validator.mjs`). Three modes: `--mode=snapshot` (score Day 1 production data, no API), `--mode=fresh` (generate via Anthropic, requires `ANTHROPIC_API_KEY`), `--mode=judge` (TODO Day 3+).
 - [x] Implement scoring on 7 axes: macro density, macro presence, targeted-macro adoption (BottomNav/ListRow/ChipSelector/RatingStars/SectionHeader), icon-name validity, content realism, tree-size sanity. Multi-axis to avoid Goodhart on density-only optimization.
 - [x] Run harness against production data (snapshot mode). Saved `eval/snapshot-2026-04-29.{json,md}`.
-- [ ] **Day 3 — Rewrite prompt v1.** Move macro section to top of `COMPONENT_TYPES` (before `DESIGN_TOKENS` is referenced).
-- [ ] Add 4-6 strong negative examples ("DON'T generate this raw stack: ... DO generate this macro version: ...").
-- [ ] Tighten the macro list to the 12 most important; drop rare ones.
-- [ ] Deploy new prompt to a staging branch.
-- [ ] Re-run harness against new prompt. Save `eval/v1-2026-04-XX.json`.
-- [ ] **DECISION POINT:** Compare v1 to baseline. If macro usage ≥ 35%, continue. If <35%, see "Not validated" branch in Validation checkpoint above.
+- [x] **Day 3 — Rewrite prompt v1.** Three targeted edits in `api/_lib/design-system.ts`:
+  - Change 1: Strict icon-name list rule (230+ Lucide kebab-case names, explicit ban on Material Symbols identifiers like `directions_walk`).
+  - Change 2: BottomNav promoted to top of macro section with imperative "REQUIRED for any app with multiple primary screens" framing, props detail, and concrete food-delivery example.
+  - Change 3: New "MACRO ADOPTION RULE" block at the top of `FUNCTIONAL_APP_RULES` — 12-question decision tree mapping UI patterns to macros, plus a NEG/POS example pair replacing the legacy emoji-based BottomNav guidance.
+- [x] Validated prompt extraction loads cleanly: 23,458 chars total, all three rules detected.
+- [ ] ~~Re-run harness against new prompt~~ **BLOCKED** — see decision-log entry below. Dev `ANTHROPIC_API_KEY` is rate-capped at 10K output-tokens/min, but Anthropic pre-charges `max_tokens` against the budget. Haiku 4.5 needs ≥20K tokens per generation call to avoid mid-stream truncation; with the dev key cap, every generation either truncates (`max_tokens ≤ 10K`) or is rejected pre-flight (`max_tokens > 10K`). Fresh-mode evaluation cannot be run on this key.
+- [ ] **DECISION POINT (deferred):** measurement of v1 prompt against baseline is unblocked once a higher-tier API key (production tier-2+) is available, OR the harness is restructured to generate one screen per call (significant refactor — out of Day 3 scope).
 - [ ] **Day 4 — Iterate.** Apply learnings from v1 results. Tighten icon-name guidance ("ALL icon names MUST be from this list: [80 explicit names]").
 - [ ] Re-run harness. Save `eval/v2-2026-04-XX.json`.
 - [ ] If macro usage ≥ 50% AND icon validity = 100%, ship.
@@ -406,6 +407,7 @@ Record significant strategic decisions made during the project. Format: `[YYYY-M
 - `[2026-04-29]` Built eval harness; baseline captured from production data. Headline: 2.28% macro density (mean), 12.9% macro presence, 8.8% BottomNav adoption, 4% ListRow, 2.8% ChipSelector, 91.7% icon validity, 100% content realism. The 8% icon-invalidity rate directly explains the icons-as-text rendering bug. Day-3 rewrite target: ≥50% density, ≥80% BottomNav adoption, 100% icon validity.
 - `[2026-04-29]` Verified: Day 1's Postgres `jsonb_path_query_array($.**.type)` was double-counting nodes (each node + once per parent enumeration). Density ratio is unaffected (numerator and denominator both 2x'd) but absolute node counts in `eval/snapshot-2026-04-28.json` are 2x reality. Harness's walkNodes count is correct. Snapshot file kept as-is for archival; harness output is authoritative going forward.
 - `[2026-04-29]` Fresh-mode (30 controlled prompts) deferred until `ANTHROPIC_API_KEY` is available in `.env`. Harness is fully built and tested for prompt extraction; just needs the key. Snapshot baseline serves as the before-photo for Day 3 iteration; first fresh run can establish the controlled-set baseline whenever convenient.
+- `[2026-04-29]` Day 3 prompt rewrite v1 landed (three targeted edits per spec; no scope creep). Harness polished: inline `.env` loader bypasses the empty-shell-export issue, `--limit=N` flag for smoke testing, rolling token-budget throttle, empty-aggregate guards in headline/markdown renderers. **Fresh-mode evaluation blocked by dev key tier:** the `.env` `ANTHROPIC_API_KEY` is capped at 10K output-tokens/min, and Anthropic pre-charges `max_tokens` against that budget. Haiku 4.5's verbose output needs `max_tokens ≥ 20K` per generation call (production uses 32K); at `max_tokens=10K` every smoke-test app truncates mid-screen (3/3 fit-N attempts each fail with `stop_reason=max_tokens`); at `max_tokens > 10K` requests are rejected pre-flight with a 429 rate-limit error. Two paths forward: (a) higher-tier API key for the harness, (b) restructure generation to one screen per call. Both deferred. Day-3 prompt edits are committed on their analytical merits; v1 vs baseline numbers unmeasured for now.
 - `[YYYY-MM-DD]` _____________
 
 ---

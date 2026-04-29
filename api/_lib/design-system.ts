@@ -31,20 +31,41 @@ CRITICAL FORMAT: styles go in "style", NOT in "props.style". Props are for compo
 Image: use searchQuery (descriptive, 5-10 words like a photo prompt) or avatar (name string for DiceBear).
   searchQuery: {"type":"Image","style":{"width":"100%","height":200},"props":{"searchQuery":"modern gym interior dark moody"}}
   avatar: {"type":"Image","style":{"width":48,"height":48,"borderRadius":9999},"props":{"avatar":"Sarah"}}
-Icon: Lucide icon names (kebab-case). {"type":"Icon","props":{"name":"heart","size":20,"color":"#FF6B6B"}}
-  Common names: heart, user, shopping-cart, chevron-right, arrow-left, search, settings, bell, home, star, plus, x, check, trash-2, edit, share, bookmark, send, eye, lock, calendar, clock, map-pin, credit-card, menu.
-  Material Symbols snake_case names (favorite, shopping_cart, chevron_right) also work — they are auto-normalized. Prefer Lucide kebab-case.
-  NEVER use emoji for icons.
+Icon: {"type":"Icon","props":{"name":"heart","size":20,"color":"#FF6B6B"}}
+  ICON NAMES — STRICT RULE
+  The 'name' prop of any Icon component MUST be exactly one of these values (Lucide kebab-case, lowercase, no spaces):
+
+  heart, home, search, settings, bell, user, mail, star, check, x, plus, minus, chevron-right, chevron-left, chevron-down, chevron-up, arrow-left, arrow-right, arrow-up, arrow-down, menu, clock, calendar, camera, phone, map-pin, eye, lock, unlock, share, download, upload, trash, trash-2, edit, copy, play, pause, skip-forward, skip-back, volume, volume-1, volume-2, volume-x, wifi, wifi-off, battery, battery-charging, battery-low, battery-full, battery-dead, send, image, shopping-cart, filter, bookmark, globe, trending-up, trending-down, zap, activity, music, video, mic, sun, moon, cloud, cloud-rain, cloud-sun, droplet, droplets, wind, thermometer, snowflake, mountain, leaf, sprout, navigation, navigation-2, refresh, repeat, shuffle, info, help, alert, alert-circle, shield, credit-card, wallet, receipt, banknote, coins, piggy-bank, savings, bar-chart, bar-chart-2, pie-chart, analytics, dashboard, layout-dashboard, timeline, layers, grid, list, folder, file, link, external-link, qr-code, scan, fingerprint, flash, gift, tag, flag, pin, compass, target, crosshair, locate, map, award, trophy, gem, crown, sparkles, wand, fire, flame, restaurant, coffee, cart, bag, package, box, truck, airplane, plane, hotel, car, bike, bicycle, walk, run, footprints, fitness, dumbbell, barbell, spa, medical, stethoscope, pill, syringe, heart-pulse, baby, school, graduation-cap, book, briefcase, work, building, building-2, house, apartment, key, chat, chat-bubble, message, message-circle, message-square, group, users, user-plus, add-user, circle-user, circle-check, circle-x, circle-alert, circle-help, circle-plus, thumb-up, thumb-down, thumbs-up, thumbs-down, more-horizontal, more-vertical, log-out, log-in, power, palette, brush, crop, tune, equalizer, headphones, speaker, radio, podcast, gamepad, timer, stopwatch, alarm, code, terminal, database, server, percent, attach, attach-file, paperclip, utensils, glass-water, apple, salad, pizza, soup, beer, wine, candy, cookie, cake, shirt, watch, glasses, lamp, bed, bath, shower, signal, rocket, lightbulb, brain, smile, frown, flower-2, maximize, minimize, add, add-circle, alarm, ac_unit, auto_awesome.
+
+  If you need an icon for a concept not in this list, pick the CLOSEST semantic match from the list.
+  NEVER invent a new icon name. NEVER use Material Symbols identifiers like "directions_walk", "local_fire_department", "fitness_center", "favorite", "shopping_cart" — they will render as raw text instead of a glyph.
+  NEVER use emoji as Icon names.
 LinearGradient: {"type":"LinearGradient","props":{"colors":["#6366F1","#8B5CF6"],"start":{"x":0,"y":0},"end":{"x":1,"y":1}},"children":[...]}
 SVG ring: {"type":"Svg","style":{"width":56,"height":56},"props":{"viewBox":"0 0 56 56"},"children":[{"type":"Circle","props":{"cx":28,"cy":28,"r":24,"stroke":"#222236","strokeWidth":4,"fill":"none"}},{"type":"Circle","props":{"cx":28,"cy":28,"r":24,"stroke":"#6C5CE7","strokeWidth":4,"fill":"none","strokeDasharray":"151","strokeDashoffset":"38","strokeLinecap":"round"}}]}
   Formula: strokeDasharray=2*pi*r, strokeDashoffset=dasharray*(1-fraction)
 ScrollView: props showsVerticalScrollIndicator, horizontal. TextInput: props placeholder, placeholderTextColor, secureTextEntry. Switch: props value, trackColor, thumbColor.
 
-MACRO COMPONENTS — use these instead of raw nodes. They auto-expand to production-quality subtrees:
+MACRO COMPONENTS — use these instead of raw nodes. They auto-expand to production-quality subtrees with proper styling, spacing, and visual hierarchy already built in.
 
-NAVIGATION & LAYOUT:
-BottomNav: {"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Browse"},{"icon":"shopping_cart","label":"Cart"},{"icon":"person","label":"Account"}]}}
-HeaderBar: {"type":"HeaderBar","props":{"title":"Settings","showBack":true,"rightIcons":["notifications","more_vert"]}}
+═══════════════════════════════════════════════════════════════════════════════
+BottomNav — REQUIRED for any app with multiple primary screens.
+═══════════════════════════════════════════════════════════════════════════════
+Every multi-screen app MUST have a single BottomNav instance shared across all screens. Do NOT manually construct bottom navigation as View [row] + TouchableOpacity + Icon + Text — that pattern is FORBIDDEN.
+
+When to use: any app with 3-5 main sections (Home / Search / Cart / Profile, etc.).
+When NOT to use: single-screen apps, modal flows, auth/onboarding screens.
+
+Props:
+  items: array of { icon: string, label: string, active?: boolean }
+    icon — one of the icon names from the STRICT RULE list above.
+    label — one word: "Home", "Search", "Cart", "Profile", etc.
+    active — true on exactly one item per screen (the current screen).
+
+Example (food delivery app, Home screen):
+{"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Browse"},{"icon":"shopping-cart","label":"Cart"},{"icon":"user","label":"Profile"}]}}
+
+NAVIGATION & LAYOUT (other macros):
+HeaderBar: {"type":"HeaderBar","props":{"title":"Settings","showBack":true,"rightIcons":["bell","more-horizontal"]}}
 TabBar: {"type":"TabBar","props":{"tabs":[{"label":"Posts","active":true},{"label":"Reels"},{"label":"Tagged"}]}}
 SectionHeader: {"type":"SectionHeader","props":{"title":"Recent Activity","actionText":"See All"}}
 SearchBar: {"type":"SearchBar","props":{"placeholder":"Search restaurants, food..."}}
@@ -131,6 +152,41 @@ Cards: borderRadius 12-16, padding 16, surface-1 bg. Buttons: height 48, borderR
 `
 
 export const FUNCTIONAL_APP_RULES = `
+═══════════════════════════════════════════════════════════════════════════════
+MACRO ADOPTION RULE — read this BEFORE generating any tree.
+═══════════════════════════════════════════════════════════════════════════════
+You have access to 26 macro components (defined in COMPONENTS section above). Macros encapsulate common UI patterns with proper styling, spacing, and visual hierarchy already built in. **Using macros is REQUIRED, not optional.**
+
+Before generating ANY raw View+Text+TouchableOpacity stack, ask yourself:
+- Is this a bottom navigation? → BottomNav.
+- Is this a screen header (title + back button + right icons)? → HeaderBar.
+- Is this a section title with optional "See All"? → SectionHeader.
+- Is this a list of items with icons + chevrons (settings, menu)? → ListRow (one per item).
+- Is this a stat tile / metric card? → StatCard.
+- Is this a row of category chips, filter pills, size buttons? → ChipSelector.
+- Is this a star rating display? → RatingStars.
+- Is this a card with image + title + price + rating? → ProductCard.
+- Is this a chat message bubble? → MessageBubble.
+- Is this a form field (label + input + icon)? → FormInput.
+- Is this an avatar with initials/photo? → AvatarCircle.
+- Is this a circular or linear progress indicator? → ProgressRing or ProgressBar.
+
+The 12 most-important macros to look for first (ranked by frequency of need):
+1. BottomNav — every multi-screen app's bottom tab bar.
+2. HeaderBar — every screen's top header.
+3. ListRow — settings rows, menu items, "Recent X" lists.
+4. SectionHeader — every "Section title · See All" pattern.
+5. StatCard — every dashboard metric tile.
+6. ChipSelector — every category / filter / size row.
+7. ProductCard — every product / restaurant / listing tile.
+8. RatingStars — every "★ 4.6 (128 reviews)" display.
+9. AvatarCircle — every user/host/contact avatar.
+10. FormInput — every form field with label.
+11. SearchBar — every search input row.
+12. MessageBubble — every chat message.
+
+If a macro fits, USE IT. Raw View+Text stacks for these patterns are FORBIDDEN.
+
 CRITICAL — GENERATE FUNCTIONAL SCREENS, NOT STATIC MOCKUPS:
 This is an app builder. The output should be a working app prototype, not a design mockup. Every interactive element must actually work. Every screen must look like a production app, NOT a wireframe.
 
@@ -151,15 +207,33 @@ REALISTIC MOCK DATA:
 - Social: [{user:'Sarah Chen',text:'Just caught this amazing sunrise!',likes:42,comments:8,time:'2h ago',avatar:'Sarah Chen'}, ...]
 - Each data item should have all fields needed for the UI (name, subtitle, image, stats, etc.)
 
-BOTTOM TAB BAR (CRITICAL):
-- Maximum 4 tabs (NEVER more than 5)
-- Tab labels must be ONE WORD: Home, Explore, Chat, Profile
-- Detail screens are NEVER tab items
-- Every tab MUST have an emoji icon ABOVE the label. Required icons:
-  Home: 🏠  Explore/Search: 🔍  Messages/Chat: 💬  Cart: 🛒  Profile: 👤  Notifications: 🔔  Settings: ⚙️  Favorites: ❤️  Activity: 📊
-- Tab bar height: 60-70px. Icon size: 20-24px above 10-11px label.
-- Active tab: accent color icon+label. Inactive: gray/muted.
-- Use BottomNav macro: {"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Explore"},{"icon":"chat","label":"Chat"},{"icon":"person","label":"Profile"}]}}
+BOTTOM TAB BAR (use the BottomNav macro — see negative/positive example below):
+- Maximum 4-5 tabs.
+- Tab labels are ONE WORD: Home, Search, Cart, Profile, etc.
+- Detail screens are NEVER tab items.
+- Tab icons are Lucide kebab-case names from the strict ICON list (NOT emoji).
+- Active tab gets the accent color; inactive tabs are muted.
+
+NEGATIVE EXAMPLE — DO NOT do this (raw stack pattern, FORBIDDEN):
+{
+  "type": "View",
+  "style": { "flexDirection": "row", "borderTopWidth": 1, "paddingVertical": 8 },
+  "children": [
+    { "type": "TouchableOpacity", "style": { "alignItems": "center" }, "children": [
+      { "type": "Icon", "props": { "name": "home", "size": 22, "color": "#6C5CE7" } },
+      { "type": "Text", "style": { "fontSize": 11, "color": "#6C5CE7" }, "children": ["Home"] }
+    ]},
+    ... 3 more identical TouchableOpacity wrappers ...
+  ]
+}
+
+POSITIVE EXAMPLE — DO this (one BottomNav macro replaces the whole stack):
+{ "type": "BottomNav", "props": { "items": [
+  { "icon": "home", "label": "Home", "active": true },
+  { "icon": "search", "label": "Search" },
+  { "icon": "shopping-cart", "label": "Cart" },
+  { "icon": "user", "label": "Profile" }
+]}}
 
 SCREEN CONTENT DENSITY (CRITICAL):
 Every screen must feel FULL and COMPLETE like a real shipped app. Never leave empty space.

@@ -22,6 +22,33 @@ import { TEST_SET, ARCHETYPES } from './test-set.mjs'
 import { scoreScreen, aggregate, TARGETED_MACROS, MACRO_TYPES } from './scoring.mjs'
 import { isKnownIcon } from './load-icon-validator.mjs'
 
+// ─── Inline .env loader ────────────────────────────────────────────────
+// Node's `--env-file` flag does NOT override variables already set in the
+// parent process — even when the existing value is an empty string. Some
+// shells / tool harnesses leak `ANTHROPIC_API_KEY=""` into the env, which
+// silently blocks the harness from picking up the real key in `.env`. We
+// load `.env` explicitly here and OVERRIDE existing values, so the harness
+// works reliably regardless of how it's launched.
+;(function loadDotEnv() {
+  const envPath = new URL('../.env', import.meta.url)
+  if (!existsSync(envPath)) return
+  const text = readFileSync(envPath, 'utf8')
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq < 1) continue
+    const key = line.slice(0, eq).trim()
+    let val = line.slice(eq + 1).trim()
+    // Strip surrounding quotes if present
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1)
+    }
+    // Override even if already set — fixes the empty-shell-export case.
+    process.env[key] = val
+  }
+})()
+
 const args = Object.fromEntries(
   process.argv.slice(2).map(a => {
     const [k, v] = a.replace(/^--/, '').split('=')
@@ -94,14 +121,19 @@ async function runFresh() {
   const completed = new Set(partial.map(p => p.test_id))
 
   const allResults = [...partial]
-  const remaining = TEST_SET.filter(t => !completed.has(t.id))
+  let remaining = TEST_SET.filter(t => !completed.has(t.id))
+  if (args.limit) {
+    remaining = remaining.slice(0, Number(args.limit))
+    log(`--limit=${args.limit} — running ${remaining.length} prompts (smoke test)`)
+  }
 
   for (let i = 0; i < remaining.length; i++) {
     const t = remaining[i]
     log(`(${i + 1}/${remaining.length}) ${t.id} [${t.archetype}] "${t.prompt.slice(0, 50)}..."`)
     const result = await generateAndScore(t, apiKey, plannerSystem, appGenerationSystem, buildGenPrompt)
     allResults.push(result)
-    // Save partial after each prompt — crash recovery
+    // Save partial after each prompt — crash recovery. Inter-app pacing is
+    // handled by the rolling token-budget throttle in callAnthropic().
     writeFileSync(partialPath, JSON.stringify(allResults, null, 2))
   }
 
@@ -155,14 +187,17 @@ async function generateAndScore(test, apiKey, plannerSystem, appGenSystem, build
       const gen = await callAnthropic({
         apiKey,
         model: 'claude-haiku-4-5-20251001', // free-tier model — same one production uses for free users
-        max_tokens: 32000,
+        max_tokens: 10000,
         system: appGenSystem,
         messages: [{ role: 'user', content: genPrompt }],
       })
       const genText = stripCodeFences(gen?.content?.[0]?.text || '')
       const screens = parseScreenArray(genText)
       if (!screens || !Array.isArray(screens) || screens.length === 0) {
-        throw new Error('generation returned no screens')
+        // Dump raw response for diagnosis
+        const dbgPath = new URL(`./debug-${test.id}-attempt${attempt}.txt`, import.meta.url)
+        writeFileSync(dbgPath, `stop_reason=${gen?.stop_reason}\nusage=${JSON.stringify(gen?.usage)}\n--- raw text ---\n${genText}`)
+        throw new Error(`generation returned no screens (stop=${gen?.stop_reason}, len=${genText.length})`)
       }
 
       // Score every generated screen
@@ -199,7 +234,31 @@ async function generateAndScore(test, apiKey, plannerSystem, appGenSystem, build
   }
 }
 
+// ─── Rolling token-budget throttle ─────────────────────────────────────
+// Dev Anthropic key is capped at 10,000 OUTPUT tokens / minute. Anthropic
+// charges max_tokens against the rate budget at request time, so we must
+// pace requests by their REQUESTED ceiling, not their actual usage.
+const TOKEN_BUDGET = 10_000
+const WINDOW_MS = 60_000
+const RECENT = []  // [{t, tokens}]
+async function reserveTokens(maxTokens) {
+  while (true) {
+    const now = Date.now()
+    while (RECENT.length && now - RECENT[0].t > WINDOW_MS) RECENT.shift()
+    const used = RECENT.reduce((a, r) => a + r.tokens, 0)
+    if (used + maxTokens <= TOKEN_BUDGET) {
+      RECENT.push({ t: now, tokens: maxTokens })
+      return
+    }
+    // Sleep until the oldest entry rolls off, plus 1s buffer
+    const wait = (RECENT[0].t + WINDOW_MS) - now + 1000
+    log(`  … rate-budget: ${used}/${TOKEN_BUDGET} reserved, waiting ${(wait/1000).toFixed(0)}s`)
+    await new Promise(r => setTimeout(r, Math.max(wait, 1000)))
+  }
+}
+
 async function callAnthropic({ apiKey, model, max_tokens, system, messages }) {
+  await reserveTokens(max_tokens)
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -286,6 +345,10 @@ async function main() {
   console.log('')
   console.log('═══ HEADLINE NUMBERS ═══')
   console.log(`Mode: ${result.mode}, screens scored: ${a.count}`)
+  if (a.count === 0) {
+    console.log('No screens scored — every app failed. See partial JSON for errors.')
+    return
+  }
   console.log(`Macro density (mean):   ${(a.macro_density_mean * 100).toFixed(2)}%`)
   console.log(`Macro presence:         ${(a.macro_presence_rate * 100).toFixed(1)}%`)
   for (const m of TARGETED_MACROS) {
@@ -309,6 +372,12 @@ function renderMarkdown(result) {
   lines.push('| Metric | Value |')
   lines.push('|--------|------:|')
   lines.push(`| Screens scored | ${a.count} |`)
+  if (a.count === 0) {
+    lines.push('')
+    lines.push('_No screens scored — every app failed. See partial JSON for errors._')
+    lines.push('')
+    return lines.join('\n') + '\n'
+  }
   lines.push(`| Macro density (mean) | **${(a.macro_density_mean * 100).toFixed(2)}%** |`)
   lines.push(`| Macro presence (≥1 macro per screen) | ${(a.macro_presence_rate * 100).toFixed(1)}% |`)
   for (const m of TARGETED_MACROS) {
