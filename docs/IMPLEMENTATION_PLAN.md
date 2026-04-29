@@ -63,9 +63,9 @@ Macro usage rate (averaged across 30 fresh harness generations) ≥ 50%. `FormIn
 
 ### Tasks
 - [ ] **Day 1 — Diagnosis** (covered in "Today" section above)
-- [ ] **Day 2 — Build harness.** Create `eval/harness.ts` that hits `/api/generate-flow` with 6 archetype prompts × 5 variations = 30 generations.
-- [ ] Implement scoring: macro usage rate, icon-name validity, content realism (no "Item 1" / "Lorem"), tree-size sanity (50-180 nodes).
-- [ ] Run harness against current production. Save `eval/baseline-2026-04-28.json`.
+- [x] **Day 2 — Build harness.** Created `eval/harness.mjs` (plus `eval/scoring.mjs`, `eval/test-set.mjs`, `eval/_load-prompts.mjs`, `eval/load-icon-validator.mjs`). Three modes: `--mode=snapshot` (score Day 1 production data, no API), `--mode=fresh` (generate via Anthropic, requires `ANTHROPIC_API_KEY`), `--mode=judge` (TODO Day 3+).
+- [x] Implement scoring on 7 axes: macro density, macro presence, targeted-macro adoption (BottomNav/ListRow/ChipSelector/RatingStars/SectionHeader), icon-name validity, content realism, tree-size sanity. Multi-axis to avoid Goodhart on density-only optimization.
+- [x] Run harness against production data (snapshot mode). Saved `eval/snapshot-2026-04-29.{json,md}`.
 - [ ] **Day 3 — Rewrite prompt v1.** Move macro section to top of `COMPONENT_TYPES` (before `DESIGN_TOKENS` is referenced).
 - [ ] Add 4-6 strong negative examples ("DON'T generate this raw stack: ... DO generate this macro version: ...").
 - [ ] Tighten the macro list to the 12 most important; drop rare ones.
@@ -403,6 +403,9 @@ Record significant strategic decisions made during the project. Format: `[YYYY-M
 - `[2026-04-28]` Decision: Render JSON tree via tree-walk, do NOT compile arbitrary TSX in browser. Reason: Babel-standalone + module resolution + CSS pipeline is a 2-month rabbit hole. Trade-off: runtime can only render Mokkoi's macro-tree format, not user-edited inline TSX.
 - `[2026-04-28]` Captured baseline: **1.9% average macro density** across 303 screens (2.3% across 249 real screens with ≥30 nodes). 87.1% of real screens have ZERO macros. The "before-photo" metric for Week 0 is far worse than the strategic memo's earlier 8% estimate (which was % of screens containing any one macro, not actual node-density). Day-3 rewrite target: 50%+ density.
 - `[2026-04-28]` Day 1 finding: macro library has at least one real gap — `ListRow` doesn't accept a `Switch` trailing element, so settings-toggle rows can't legitimately use it. Add `ListRow` switch-trailing support as low-risk parallel improvement during Day 3-4 prompt work. Tracked as a Day 4 sub-task.
+- `[2026-04-29]` Built eval harness; baseline captured from production data. Headline: 2.28% macro density (mean), 12.9% macro presence, 8.8% BottomNav adoption, 4% ListRow, 2.8% ChipSelector, 91.7% icon validity, 100% content realism. The 8% icon-invalidity rate directly explains the icons-as-text rendering bug. Day-3 rewrite target: ≥50% density, ≥80% BottomNav adoption, 100% icon validity.
+- `[2026-04-29]` Verified: Day 1's Postgres `jsonb_path_query_array($.**.type)` was double-counting nodes (each node + once per parent enumeration). Density ratio is unaffected (numerator and denominator both 2x'd) but absolute node counts in `eval/snapshot-2026-04-28.json` are 2x reality. Harness's walkNodes count is correct. Snapshot file kept as-is for archival; harness output is authoritative going forward.
+- `[2026-04-29]` Fresh-mode (30 controlled prompts) deferred until `ANTHROPIC_API_KEY` is available in `.env`. Harness is fully built and tested for prompt extraction; just needs the key. Snapshot baseline serves as the before-photo for Day 3 iteration; first fresh run can establish the controlled-set baseline whenever convenient.
 - `[YYYY-MM-DD]` _____________
 
 ---
