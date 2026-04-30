@@ -101,7 +101,7 @@ async function runSnapshot() {
 }
 
 // ─── Fresh mode ────────────────────────────────────────────────────────
-async function runFresh() {
+async function runFresh(opts = { streamed: false }) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     console.error('Set ANTHROPIC_API_KEY in env to run fresh mode.')
@@ -112,7 +112,8 @@ async function runFresh() {
   // Load Mokkoi's prompts dynamically from the API source.
   const { plannerSystem, appGenerationSystem, buildGenPrompt } = await loadMokkoiPrompts()
 
-  const partialPath = new URL(`./fresh-${TODAY}.partial.json`, import.meta.url)
+  const modeLabel = opts.streamed ? 'fresh-streamed' : 'fresh'
+  const partialPath = new URL(`./${modeLabel}-${TODAY}.partial.json`, import.meta.url)
   let partial = []
   if (existsSync(partialPath)) {
     partial = JSON.parse(readFileSync(partialPath, 'utf8'))
@@ -130,7 +131,9 @@ async function runFresh() {
   for (let i = 0; i < remaining.length; i++) {
     const t = remaining[i]
     log(`(${i + 1}/${remaining.length}) ${t.id} [${t.archetype}] "${t.prompt.slice(0, 50)}..."`)
-    const result = await generateAndScore(t, apiKey, plannerSystem, appGenerationSystem, buildGenPrompt)
+    const result = opts.streamed
+      ? await generateAppOneScreenPerCall(t, apiKey, plannerSystem, appGenerationSystem)
+      : await generateAndScore(t, apiKey, plannerSystem, appGenerationSystem, buildGenPrompt)
     allResults.push(result)
     // Save partial after each prompt — crash recovery. Inter-app pacing is
     // handled by the rolling token-budget throttle in callAnthropic().
@@ -151,14 +154,216 @@ async function runFresh() {
 
   const allScreens = allResults.filter(r => r.success).flatMap(r => r.screen_scores)
   return {
-    mode: 'fresh',
+    mode: modeLabel,
     captured_at: new Date().toISOString(),
     test_set_size: TEST_SET.length,
     apps_generated: allResults.filter(r => r.success).length,
     apps_failed: allResults.filter(r => !r.success).length,
+    apps_partial: allResults.filter(r => r.partial).length,
     aggregate: aggregate(allScreens),
     per_archetype: perArchetype,
     apps: allResults,
+  }
+}
+
+// ─── One-screen-per-call generation ────────────────────────────────────
+// Refactored path that generates a multi-screen app via N+1 small calls
+// (1 planner call + one call per screen), each with max_tokens ≈ 4K. This
+// fits Anthropic Tier 1's 10K output-tokens/min cap and prototypes the
+// Week 1 runtime architecture (progressive screen rendering).
+//
+// Returns the same shape as generateAndScore so scoring/aggregation works
+// unchanged. If individual screens fail, the app is returned with
+// partial:true and failed_screens populated; the screens that did
+// generate are still scored.
+const PER_SCREEN_MAX_TOKENS = 5500
+const PLANNER_MAX_TOKENS = 2000
+const INTER_SCREEN_DELAY_MS = 100
+
+// Strip JS-only literals that the AI sometimes emits inside otherwise-valid
+// JSON. Most common: `"onPress": () => {}`, `"onPress": function() {...}`,
+// and bare identifiers like `"onPress": handlePress`. Replace with null.
+function stripFunctionLiterals(text) {
+  let t = text
+  // Arrow functions with optional async, optional parens, optional body
+  t = t.replace(/("[\w-]+"\s*:\s*)(?:async\s*)?\([^)]*\)\s*=>\s*\{[^}]*\}/g, '$1null')
+  t = t.replace(/("[\w-]+"\s*:\s*)(?:async\s*)?[\w$]+\s*=>\s*\{[^}]*\}/g, '$1null')
+  // function() { ... } — assumes body has no nested braces (good enough for AI output)
+  t = t.replace(/("[\w-]+"\s*:\s*)(?:async\s*)?function\s*\*?[\w$]*\s*\([^)]*\)\s*\{[^}]*\}/g, '$1null')
+  // Bare identifier handlers like `"onPress": handlePress` (only when followed by , } or whitespace)
+  t = t.replace(/("on[A-Z][\w]*"\s*:\s*)([a-zA-Z_$][\w$]*)(\s*[,}\]])/g, '$1null$3')
+  return t
+}
+
+async function generateAppOneScreenPerCall(test, apiKey, plannerSystem, appGenSystem) {
+  const t0 = Date.now()
+  let plan
+  // Planner phase — same as the original path. Try up to 3 times.
+  let plannerErr
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const planResp = await callAnthropic({
+        apiKey,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: PLANNER_MAX_TOKENS,
+        system: plannerSystem,
+        messages: [{ role: 'user', content: test.prompt }],
+      })
+      const planText = stripCodeFences(planResp?.content?.[0]?.text || '')
+      try { plan = JSON.parse(planText) } catch { plan = repairJSON(planText) }
+      if (!plan?.screens || !Array.isArray(plan.screens) || plan.screens.length < 2) {
+        throw new Error('plan returned no screens')
+      }
+      break
+    } catch (err) {
+      plannerErr = err
+      log(`  ✗ planner attempt ${attempt}/3 failed: ${err.message}`)
+      if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt))
+    }
+  }
+  if (!plan) {
+    return {
+      test_id: test.id,
+      archetype: test.archetype,
+      prompt: test.prompt,
+      success: false,
+      error: `planner failed: ${plannerErr?.message ?? 'unknown'}`,
+      screen_scores: [],
+    }
+  }
+
+  // Cap to 7 screens — design-system spec is 5–7 per app.
+  const planScreens = plan.screens.slice(0, 7)
+  log(`  → plan: "${plan.appName || 'MyApp'}" with ${planScreens.length} screens`)
+
+  // Build the shared screen-list summary that every per-screen call sees.
+  const screenListSummary = planScreens.map((s, i) =>
+    `${i + 1}. "${s.name}" (id: "${s.id}", type: ${s.screenType}${s.isHome ? ', HOME SCREEN' : ''}): ${s.description}`,
+  ).join('\n')
+  const tabInfo = plan.navigation?.tabScreens?.length
+    ? `Tab screens: ${plan.navigation.tabScreens.join(', ')}. These screens MUST include an identical BottomNav. Active tab matches current screen.`
+    : 'No bottom tabs — use stack navigation only.'
+  const accent = plan.designDirection?.accentColor || '#6C5CE7'
+  const theme = plan.designDirection?.theme || 'dark'
+  const style = plan.designDirection?.style || 'modern minimal'
+
+  const generatedScreens = []
+  const failedScreens = []
+
+  for (let i = 0; i < planScreens.length; i++) {
+    const s = planScreens[i]
+    const isTab = plan.navigation?.tabScreens?.includes(s.id) ?? false
+    const userPrompt = `Generate ONE screen for "${plan.appName || 'MyApp'}".
+
+APP CONTEXT
+Original request: "${test.prompt}"
+App name: "${plan.appName || 'MyApp'}"
+Design direction: theme=${theme}, accent=${accent}, style=${style}
+Navigation: ${plan.navigation?.type || 'stack'}. ${tabInfo}
+
+FULL SCREEN LIST (for cross-screen consistency — visual language, surfaces, header style, BottomNav layout must match across all screens):
+${screenListSummary}
+
+GENERATE ONLY THIS SCREEN
+id: "${s.id}"
+name: "${s.name}"
+type: ${s.screenType}${s.isHome ? ' (HOME SCREEN)' : ''}${isTab ? ' (TAB SCREEN — must include the same BottomNav as other tab screens, with this tab as active)' : ''}
+description: ${s.description}
+
+CRITICAL
+- Use accent ${accent} for primary actions across the app.
+- Use macro components (BottomNav, SearchBar, ProductCard, ListRow, StatCard, ChipSelector, RatingStars, SectionHeader, MessageBubble, FormInput, etc.) instead of building from raw Views. This is required.
+- Keep the tree COMPACT (target 50–180 nodes total).
+- App name "${plan.appName || 'MyApp'}" appears in the Home header${s.isHome ? ' on this screen' : ''}.
+
+JSON OUTPUT RULES (strict — invalid output will be rejected)
+- Output must be PURE JSON — no JavaScript syntax of any kind.
+- DO NOT use arrow functions: never write \`"onPress": () => {}\` or \`"onPress": x => doThing(x)\`.
+- DO NOT use \`function\` literals: never write \`"onPress": function() {}\`.
+- DO NOT use bare identifiers as values: never write \`"onPress": handlePress\`.
+- For interactive props, either OMIT them or use a string descriptor: \`"onPress": "openWorkoutDetail"\`.
+- DO NOT include comments (\`//\` or \`/* */\`) anywhere in the JSON.
+- DO NOT include trailing commas.
+
+Return ONLY a JSON object with this exact shape, no markdown, no explanation:
+{"id": "${s.id}", "name": "${s.name}", "tree": { ... }}`
+
+    let lastErr
+    let screen = null
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const resp = await callAnthropic({
+          apiKey,
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: PER_SCREEN_MAX_TOKENS,
+          system: appGenSystem,
+          messages: [{ role: 'user', content: userPrompt }],
+        })
+        const text = stripFunctionLiterals(stripCodeFences(resp?.content?.[0]?.text || ''))
+        let obj
+        try { obj = JSON.parse(text) } catch { obj = repairJSON(text) }
+        if (!obj || !obj.tree) {
+          const dbgPath = new URL(`./debug-${test.id}-${s.id}-attempt${attempt}.txt`, import.meta.url)
+          writeFileSync(dbgPath, `stop_reason=${resp?.stop_reason}\nusage=${JSON.stringify(resp?.usage)}\n--- raw text ---\n${text}`)
+          throw new Error(`screen ${s.id} returned no tree (stop=${resp?.stop_reason}, len=${text.length})`)
+        }
+        screen = { id: obj.id || s.id, name: obj.name || s.name, tree: obj.tree }
+        break
+      } catch (err) {
+        lastErr = err
+        log(`    ✗ screen ${s.id} attempt ${attempt}/3 failed: ${err.message}`)
+        if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt))
+      }
+    }
+
+    if (screen) {
+      generatedScreens.push(screen)
+      log(`    ✓ screen ${i + 1}/${planScreens.length} "${s.name}" generated`)
+    } else {
+      failedScreens.push({ id: s.id, name: s.name, error: lastErr?.message ?? 'unknown' })
+      log(`    ✗ screen ${i + 1}/${planScreens.length} "${s.name}" gave up after 3 attempts`)
+    }
+
+    // Tiny pacing between sequential per-screen calls — keeps the rolling
+    // 60s window from clustering reservations on the boundary.
+    if (i < planScreens.length - 1) {
+      await new Promise(r => setTimeout(r, INTER_SCREEN_DELAY_MS))
+    }
+  }
+
+  if (generatedScreens.length === 0) {
+    return {
+      test_id: test.id,
+      archetype: test.archetype,
+      prompt: test.prompt,
+      success: false,
+      error: `all ${planScreens.length} screens failed`,
+      failed_screens: failedScreens,
+      screen_scores: [],
+    }
+  }
+
+  const screenScores = generatedScreens.map(s => ({
+    id: s.id,
+    name: s.name,
+    ...scoreScreen(s.tree, isKnownIcon),
+  }))
+  const elapsedMs = Date.now() - t0
+  const partial = failedScreens.length > 0
+  log(`  ✓ ${generatedScreens.length}/${planScreens.length} screens in ${(elapsedMs/1000).toFixed(1)}s, density mean=${(screenScores.reduce((a,s)=>a+s.macro_density,0)/screenScores.length).toFixed(3)}${partial ? ` (PARTIAL: ${failedScreens.length} failed)` : ''}`)
+
+  return {
+    test_id: test.id,
+    archetype: test.archetype,
+    prompt: test.prompt,
+    success: true,
+    partial,
+    elapsed_ms: elapsedMs,
+    plan: { appName: plan.appName, screen_count: planScreens.length },
+    failed_screens: failedScreens.length > 0 ? failedScreens : undefined,
+    screen_scores: screenScores,
+    // Stash the first screen's tree for debug/inspection in smoke tests.
+    sample_tree: generatedScreens[0]?.tree,
   }
 }
 
@@ -247,8 +452,9 @@ async function reserveTokens(maxTokens) {
     while (RECENT.length && now - RECENT[0].t > WINDOW_MS) RECENT.shift()
     const used = RECENT.reduce((a, r) => a + r.tokens, 0)
     if (used + maxTokens <= TOKEN_BUDGET) {
-      RECENT.push({ t: now, tokens: maxTokens })
-      return
+      const entry = { t: now, tokens: maxTokens }
+      RECENT.push(entry)
+      return entry
     }
     // Sleep until the oldest entry rolls off, plus 1s buffer
     const wait = (RECENT[0].t + WINDOW_MS) - now + 1000
@@ -258,7 +464,7 @@ async function reserveTokens(maxTokens) {
 }
 
 async function callAnthropic({ apiKey, model, max_tokens, system, messages }) {
-  await reserveTokens(max_tokens)
+  const reservation = await reserveTokens(max_tokens)
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -276,7 +482,15 @@ async function callAnthropic({ apiKey, model, max_tokens, system, messages }) {
     const body = await res.text()
     throw new Error(`anthropic ${res.status}: ${body.slice(0, 200)}`)
   }
-  return res.json()
+  const json = await res.json()
+  // Release unused budget — Anthropic charges max_tokens at request time but
+  // actual usage is what counts against the rolling window. Adjusting down
+  // lets sequential per-screen calls fit more comfortably.
+  const actualOut = json?.usage?.output_tokens
+  if (typeof actualOut === 'number' && actualOut < reservation.tokens) {
+    reservation.tokens = actualOut
+  }
+  return json
 }
 
 // ─── Lightweight stripCodeFences / repairJSON / parseScreenArray ───────
@@ -323,12 +537,14 @@ async function main() {
   if (MODE === 'snapshot') {
     result = await runSnapshot()
   } else if (MODE === 'fresh') {
-    result = await runFresh()
+    result = await runFresh({ streamed: false })
+  } else if (MODE === 'fresh-streamed') {
+    result = await runFresh({ streamed: true })
   } else if (MODE === 'judge') {
     console.error('judge mode not implemented in initial harness; will add when fresh-mode results are available')
     process.exit(1)
   } else {
-    console.error(`Unknown mode: ${MODE}. Use --mode=snapshot|fresh|judge`)
+    console.error(`Unknown mode: ${MODE}. Use --mode=snapshot|fresh|fresh-streamed|judge`)
     process.exit(1)
   }
 
