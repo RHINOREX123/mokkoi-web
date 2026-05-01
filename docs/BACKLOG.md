@@ -14,18 +14,6 @@ Area tags: `RENDERER`, `PROMPT`, `RUNTIME`, `EVAL`, `INFRA`, `UX`, `DOCS`.
 
 ## Open
 
-### `[P1, RENDERER]` Icon fallback for invalid names
-
-Surfaced during Day 5 UAT (2026-04-30). The Home screen of a task-tracker test generation displayed `ALERT_O` as red raw text — same class of bug as the historical `directions_walk` / `local_fire_department` cases. Iteration-1's strict prompt reduced frequency (icon validity 91.74% → 99.33%) but did not eliminate it.
-
-**Root cause is renderer-side, not prompt-side.** When an `Icon` component receives a `name` prop that doesn't match `iconMap` exactly, the renderer falls through to displaying the raw string instead of a fallback glyph. This is fragile — even one in 100 invalid names produces a visible regression in a demo.
-
-**Fix:** in `src/utils/iconMap.ts` (and the analogous runtime path when Week 1 lands), look up the name against the map; if it misses, return a generic fallback icon (e.g., Lucide `HelpCircle` or `Square`) instead of letting the string render. Add a `console.warn` for the invalid name so it shows up in dev but never as red text in the UI.
-
-Accept that the AI will sometimes produce invalid icon names; make the renderer resilient to it.
-
----
-
 ### `[P2, PROMPT]` BottomNav consistency across primary screens within an app
 
 Surfaced during Day 5 UAT (2026-04-30). The task-tracker test app showed BottomNav on Home / Tasks / Add Task but not on Task Detail / Profile. Reads as inconsistent — could be intentional drill-down design (detail screens push without the tab bar, common iOS pattern), or could be the AI being unevenly applying the rule.
@@ -42,4 +30,12 @@ Not urgent — this isn't a broken-looking demo, just a polish issue. Punt to We
 
 ## Closed
 
-(none yet)
+### `[P1, RENDERER]` Icon fallback for invalid names — resolved 2026-05-01 (commit `84f5656`)
+
+Surfaced during Day 5 UAT (2026-04-30). The Home screen of a task-tracker test generation displayed `ALERT_O` as red raw text — same class of bug as the historical `directions_walk` / `local_fire_department` cases. Iteration-1's strict prompt reduced frequency (icon validity 91.74% → 99.33%) but did not eliminate it.
+
+**Root cause was renderer-side.** `toMaterialSymbol()` in `src/utils/iconMap.ts` returned the raw normalized string on a miss, which the canvas renderer then placed inside `<span class="material-symbols-outlined">` — the Material Symbols font only renders ligatures for valid glyph names, so unknown names leaked through as raw text.
+
+**Fix shipped (commit `84f5656`):** added `KNOWN_MATERIAL_SYMBOLS` set to `iconMap.ts` and gated the renderer in `src/components/ScreenRenderer.tsx` — known names render normally, unknown names render the `circle` glyph at 0.4 opacity (visually distinct for UAT) and emit a one-time `console.warn` of the form `[Mokkoi] Unknown icon name: 'X' (rendering fallback)` for diagnostic backlog-building.
+
+Verified locally (alert_o measured 168px raw text vs. circle glyph at 24px) and confirmed in production bundle `assets/index-5wlfiH62.js`. Prompt and design-system were intentionally not touched.
