@@ -1,113 +1,213 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { expandComponents } from '../../lib/component-library'
 import type { ComponentNode } from '../types/mokkoi'
+import {
+  fetchProjectScreens,
+  fetchScreenTree,
+  fetchUserProjects,
+  formatRelativeTime,
+  type RuntimeProject,
+  type RuntimeScreenSummary,
+} from '../lib/runtimeFetch'
 
-// A representative Mokkoi-shape macro tree — what the AI emits before
-// expansion. We run it through expandComponents() (the same path the
-// canvas/snack export uses) so the iframe receives pre-expanded primitives,
-// matching what production Supabase trees look like.
-const SAMPLE_MACRO_TREE: ComponentNode = {
-  type: 'View',
-  style: { flex: 1, backgroundColor: '#0A0A1A' },
-  children: [
-    {
-      type: 'HeaderBar',
-      props: { title: 'Discover', showBack: false, rightIcons: ['notifications', 'settings'] },
-    },
-    {
-      type: 'ScrollView',
-      style: { flex: 1 },
-      props: { contentContainerStyle: { padding: 16, gap: 16 } },
-      children: [
-        {
-          type: 'SearchBar',
-          props: { placeholder: 'Search restaurants, dishes…' },
-        },
-        {
-          type: 'View',
-          style: { flexDirection: 'row', gap: 12 },
-          children: [
-            { type: 'StatCard', props: { icon: 'local_fire_department', iconColor: '#F97316', value: '1.2k', label: 'Trending' } },
-            { type: 'StatCard', props: { icon: 'star', iconColor: '#FBBF24', value: '4.8', label: 'Avg. rating' } },
-            { type: 'StatCard', props: { icon: 'schedule', iconColor: '#818CF8', value: '15m', label: 'Avg. wait' } },
-          ],
-        },
-        { type: 'SectionHeader', props: { title: 'Featured', actionText: 'See all' } },
-        {
-          type: 'PromoCard',
-          props: { title: '50% off your first order', subtitle: 'Limited time — use code MOKKOI50', buttonText: 'Claim' },
-        },
-        { type: 'SectionHeader', props: { title: 'Popular near you' } },
-        {
-          type: 'View',
-          style: { gap: 8 },
-          children: [
-            { type: 'ListRow', props: { icon: 'restaurant', iconColor: '#F97316', title: 'Sakura Sushi', subtitle: '0.4 mi · $$ · Japanese', trailing: '4.7' } },
-            { type: 'ListRow', props: { icon: 'local_pizza', iconColor: '#EF4444', title: 'Pizzeria Romana', subtitle: '0.6 mi · $$ · Italian', trailing: '4.5' } },
-            { type: 'ListRow', props: { icon: 'lunch_dining', iconColor: '#22C55E', title: 'Green Bowl', subtitle: '0.8 mi · $ · Healthy', trailing: '4.6' } },
-          ],
-        },
-      ],
-    },
-    {
-      type: 'BottomNav',
-      props: {
-        items: [
-          { icon: 'home', label: 'Home', active: true },
-          { icon: 'search', label: 'Discover' },
-          { icon: 'favorite', label: 'Saved' },
-          { icon: 'person', label: 'Profile' },
-        ],
-      },
-    },
-  ],
+function readUrlParams() {
+  const sp = new URLSearchParams(window.location.search)
+  return {
+    project: sp.get('project') ?? '',
+    screen: sp.get('screen') ?? '',
+  }
 }
 
-const EXPANDED_TREE: ComponentNode = expandComponents(SAMPLE_MACRO_TREE) as ComponentNode
+function writeUrlParams(projectId: string, screenId: string) {
+  const sp = new URLSearchParams(window.location.search)
+  if (projectId) sp.set('project', projectId)
+  else sp.delete('project')
+  if (screenId) sp.set('screen', screenId)
+  else sp.delete('screen')
+  const next = `${window.location.pathname}?${sp.toString()}`
+  window.history.replaceState(null, '', next)
+}
 
 export default function RuntimePoc() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [ready, setReady] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [iframeReady, setIframeReady] = useState(false)
 
+  const [projects, setProjects] = useState<RuntimeProject[]>([])
+  const [screens, setScreens] = useState<RuntimeScreenSummary[]>([])
+  const [projectId, setProjectId] = useState<string>('')
+  const [screenId, setScreenId] = useState<string>('')
+
+  const [status, setStatus] = useState<'idle' | 'loading-projects' | 'loading-screens' | 'loading-tree' | 'ready' | 'error'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [activeTreeName, setActiveTreeName] = useState<string>('')
+
+  // Iframe handshake.
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.source !== iframeRef.current?.contentWindow) return
       if (e.data?.type === 'mokkoi:runtime-ready') {
         console.log('[parent] runtime ready')
-        setReady(true)
+        setIframeReady(true)
       }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  function send() {
+  // Load projects on mount; resolve initial project/screen from URL params.
+  useEffect(() => {
+    let cancelled = false
+    setStatus('loading-projects')
+    fetchUserProjects(20)
+      .then(rows => {
+        if (cancelled) return
+        setProjects(rows)
+        const params = readUrlParams()
+        const initialProject = rows.find(p => p.id === params.project)?.id
+          ?? rows[0]?.id
+          ?? ''
+        setProjectId(initialProject)
+        if (params.screen) setScreenId(params.screen)
+        if (!initialProject) setStatus('idle')
+      })
+      .catch(err => {
+        if (cancelled) return
+        console.error('[runtime-poc] fetchUserProjects failed', err)
+        setError(err?.message ?? 'Failed to load projects')
+        setStatus('error')
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  // Load screens whenever projectId changes.
+  useEffect(() => {
+    if (!projectId) return
+    let cancelled = false
+    setStatus('loading-screens')
+    setScreens([])
+    fetchProjectScreens(projectId)
+      .then(rows => {
+        if (cancelled) return
+        setScreens(rows)
+        const stillValid = rows.find(s => s.id === screenId)
+        const next = stillValid?.id ?? rows[0]?.id ?? ''
+        setScreenId(next)
+        if (!next) setStatus('idle')
+      })
+      .catch(err => {
+        if (cancelled) return
+        console.error('[runtime-poc] fetchProjectScreens failed', err)
+        setError(err?.message ?? 'Failed to load screens')
+        setStatus('error')
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
+  // Sync URL params whenever selection changes.
+  useEffect(() => {
+    if (projectId || screenId) writeUrlParams(projectId, screenId)
+  }, [projectId, screenId])
+
+  const postTree = useCallback((tree: ComponentNode) => {
     iframeRef.current?.contentWindow?.postMessage(
-      { type: 'mokkoi:render-tree', tree: EXPANDED_TREE },
+      { type: 'mokkoi:render-tree', tree },
       '*',
     )
-    setSent(true)
+  }, [])
+
+  // Fetch + post tree whenever project, screen, and iframe are all ready.
+  useEffect(() => {
+    if (!projectId || !screenId || !iframeReady) return
+    let cancelled = false
+    setStatus('loading-tree')
+    setError(null)
+    fetchScreenTree(projectId, screenId)
+      .then(screen => {
+        if (cancelled) return
+        const expanded = expandComponents(screen.tree) as ComponentNode
+        postTree(expanded)
+        setActiveTreeName(screen.name || screen.id)
+        setStatus('ready')
+      })
+      .catch(err => {
+        if (cancelled) return
+        console.error('[runtime-poc] fetchScreenTree failed', err)
+        setError(err?.message ?? 'Failed to load screen tree')
+        setStatus('error')
+      })
+    return () => { cancelled = true }
+  }, [projectId, screenId, iframeReady, postTree])
+
+  const statusLabel: Record<typeof status, string> = {
+    'idle': 'idle',
+    'loading-projects': 'Loading projects…',
+    'loading-screens': 'Loading screens…',
+    'loading-tree': 'Fetching screen…',
+    'ready': `Rendering: ${activeTreeName}`,
+    'error': `Error: ${error ?? 'unknown'}`,
+  }
+
+  const selectStyle: React.CSSProperties = {
+    padding: '6px 10px',
+    borderRadius: 6,
+    border: '1px solid #1C2333',
+    background: '#0E1320',
+    color: '#E6EDF3',
+    fontSize: 13,
+    minWidth: 220,
   }
 
   return (
     <div style={{ minHeight: '100vh', background: '#06080D', color: '#E6EDF3', padding: 24, fontFamily: 'system-ui' }}>
       <h1 style={{ fontSize: 18, marginBottom: 8 }}>Mokkoi Runtime POC</h1>
       <p style={{ fontSize: 13, color: '#7D8590', marginBottom: 16 }}>
-        Iframe status: {ready ? 'ready' : 'waiting'} · Tree sent: {sent ? 'yes' : 'no'}
+        Iframe: {iframeReady ? 'ready' : 'waiting'} · {statusLabel[status]}
       </p>
-      <button
-        onClick={send}
-        disabled={!ready}
-        style={{
-          padding: '8px 16px', borderRadius: 8, border: 'none',
-          background: ready ? '#2563EB' : '#1C2333',
-          color: '#fff', fontSize: 13, cursor: ready ? 'pointer' : 'default',
-          marginBottom: 16,
-        }}
-      >
-        Send tree to runtime
-      </button>
+
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#7D8590' }}>
+          Project
+          <select
+            value={projectId}
+            onChange={e => { setProjectId(e.target.value); setScreenId('') }}
+            style={selectStyle}
+            disabled={projects.length === 0}
+          >
+            {projects.length === 0 && <option value="">(no projects)</option>}
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name || '(untitled)'} · {formatRelativeTime(p.updated_at)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#7D8590' }}>
+          Screen
+          <select
+            value={screenId}
+            onChange={e => setScreenId(e.target.value)}
+            style={selectStyle}
+            disabled={screens.length === 0}
+          >
+            {screens.length === 0 && <option value="">(no screens)</option>}
+            {screens.map(s => (
+              <option key={s.id} value={s.id}>{s.name || s.id.slice(0, 8)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {status === 'error' && (
+        <div style={{
+          padding: 12, marginBottom: 16, borderRadius: 8,
+          border: '1px solid #4C1D24', background: '#1C0F12', color: '#FCA5A5', fontSize: 13,
+        }}>
+          Couldn't load — {error}. Check the project/screen IDs (URL params) or RLS access.
+        </div>
+      )}
+
       <div style={{
         width: 390, height: 700, border: '1px solid #1C2333',
         borderRadius: 12, overflow: 'hidden', background: '#0A0A1A',
