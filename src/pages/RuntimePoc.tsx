@@ -3,6 +3,9 @@ import { expandComponents } from '../../lib/component-library'
 import type { ComponentNode } from '../types/mokkoi'
 import type { FlowConnection } from '../components/FlowConnectors'
 import { findNavigationTarget } from '../utils/previewNavigation'
+import { RuntimePhoneFrame } from '../components/RuntimePhoneFrame'
+import { DEVICE_PRESETS, DEFAULT_DEVICE, getDevicePreset, resolveDeviceId } from '../constants/devices'
+import { MIN_ZOOM, MAX_ZOOM } from '../utils/computeFitScale'
 import {
   fetchProjectConnections,
   fetchProjectScreens,
@@ -12,6 +15,20 @@ import {
   type RuntimeProject,
   type RuntimeScreenSummary,
 } from '../lib/runtimeFetch'
+
+const ZOOM_OPTIONS = [0.5, 0.75, 1.0] as const
+
+/** Pick a sensible default zoom so phones fit on a typical laptop without manual tweaking.
+ *  Small phones render at 1.0 (else they'd look tiny); standard phones at 0.75; tablets at 0.5. */
+function getDefaultZoom(deviceHeight: number): number {
+  if (deviceHeight <= 700) return 1.0
+  if (deviceHeight <= 900) return 0.75
+  return 0.5
+}
+
+function clampZoom(z: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+}
 
 /** Fuzzy fallback: match a tab label against a screen name when no FlowConnection exists.
  *  Strips a trailing "Screen" word + normalizes whitespace/case. Tries exact match first,
@@ -31,18 +48,21 @@ function fuzzyMatchScreen(label: string, screens: RuntimeScreenSummary[]): Runti
 
 function readUrlParams() {
   const sp = new URLSearchParams(window.location.search)
+  const zoomRaw = parseFloat(sp.get('zoom') ?? '')
   return {
     project: sp.get('project') ?? '',
     screen: sp.get('screen') ?? '',
+    device: sp.get('device') ?? '',
+    zoom: Number.isFinite(zoomRaw) ? clampZoom(zoomRaw / 100) : null,
   }
 }
 
-function writeUrlParams(projectId: string, screenId: string) {
+function writeUrlParams(projectId: string, screenId: string, deviceId: string, zoom: number) {
   const sp = new URLSearchParams(window.location.search)
-  if (projectId) sp.set('project', projectId)
-  else sp.delete('project')
-  if (screenId) sp.set('screen', screenId)
-  else sp.delete('screen')
+  if (projectId) sp.set('project', projectId); else sp.delete('project')
+  if (screenId) sp.set('screen', screenId); else sp.delete('screen')
+  if (deviceId) sp.set('device', deviceId); else sp.delete('device')
+  sp.set('zoom', String(Math.round(zoom * 100)))
   const next = `${window.location.pathname}?${sp.toString()}`
   window.history.replaceState(null, '', next)
 }
@@ -56,6 +76,23 @@ export default function RuntimePoc() {
   const [connections, setConnections] = useState<FlowConnection[]>([])
   const [projectId, setProjectId] = useState<string>('')
   const [screenId, setScreenId] = useState<string>('')
+
+  const initialUrl = useRef(readUrlParams()).current
+  const [deviceId, setDeviceId] = useState<string>(() => {
+    const fromUrl = initialUrl.device
+    if (fromUrl && DEVICE_PRESETS.some(d => d.id === resolveDeviceId(fromUrl))) {
+      return resolveDeviceId(fromUrl)
+    }
+    return DEFAULT_DEVICE
+  })
+  const [zoom, setZoom] = useState<number>(() => {
+    if (initialUrl.zoom != null) return initialUrl.zoom
+    const dev = getDevicePreset(deviceId)
+    return getDefaultZoom(dev.height)
+  })
+  // Tracks whether the user has manually picked a zoom; if so, we stop auto-resetting it
+  // when the device changes. Initial URL with explicit zoom counts as manual.
+  const userChoseZoomRef = useRef<boolean>(initialUrl.zoom != null)
 
   const [status, setStatus] = useState<'idle' | 'loading-projects' | 'loading-screens' | 'loading-tree' | 'ready' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -82,12 +119,11 @@ export default function RuntimePoc() {
       .then(rows => {
         if (cancelled) return
         setProjects(rows)
-        const params = readUrlParams()
-        const initialProject = rows.find(p => p.id === params.project)?.id
+        const initialProject = rows.find(p => p.id === initialUrl.project)?.id
           ?? rows[0]?.id
           ?? ''
         setProjectId(initialProject)
-        if (params.screen) setScreenId(params.screen)
+        if (initialUrl.screen) setScreenId(initialUrl.screen)
         if (!initialProject) setStatus('idle')
       })
       .catch(err => {
@@ -97,6 +133,7 @@ export default function RuntimePoc() {
         setStatus('error')
       })
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Load screens whenever projectId changes.
@@ -141,7 +178,6 @@ export default function RuntimePoc() {
       const label = String(e.data.label ?? '')
       if (!label || !screenId) return
 
-      // 1. Canonical: project's flow connections.
       const flowTarget = findNavigationTarget(connections, screenId, label)
       if (flowTarget) {
         console.log(`[runtime-nav] mapping path: flowConnection`)
@@ -150,7 +186,6 @@ export default function RuntimePoc() {
         return
       }
 
-      // 2. Fallback: fuzzy match against screen names in this project.
       const fuzzy = fuzzyMatchScreen(label, screens)
       if (fuzzy) {
         console.log(`[runtime-nav] mapping path: fuzzyName`)
@@ -167,10 +202,10 @@ export default function RuntimePoc() {
     return () => window.removeEventListener('message', onNavClick)
   }, [connections, screens, screenId])
 
-  // Sync URL params whenever selection changes.
+  // Sync URL params whenever any test-rig dimension changes.
   useEffect(() => {
-    if (projectId || screenId) writeUrlParams(projectId, screenId)
-  }, [projectId, screenId])
+    if (projectId || screenId) writeUrlParams(projectId, screenId, deviceId, zoom)
+  }, [projectId, screenId, deviceId, zoom])
 
   const postTree = useCallback((tree: ComponentNode) => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -202,6 +237,19 @@ export default function RuntimePoc() {
     return () => { cancelled = true }
   }, [projectId, screenId, iframeReady, postTree])
 
+  const onDeviceChange = (next: string) => {
+    setDeviceId(next)
+    if (!userChoseZoomRef.current) {
+      const dev = getDevicePreset(next)
+      setZoom(getDefaultZoom(dev.height))
+    }
+  }
+
+  const onZoomChange = (next: number) => {
+    userChoseZoomRef.current = true
+    setZoom(clampZoom(next))
+  }
+
   const statusLabel: Record<typeof status, string> = {
     'idle': 'idle',
     'loading-projects': 'Loading projects…',
@@ -218,8 +266,10 @@ export default function RuntimePoc() {
     background: '#0E1320',
     color: '#E6EDF3',
     fontSize: 13,
-    minWidth: 220,
+    minWidth: 180,
   }
+
+  const device = getDevicePreset(deviceId)
 
   return (
     <div style={{ minHeight: '100vh', background: '#06080D', color: '#E6EDF3', padding: 24, fontFamily: 'system-ui' }}>
@@ -228,7 +278,7 @@ export default function RuntimePoc() {
         Iframe: {iframeReady ? 'ready' : 'waiting'} · {statusLabel[status]}
       </p>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#7D8590' }}>
           Project
           <select
@@ -260,6 +310,34 @@ export default function RuntimePoc() {
             ))}
           </select>
         </label>
+
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#7D8590' }}>
+          Device
+          <select
+            value={deviceId}
+            onChange={e => onDeviceChange(e.target.value)}
+            style={selectStyle}
+          >
+            {DEVICE_PRESETS.map(d => (
+              <option key={d.id} value={d.id}>
+                {d.icon} {d.name} · {d.width}×{d.height}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#7D8590' }}>
+          Zoom
+          <select
+            value={zoom}
+            onChange={e => onZoomChange(parseFloat(e.target.value))}
+            style={{ ...selectStyle, minWidth: 100 }}
+          >
+            {ZOOM_OPTIONS.map(z => (
+              <option key={z} value={z}>{Math.round(z * 100)}%</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {status === 'error' && (
@@ -271,16 +349,21 @@ export default function RuntimePoc() {
         </div>
       )}
 
-      <div style={{
-        width: 390, height: 700, border: '1px solid #1C2333',
-        borderRadius: 12, overflow: 'hidden', background: '#0A0A1A',
-      }}>
-        <iframe
-          ref={iframeRef}
-          src="/runtime/index.html"
-          title="Mokkoi Runtime POC"
-          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-        />
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <RuntimePhoneFrame deviceId={deviceId} zoom={zoom}>
+          <iframe
+            ref={iframeRef}
+            src="/runtime/index.html"
+            title="Mokkoi Runtime POC"
+            style={{
+              width: device.width,
+              height: device.height,
+              border: 'none',
+              display: 'block',
+              background: '#0F172A',
+            }}
+          />
+        </RuntimePhoneFrame>
       </div>
     </div>
   )
