@@ -317,7 +317,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       // When content < scroll area: children stay at natural size, empty space below.
       // When content > scroll area: outer scrolls, children still at natural size.
       return (
-        <div key={key} style={{
+        <div key={key} className="mokkoi-screen-scroll" style={{
           ...style,
           display: 'flex',
           flexDirection: 'column',
@@ -330,6 +330,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
           boxSizing: 'border-box',
           WebkitOverflowScrolling: 'touch',
           scrollbarWidth: 'none',
+          overscrollBehavior: 'contain',
         }}>
           <div style={{
             ...containerStyle,
@@ -530,9 +531,31 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const containerStyle = rnStyleToCSS(
         node.props?.contentContainerStyle as Record<string, unknown> | undefined
       )
+      const isHorizontal = !!node.props?.horizontal
       return (
-        <div key={key} style={{ ...style, display: 'flex', flexDirection: 'column', overflow: 'auto', flex: style.flex ?? 1, minHeight: 0, position: 'relative', boxSizing: 'border-box' }}>
-          <div style={{ ...containerStyle, display: 'flex', flexDirection: 'column', flexGrow: 0, flexShrink: 0 }}>
+        <div key={key} className="mokkoi-screen-scroll" style={{
+          ...style,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: isHorizontal ? 'hidden' : 'auto',
+          overflowX: isHorizontal ? 'auto' : 'hidden',
+          overflowY: isHorizontal ? 'hidden' : 'auto',
+          flex: style.flex ?? 1,
+          minHeight: 0,
+          position: 'relative',
+          boxSizing: 'border-box',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          overscrollBehavior: 'contain',
+        }}>
+          <div style={{
+            ...containerStyle,
+            display: 'flex',
+            flexDirection: isHorizontal ? 'row' : 'column',
+            ...(isHorizontal ? { flexWrap: 'nowrap' } : {}),
+            flexGrow: 0,
+            flexShrink: 0,
+          }}>
             {children}
           </div>
         </div>
