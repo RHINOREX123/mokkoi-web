@@ -257,6 +257,145 @@ const TEXT_BASE: React.CSSProperties = {
   wordBreak: 'break-word',
 }
 
+// React Native keyboardType → HTML inputMode
+function rnKeyboardTypeToInputMode(kt?: string): React.HTMLAttributes<HTMLElement>['inputMode'] | undefined {
+  switch (kt) {
+    case 'email-address': return 'email'
+    case 'numeric': return 'numeric'
+    case 'decimal-pad': return 'decimal'
+    case 'phone-pad': return 'tel'
+    case 'number-pad': return 'numeric'
+    case 'url': return 'url'
+    default: return undefined
+  }
+}
+
+// Uncontrolled TextInput / textarea wrapper. Runtime is a preview, so AI's
+// `value` becomes `defaultValue` — user can type freely, state lives in the
+// DOM. On a fresh tree posted from the parent, React unmounts and remounts
+// these inputs (different positions in the new tree), so input contents
+// reset naturally — desired behavior for a preview.
+function InteractiveTextInput({
+  inputKey,
+  value,
+  placeholder,
+  placeholderColor,
+  isSecure,
+  inputMode,
+  multiline,
+  style,
+}: {
+  inputKey: number
+  value: string | undefined
+  placeholder: string | undefined
+  placeholderColor: string | undefined
+  isSecure: boolean | undefined
+  inputMode: React.HTMLAttributes<HTMLElement>['inputMode']
+  multiline: boolean | undefined
+  style: React.CSSProperties
+}) {
+  const inputId = `mokkoi-input-${inputKey}-${(placeholder || '').slice(0, 8)}`
+  const styleBlock = (
+    <style key={`${inputId}-style`}>{`
+      #${inputId}::placeholder { ${placeholderColor ? `color: ${placeholderColor}; opacity: 1;` : ''} }
+      #${inputId}:focus { box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.6); }
+    `}</style>
+  )
+  const sharedStyle: React.CSSProperties = {
+    ...VIEW_BASE,
+    border: 'none',
+    outline: 'none',
+    fontFamily: 'inherit',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    background: 'transparent',
+    color: 'inherit',
+    ...style,
+    borderStyle: (style.borderWidth && style.borderColor) ? 'solid' : undefined,
+    borderWidth: style.borderColor ? style.borderWidth : undefined,
+    backgroundColor: style.backgroundColor || 'transparent',
+  }
+  return (
+    <span style={{ display: 'contents' }}>
+      {styleBlock}
+      {multiline ? (
+        <textarea
+          id={inputId}
+          placeholder={placeholder}
+          defaultValue={value}
+          style={{ ...sharedStyle, resize: 'none' }}
+        />
+      ) : (
+        <input
+          id={inputId}
+          type={isSecure ? 'password' : 'text'}
+          placeholder={placeholder}
+          defaultValue={value}
+          inputMode={inputMode}
+          style={sharedStyle}
+        />
+      )}
+    </span>
+  )
+}
+
+// Uncontrolled Switch — local state, flips on click and on Space/Enter for
+// keyboard users. Resets to AI's initial value when React remounts the
+// component (e.g. after a fresh tree from postMessage).
+function InteractiveSwitch({
+  initialOn,
+  trackOn,
+  trackOff,
+  thumbColor,
+  style,
+}: {
+  initialOn: boolean
+  trackOn: string
+  trackOff: string
+  thumbColor: string
+  style: React.CSSProperties
+}) {
+  const [on, setOn] = useState(initialOn)
+  const toggle = useCallback(() => setOn(v => !v), [])
+  return (
+    <div
+      role="switch"
+      aria-checked={on}
+      tabIndex={0}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault()
+          toggle()
+        }
+      }}
+      style={{
+        width: 51,
+        height: 31,
+        borderRadius: 16,
+        backgroundColor: on ? trackOn : trackOff,
+        padding: 2,
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+        flexShrink: 0,
+        ...style,
+      }}
+    >
+      <div
+        style={{
+          width: 27,
+          height: 27,
+          borderRadius: 14,
+          backgroundColor: thumbColor,
+          transform: on ? 'translateX(20px)' : 'translateX(0)',
+          transition: 'transform 0.2s',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        }}
+      />
+    </div>
+  )
+}
+
 // Filter out prop-like junk strings the AI sometimes puts as children
 // (e.g. "_HORIZONTAL", "true", "false", prop names starting with _)
 const JUNK_CHILD_RE = /^[_A-Z][_A-Z0-9]+$|^(true|false|null|undefined|horizontal|vertical)$/i
@@ -359,36 +498,21 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const placeholder = node.props?.placeholder as string | undefined
       const placeholderColor = node.props?.placeholderTextColor as string | undefined
       const isSecure = node.props?.secureTextEntry as boolean | undefined
-      const inputId = `input-${key}-${placeholder?.slice(0, 8) ?? ''}`
+      const value = node.props?.value as string | undefined
+      const keyboardType = node.props?.keyboardType as string | undefined
+      const multiline = node.props?.multiline as boolean | undefined
       return (
-        <span key={key} style={{ display: 'contents' }}>
-          {placeholderColor && (
-            <style key={`${inputId}-style`}>{`#${inputId}::placeholder { color: ${placeholderColor}; opacity: 1; }`}</style>
-          )}
-          <input
-            id={inputId}
-            type={isSecure ? 'password' : 'text'}
-            placeholder={placeholder}
-            readOnly
-            style={{
-              ...VIEW_BASE,
-              border: 'none',
-              outline: 'none',
-              fontFamily: 'inherit',
-              appearance: 'none',
-              WebkitAppearance: 'none',
-              background: 'transparent',
-              color: 'inherit',
-              ...style,
-              // Only show border if AI explicitly set both width and color
-              borderStyle: (style.borderWidth && style.borderColor) ? 'solid' : undefined,
-              // Prevent white rectangle: if AI set borderWidth without color, suppress it
-              borderWidth: style.borderColor ? style.borderWidth : undefined,
-              // Never let backgroundColor default to white
-              backgroundColor: style.backgroundColor || 'transparent',
-            }}
-          />
-        </span>
+        <InteractiveTextInput
+          key={key}
+          inputKey={key}
+          value={value}
+          placeholder={placeholder}
+          placeholderColor={placeholderColor}
+          isSecure={isSecure}
+          inputMode={rnKeyboardTypeToInputMode(keyboardType)}
+          multiline={multiline}
+          style={style}
+        />
       )
     }
 
@@ -491,39 +615,19 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
     }
 
     case 'Switch': {
-      const isOn = node.props?.value as boolean | undefined
+      const isOn = !!node.props?.value
       const trackOn = (node.props?.trackColor as Record<string, string>)?.true || '#34D399'
       const trackOff = (node.props?.trackColor as Record<string, string>)?.false || '#3F3F46'
       const thumbColor = (node.props?.thumbColor as string) || '#FFFFFF'
       return (
-        <div
+        <InteractiveSwitch
           key={key}
-          role="switch"
-          aria-checked={!!isOn}
-          style={{
-            width: 51,
-            height: 31,
-            borderRadius: 16,
-            backgroundColor: isOn ? trackOn : trackOff,
-            padding: 2,
-            cursor: 'pointer',
-            transition: 'background-color 0.2s',
-            flexShrink: 0,
-            ...style,
-          }}
-        >
-          <div
-            style={{
-              width: 27,
-              height: 27,
-              borderRadius: 14,
-              backgroundColor: thumbColor,
-              transform: isOn ? 'translateX(20px)' : 'translateX(0)',
-              transition: 'transform 0.2s',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-            }}
-          />
-        </div>
+          initialOn={isOn}
+          trackOn={trackOn}
+          trackOff={trackOff}
+          thumbColor={thumbColor}
+          style={style}
+        />
       )
     }
 
