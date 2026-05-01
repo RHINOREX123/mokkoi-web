@@ -14,6 +14,24 @@ Area tags: `RENDERER`, `PROMPT`, `RUNTIME`, `EVAL`, `INFRA`, `UX`, `DOCS`.
 
 ## Open
 
+### `[P2, PROMPT]` Document `filled` prop on Icon in iconography prompt section
+
+Renderer supports `filled: true|false` for outline vs filled icon variant. Currently undocumented in prompt, so AI never uses it. Result: active BottomNav tabs visually identical to inactive (only color differs). Documenting in iteration-2 lets AI generate proper active-state visual hierarchy. Discovered Week 2 Day 2 icon audit. Severity: medium — affects perceived polish on every nav.
+
+---
+
+### `[P2, PROMPT]` Strict icon list has names with no iconMap mapping
+
+Iteration-1 prompt strict list (231 Lucide names) was generated from iconMap keys, but 5 names (`alert-circle`, `battery-dead`, `bicycle`, `barbell`, `cake`) had no `LUCIDE_TO_MATERIAL` entry, falling back to placeholder. Today's hot-fix added the missing mappings (Day 2 commit), but the strict-list generator should validate against `KNOWN_MATERIAL_SYMBOLS` at prompt-build time to prevent recurrence. Severity: low — patched today, but pattern could repeat if icon coverage drifts.
+
+---
+
+### `[P3, PERF]` Material Symbols font is full-variable (large)
+
+Variable axis font ships everything. Subsetting to actually-used glyphs would cut load time. Defer until perf is measured as bottleneck. Severity: low — perf optimization.
+
+---
+
 ### `[P2, PROMPT]` Empty / placeholder labels in components
 
 Surfaced during 2026-05-01 UAT of an iteration-1 expense-tracker generation. Buttons rendered with placeholder names like "Alex Bennett" instead of action text ("Save Expense", etc.). ChipSelector chips rendered with icons but no text labels. Stat cards showed values but no category headings.
