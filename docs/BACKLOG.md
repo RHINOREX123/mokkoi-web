@@ -92,6 +92,18 @@ When BottomNav tabs lack text labels, runtime falls back to icon glyph names. Ad
 
 ---
 
+### `[P3, RENDERER]` Avatar branch onError fallback
+
+`src/components/ScreenRenderer.tsx` avatar branch (DiceBear SVG, lines 344-353) has no `onError` handler. DiceBear is reliable, but defense-in-depth would mirror the `RawUriImage` pattern (swap to styled placeholder filling original dimensions, log dedupe warn). Discovered during Week 2 Day 1 image hardening (2026-05-01). Severity: low — DiceBear failures are rare in practice.
+
+---
+
+### `[P3, RENDERER]` LoremFlickr double-bounce on searchQuery proxy fallback
+
+When `ProxyImage`'s primary path fails, fallback to LoremFlickr requires the image to fail twice: the proxy returns a LoremFlickr URL → that URL fails to render → the `<img onError>` handler fires *another* LoremFlickr URL with the same hash. Optimization opportunity to skip the first failed request, e.g. by trying LoremFlickr directly when the proxy is unreachable in dev. Discovered during Week 2 Day 1 image hardening (2026-05-01). Severity: low — fallback works, just slower than ideal.
+
+---
+
 ## Closed
 
 ### `[P1, RENDERER]` Icon fallback for invalid names — resolved 2026-05-01 (commit `84f5656`)
