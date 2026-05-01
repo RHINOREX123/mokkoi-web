@@ -23,6 +23,7 @@ import { NoCreditsModal } from './components/PricingPage'
 import { ExportProjectModal } from './components/ExportProjectModal'
 import { ExpoPreviewModal } from './components/ExpoPreviewModal'
 import { InlineSnackPreview } from './components/InlineSnackPreview'
+import { RuntimeIframePreview } from './components/RuntimeIframePreview'
 import { useScreenExport } from './hooks/useScreenExport'
 import { getEntryPointScreens } from './utils/entryPointScreens'
 
@@ -585,15 +586,29 @@ function App() {
                           navigation are handled by the running app. Disabled
                           while generation is in progress (avoids booting
                           Snack on a partial tree). */}
-                      <InlineSnackPreview
-                        key={previewRefreshKey}
-                        screens={screens.generatedScreens.filter(s => s.tree)}
-                        connections={screens.connections}
-                        projectName={screens.projectName}
-                        deviceId={screens.projectDeviceId}
-                        manualZoom={previewManualZoom}
-                        disabled={ai.isGenerating || ai.isStreaming}
-                      />
+                      {(() => {
+                        // Flag is strict-equality on '1'. Setting to 'true',
+                        // 'yes', or any other truthy string will not enable.
+                        // This is intentional for explicit opt-in.
+                        const useRuntime = typeof window !== 'undefined'
+                          && window.localStorage.getItem('mokkoi_runtime_iframe_preview') === '1'
+                        const sharedProps = {
+                          key: previewRefreshKey,
+                          screens: screens.generatedScreens.filter(s => s.tree),
+                          connections: screens.connections,
+                          projectName: screens.projectName,
+                          deviceId: screens.projectDeviceId,
+                          manualZoom: previewManualZoom,
+                          disabled: ai.isGenerating || ai.isStreaming,
+                        }
+                        return useRuntime
+                          ? <RuntimeIframePreview
+                              {...sharedProps}
+                              activeScreenId={screens.activeGeneratedId || ''}
+                              onActiveScreenChange={screens.setActiveGeneratedId}
+                            />
+                          : <InlineSnackPreview {...sharedProps} />
+                      })()}
                     </div>
                   </>
                 )}
