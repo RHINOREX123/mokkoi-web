@@ -14,6 +14,18 @@ Area tags: `RENDERER`, `PROMPT`, `RUNTIME`, `EVAL`, `INFRA`, `UX`, `DOCS`.
 
 ## Open
 
+### `[P3, RUNTIME]` De-duplicate `fuzzyMatchScreen` between RuntimePoc and RuntimeIframePreview
+
+Two near-identical implementations of fuzzy screen-name matching exist after Week 4 Day 1: one in `src/pages/RuntimePoc.tsx` (typed against `RuntimeScreenSummary`), one inlined in `src/components/RuntimeIframePreview.tsx` (typed against `GeneratedScreen`). Both do the same normalize-and-match logic (strip trailing "Screen", lowercase, exact-then-substring). Extract to `src/utils/fuzzyMatchScreen.ts` with a generic shape parameter (`<T extends { id: string; name: string }>`) after Week 4 Day 1 stabilizes. Discovered Week 4 Day 1. Severity: low — code duplication, not a behavior bug.
+
+---
+
+### `[P3, INFRA]` Local dev environment has Chrome/auth redirect friction
+
+Localhost dev (port 5174 / 5173) redirects through mokkoi.com auth, then HSTS upgrades break the return path. Tested with both `localhost` and `127.0.0.1`, blocked by different issues per host. Workaround: dev verification on production-like env or via trusted IP allowlist. Not blocking development, but slows manual browser-side testing — Week 4 Day 1 had to fall back to static-verification-only because the canvas couldn't be exercised live. Discovered Week 4 Day 1. Severity: low — friction not a bug.
+
+---
+
 ### `[P3, RENDERER]` Empty/zero-content children squish in horizontal scroll
 
 Pre-existing in ScrollView, now also in FlatList: explicit-width Views with no inner text/image content collapse to minimal width inside horizontal scroll containers. Fix would be `min-width: max-content` on inner row, or `align-self: flex-start` on each child. Not observed in current production trees. Surfaced during Week 2 Day 3 verification. Severity: low — defensive only.
