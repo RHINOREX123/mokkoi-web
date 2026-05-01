@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { expandComponents } from '../../lib/component-library'
 import type { ComponentNode } from '../types/mokkoi'
+import type { FlowConnection } from '../components/FlowConnectors'
+import { findNavigationTarget } from '../utils/previewNavigation'
 import {
+  fetchProjectConnections,
   fetchProjectScreens,
   fetchScreenTree,
   fetchUserProjects,
@@ -9,6 +12,22 @@ import {
   type RuntimeProject,
   type RuntimeScreenSummary,
 } from '../lib/runtimeFetch'
+
+/** Fuzzy fallback: match a tab label against a screen name when no FlowConnection exists.
+ *  Strips a trailing "Screen" word + normalizes whitespace/case. Tries exact match first,
+ *  then substring match in either direction (covers "Profile" tab → "ProfileScreen", and
+ *  "Home" tab → "Home"). */
+function fuzzyMatchScreen(label: string, screens: RuntimeScreenSummary[]): RuntimeScreenSummary | null {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/\s*screen$/, '').trim()
+  const target = norm(label)
+  if (!target) return null
+  for (const s of screens) if (norm(s.name) === target) return s
+  for (const s of screens) {
+    const n = norm(s.name)
+    if (n && (n.includes(target) || target.includes(n))) return s
+  }
+  return null
+}
 
 function readUrlParams() {
   const sp = new URLSearchParams(window.location.search)
@@ -34,6 +53,7 @@ export default function RuntimePoc() {
 
   const [projects, setProjects] = useState<RuntimeProject[]>([])
   const [screens, setScreens] = useState<RuntimeScreenSummary[]>([])
+  const [connections, setConnections] = useState<FlowConnection[]>([])
   const [projectId, setProjectId] = useState<string>('')
   const [screenId, setScreenId] = useState<string>('')
 
@@ -85,10 +105,19 @@ export default function RuntimePoc() {
     let cancelled = false
     setStatus('loading-screens')
     setScreens([])
-    fetchProjectScreens(projectId)
-      .then(rows => {
+    setConnections([])
+    Promise.all([
+      fetchProjectScreens(projectId),
+      fetchProjectConnections(projectId).catch(err => {
+        // Connections is non-fatal — fuzzy fallback still works without it.
+        console.warn('[runtime-poc] fetchProjectConnections failed (non-fatal)', err)
+        return [] as FlowConnection[]
+      }),
+    ])
+      .then(([rows, conns]) => {
         if (cancelled) return
         setScreens(rows)
+        setConnections(conns)
         const stillValid = rows.find(s => s.id === screenId)
         const next = stillValid?.id ?? rows[0]?.id ?? ''
         setScreenId(next)
@@ -103,6 +132,40 @@ export default function RuntimePoc() {
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  // Handle nav clicks from inside the iframe (BottomNav tabs).
+  useEffect(() => {
+    function onNavClick(e: MessageEvent) {
+      if (e.source !== iframeRef.current?.contentWindow) return
+      if (e.data?.type !== 'mokkoi:nav-click') return
+      const label = String(e.data.label ?? '')
+      if (!label || !screenId) return
+
+      // 1. Canonical: project's flow connections.
+      const flowTarget = findNavigationTarget(connections, screenId, label)
+      if (flowTarget) {
+        console.log(`[runtime-nav] mapping path: flowConnection`)
+        console.log(`[runtime-nav] resolved target: ${flowTarget}`)
+        if (flowTarget !== screenId) setScreenId(flowTarget)
+        return
+      }
+
+      // 2. Fallback: fuzzy match against screen names in this project.
+      const fuzzy = fuzzyMatchScreen(label, screens)
+      if (fuzzy) {
+        console.log(`[runtime-nav] mapping path: fuzzyName`)
+        console.log(`[runtime-nav] resolved target: ${fuzzy.id}`)
+        if (fuzzy.id !== screenId) setScreenId(fuzzy.id)
+        return
+      }
+
+      console.log(`[runtime-nav] mapping path: none`)
+      console.log(`[runtime-nav] resolved target: null`)
+      console.warn(`[runtime-nav] no target for tab '${label}' on screen ${screenId}`)
+    }
+    window.addEventListener('message', onNavClick)
+    return () => window.removeEventListener('message', onNavClick)
+  }, [connections, screens, screenId])
 
   // Sync URL params whenever selection changes.
   useEffect(() => {

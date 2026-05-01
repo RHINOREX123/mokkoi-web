@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { ComponentNode } from '../types/mokkoi'
+import type { FlowConnection } from '../components/FlowConnectors'
 
 export interface RuntimeProject {
   id: string
@@ -44,6 +45,22 @@ export async function fetchProjectScreens(projectId: string): Promise<RuntimeScr
     .order('order_index', { ascending: true })
   if (error) throw error
   return (data ?? []) as RuntimeScreenSummary[]
+}
+
+export async function fetchProjectConnections(projectId: string): Promise<FlowConnection[]> {
+  const sb = ensureClient()
+  const { data, error } = await sb
+    .from('projects')
+    .select('connections')
+    .eq('id', projectId)
+    .single()
+  if (error) throw error
+  const raw = (data?.connections ?? []) as unknown
+  if (!Array.isArray(raw)) return []
+  // Defensive shape check — JSONB may contain rows missing fields.
+  return raw.filter((c: any): c is FlowConnection =>
+    c && typeof c.fromScreenId === 'string' && typeof c.toScreenId === 'string'
+  )
 }
 
 export async function fetchScreenTree(projectId: string, screenId: string): Promise<RuntimeScreen> {
