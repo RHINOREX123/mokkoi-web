@@ -487,12 +487,22 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       )
     }
 
-    case 'Text':
+    case 'Text': {
+      const numberOfLines = node.props?.numberOfLines as number | undefined
+      const clampStyle: React.CSSProperties = numberOfLines && numberOfLines >= 1
+        ? {
+            display: '-webkit-box',
+            WebkitLineClamp: numberOfLines,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }
+        : {}
       return (
-        <span key={key} style={{ ...TEXT_BASE, ...style }}>
+        <span key={key} style={{ ...TEXT_BASE, ...style, ...clampStyle }}>
           {children}
         </span>
       )
+    }
 
     case 'TextInput': {
       const placeholder = node.props?.placeholder as string | undefined
@@ -520,6 +530,7 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       return (
         <div
           key={key}
+          className="mokkoi-touchable"
           style={{ ...VIEW_BASE, ...style, cursor: 'pointer' }}
           role="button"
         >

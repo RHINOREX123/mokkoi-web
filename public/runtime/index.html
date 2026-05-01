@@ -18,6 +18,10 @@
       /* Hide scrollbars on Mokkoi scroll containers in Chromium/Safari.
          Pairs with inline scrollbarWidth:'none' (Firefox-only). */
       .mokkoi-screen-scroll::-webkit-scrollbar { display: none; }
+      /* Pressed-state visual feedback for TouchableOpacity. Pre-Week-3 stand-in
+         for real onPress feedback — gives users acknowledgment that a tap was
+         registered without wiring real handlers. */
+      .mokkoi-touchable:active { opacity: 0.7; }
     </style>
   </head>
   <body>
