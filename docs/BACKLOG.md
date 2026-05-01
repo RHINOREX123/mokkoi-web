@@ -54,6 +54,18 @@ Not urgent — this isn't a broken-looking demo, just a polish issue. Punt to We
 
 ---
 
+### `[P3, INFRA]` Seed canonical archetype test apps in dev DB
+
+Current dev DB has only 4 projects (2 fitness + 1 MCP imports + 1 mokkoi). Missing food-delivery, banking, e-commerce, and social archetypes for runtime verification testing. Seeding canonical test apps would let Week 2-5 verification cover archetype-spread properly. Lift from production via test-data export, or generate fresh ones. Surfaced during Week 1 Day 3 verification — could only test 3 of the 4 available projects, none of which were food-delivery or banking. Severity: low — affects test coverage, not user-facing.
+
+---
+
+### `[P3, RENDERER]` Fitness Home progress-ring text overlay
+
+"1,847 cal" text overlaps the green "Daily Goal" progress ring label on the fitness tracker's Home screen. Affects canvas AND runtime (fidelity preserved between them). Layering / positioning issue in the `ProgressRing` macro composition — the value text and the ring's own label end up at the same vertical position. Discovered during Week 1 Day 3 verification. Severity: low — visual quirk, not blocking.
+
+---
+
 ### `[P3, PROMPT]` Logo / brand text rendered raw
 
 Surfaced during 2026-05-01 expense-tracker UAT. "GAS" appeared as a text node in a transaction row where it was likely intended as a station logo or brand badge. Could indicate the AI is conflating an `Image` (or icon-style brand mark) with a `Text` component, or attempting to label something without proper logo/icon context.
