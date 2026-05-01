@@ -184,27 +184,36 @@ export default function RuntimePoc() {
       const label = String(e.data.label ?? '')
       if (!screenId) return
 
+      // Structured one-line resolution log per click. Same prefix + field shape
+      // for success and failure — `tried=` shows the resolution path attempted,
+      // `matched=` is `<source>:<id>` on success or `none` on failure. Makes
+      // patterns like "flowConnection always misses because no triggers exist"
+      // visible at log-scrub time.
+      const tried: string[] = []
+
       if (!label) {
-        console.warn(`[runtime-click] empty label for kind=${kind} — cannot route`)
+        console.warn(`[mokkoi-click] parent → kind=${kind} label='' tried= matched=none reason=empty-label`)
         e.source?.postMessage({ type: 'mokkoi:click-unresolved', label: '', kind }, '*')
         return
       }
 
+      tried.push('flowConnection')
       const flowTarget = findNavigationTarget(connections, screenId, label)
       if (flowTarget) {
-        console.log(`[runtime-click] kind=${kind} label='${label}' → flowConnection → ${flowTarget}`)
+        console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=flowConnection:${flowTarget}`)
         if (flowTarget !== screenId) setScreenId(flowTarget)
         return
       }
 
+      tried.push('fuzzyName')
       const fuzzy = fuzzyMatchScreen(label, screens)
       if (fuzzy) {
-        console.log(`[runtime-click] kind=${kind} label='${label}' → fuzzyName → ${fuzzy.id}`)
+        console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=fuzzyName:${fuzzy.id}`)
         if (fuzzy.id !== screenId) setScreenId(fuzzy.id)
         return
       }
 
-      console.warn(`[runtime-click] no target for kind=${kind} label='${label}' on screen ${screenId}`)
+      console.warn(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=none`)
       e.source?.postMessage({ type: 'mokkoi:click-unresolved', label, kind }, '*')
     }
     window.addEventListener('message', onClick)

@@ -176,6 +176,25 @@ interface ToastState {
   nonce: number
 }
 
+/** Measure the BottomNav row in the iframe (if any) and return the toast's
+ *  `bottom` offset so the toast clears it with 16px of breathing room.
+ *  Falls back to 24px when no BottomNav is present. Re-measured on every render
+ *  via ToastState.nonce so screen changes pick up new BottomNav dimensions. */
+function computeToastBottom(): number {
+  const all = document.querySelectorAll<HTMLElement>('div')
+  for (const el of Array.from(all)) {
+    const s = el.style
+    if (s.flexDirection !== 'row') continue
+    if (parseFloat(s.paddingBottom || '0') < 24) continue
+    if (parseFloat(s.borderTopWidth || '0') < 1) continue
+    if (el.querySelectorAll(':scope > [role="button"]').length < 2) continue
+    const rect = el.getBoundingClientRect()
+    const viewportH = document.documentElement.clientHeight
+    return Math.round(viewportH - rect.top + 16)
+  }
+  return 24
+}
+
 function Toast({ state }: { state: ToastState | null }) {
   if (!state) return null
   return (
@@ -184,7 +203,7 @@ function Toast({ state }: { state: ToastState | null }) {
       style={{
         position: 'absolute',
         left: '50%',
-        bottom: 24,
+        bottom: computeToastBottom(),
         transform: 'translateX(-50%)',
         background: 'rgba(15, 23, 42, 0.92)',
         color: '#E6EDF3',
@@ -267,8 +286,7 @@ function RuntimeApp() {
     if (c.kind === 'Deferred') {
       e.stopPropagation()
       console.log(
-        `[runtime-click] deferred (${c.deferReason})`,
-        c.label ? `label='${c.label}'` : '(no label)',
+        `[mokkoi-click] iframe → kind=Deferred reason=${c.deferReason} label='${c.label}'`,
       )
       showToast(c.deferReason === 'list-row'
         ? 'List-row taps need macro metadata (Phase 2)'
@@ -277,7 +295,7 @@ function RuntimeApp() {
     }
 
     e.stopPropagation()
-    console.log(`[runtime-click] kind=${c.kind} label='${c.label}'`)
+    console.log(`[mokkoi-click] iframe → kind=${c.kind} label='${c.label}'`)
     window.parent.postMessage(
       {
         type: 'mokkoi:click',
