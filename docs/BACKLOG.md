@@ -48,6 +48,12 @@ Not urgent — this isn't a broken-looking demo, just a polish issue. Punt to We
 
 ---
 
+### `[P2, RENDERER]` JUNK_CHILD_RE regex incorrectly filters single-word labels
+
+`ScreenRenderer.tsx:195`'s `JUNK_CHILD_RE` has `/i` flag, causing single-word PascalCase strings (Home, Profile, Discover, Featured, Trending, etc.) to be incorrectly filtered as junk children alongside legitimate junk like "TRUE"/"HORIZONTAL". Affects canvas AND runtime (fidelity preserved between them). Likely 1-character or short-rewrite fix — make regex match only known-junk patterns, not generic single-word PascalCase. Discovered during Week 1 Day 2 runtime POC. Severity: medium (visible content loss for single-word labels in production).
+
+---
+
 ### `[P3, PROMPT]` Logo / brand text rendered raw
 
 Surfaced during 2026-05-01 expense-tracker UAT. "GAS" appeared as a text node in a transaction row where it was likely intended as a station logo or brand badge. Could indicate the AI is conflating an `Image` (or icon-style brand mark) with a `Text` component, or attempting to label something without proper logo/icon context.
