@@ -250,6 +250,18 @@ export const LUCIDE_TO_MATERIAL: Record<string, string> = {
   lightbulb: 'lightbulb',
   gem: 'diamond',
   crown: 'workspace_premium',
+  // Strict-list names that previously fell back to circle (Week 2 Day 2)
+  'alert-circle': 'error',
+  'battery-dead': 'battery_alert',
+  bicycle: 'directions_bike',
+  barbell: 'fitness_center',
+  cake: 'cake',
+  // Common AI hallucinations — alias to nearest valid glyph
+  'bar-chart-3': 'bar_chart',
+  'bar-chart-4': 'bar_chart',
+  'chevron-double-right': 'keyboard_double_arrow_right',
+  'chevron-double-left': 'keyboard_double_arrow_left',
+  'star-border': 'star_border',
 }
 
 /** Material Symbols snake_case → Lucide kebab-case (auto-generated) */

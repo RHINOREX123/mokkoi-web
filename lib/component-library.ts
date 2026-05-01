@@ -66,7 +66,7 @@ function expandHeaderBar(props: { title?: string; showBack?: boolean; rightIcons
     children.push({
       type: 'TouchableOpacity',
       style: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-      children: [{ type: 'Icon', props: { name: 'arrow_back', size: 20, color: TEXT_PRIMARY } }],
+      children: [{ type: 'Icon', props: { name: 'arrow-left', size: 20, color: TEXT_PRIMARY } }],
     })
   }
 
@@ -119,7 +119,7 @@ function expandStatCard(props: { icon?: string; iconColor?: string; value?: stri
       alignItems: 'center',
     },
     children: [
-      { type: 'Icon', props: { name: props.icon || 'monitoring', size: 17, color: props.iconColor || ACCENT } },
+      { type: 'Icon', props: { name: props.icon || 'activity', size: 17, color: props.iconColor || ACCENT } },
       { type: 'Text', style: { fontSize: 20, fontWeight: '700', color: TEXT_PRIMARY, marginTop: 4 }, children: [props.value || '0'] },
       { type: 'Text', style: { fontSize: 11, color: TEXT_TERTIARY, marginTop: 2 }, children: [props.label || 'stat'] },
     ],
@@ -255,7 +255,7 @@ function expandListRow(props: { icon?: string; iconColor?: string; title?: strin
     children.push({ type: 'Text', style: { fontSize: 14, color: TEXT_TERTIARY, marginRight: 4 }, children: [props.trailing] })
   }
   if (props.showChevron !== false) {
-    children.push({ type: 'Icon', props: { name: 'chevron_right', size: 18, color: TEXT_TERTIARY } })
+    children.push({ type: 'Icon', props: { name: 'chevron-right', size: 18, color: TEXT_TERTIARY } })
   }
   return {
     type: 'TouchableOpacity',
@@ -480,7 +480,7 @@ function expandChatInputBar(props: { placeholder?: string }): any {
     style: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderColor: SURFACE_2, gap: 8 },
     children: [
       { type: 'TouchableOpacity', style: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }, children: [
-        { type: 'Icon', props: { name: 'sentiment_satisfied', size: 20, color: TEXT_TERTIARY } },
+        { type: 'Icon', props: { name: 'smile', size: 20, color: TEXT_TERTIARY } },
       ]},
       { type: 'TextInput', style: { flex: 1, height: 40, backgroundColor: SURFACE_2, borderRadius: 20, paddingHorizontal: 16, fontSize: 14, color: TEXT_PRIMARY }, props: { placeholder: props.placeholder || 'Message...', placeholderTextColor: TEXT_TERTIARY } },
       { type: 'TouchableOpacity', style: { width: 40, height: 40, borderRadius: 20, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' }, children: [
