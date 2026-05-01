@@ -33,6 +33,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Dev-only: snack-sdk (loaded transitively via InlineSnackPreview) reads
+      // `process.env.NODE_ENV` at module init. Production builds statically
+      // replace those references; the dev server doesn't, so without this shim
+      // the entire app fails to mount in `vite dev` with "process is not defined".
+      window.process = window.process || { env: { NODE_ENV: 'development' } };
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
