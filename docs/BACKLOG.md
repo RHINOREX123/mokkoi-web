@@ -119,6 +119,18 @@ Discovered Week 3 Day 2 by inspecting the actual `projects.connections` Supabase
 
 ---
 
+### `[P2, INFRA]` Runtime preview telemetry / error reporting
+
+Today there is no error reporting, analytics, or iframe-failure tracking around the runtime preview. "Monitor for regressions during dev burn-in" means manually checking canvas behavior and reading dev-tools console. Before the Week 5 flag-flip to default-ON for real users, basic telemetry needs to exist:
+- Iframe boot success/failure rate (handshake completed vs. timed out).
+- Render error frequency (ErrorBoundary catches, with tree shape signal so we can pattern-match).
+- Click-routing miss rate (`matched=none` warns vs. successful matches — already structured at the log level Week 3 Day 2).
+- First-paint latency distribution (parent posts tree → iframe acks render).
+
+Doesn't need to be Sentry-tier for Week 5; even a console-aggregated dev metric or a tiny telemetry endpoint that batches counts would unblock the cutover. Discovered Week 3 Day 3 production-swap design. Severity: medium — blocker for the Week 5 flag-flip / production cutover, not for the Week 4 ship-behind-flag milestone.
+
+---
+
 ### `[P3, RUNTIME]` Single-text data-as-label classifies as Button
 
 TouchableOpacity wrappers around data text (person names like "Nora Ward" in an activity feed, transaction amounts in a banking app, message previews in a messages list) classify as `Button` because they have exactly one Text descendant. The runtime then posts `{ kind: 'Button', label: 'Nora Ward' }`, the parent finds no FlowConnection or fuzzy screen-name match, and the toast says `No screen wired for 'Nora Ward'` — misleading because the data was never supposed to be wired. Same root cause as the compound-clickable data-vs-action discrimination: the runtime can't tell action labels from data without macro metadata. Discovered Week 3 Day 2 verification on a fitness Home screen with a friends-activity card. Severity: low — the toast is honest about lack of wiring, just framed awkwardly. Phase 2 macro-metadata preservation resolves this naturally (the macro emits `Card` with `kind:'activity-feed-row'` and the runtime knows the inner text is data).

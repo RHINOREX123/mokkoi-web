@@ -1,7 +1,7 @@
 # Mokkoi — Implementation Plan
 
 **Last updated:** 2026-05-01
-**Status as of 2026-05-01:** **Week 1 closed.** Five days of runtime POC work shipped: iframe shell + postMessage protocol (Day 1-2), Supabase fetch wired in (Day 3), BottomNav tap-to-navigate (Day 4), phone-frame chrome + device/zoom controls (Day 5). The runtime renders real production trees from real projects with working tabs and a polished test rig. All in dev only — `mokkoi.com` still serves the broken Snack preview; that swap is Week 4. Renderer pivoted from `react-native-web` to the existing `ScreenRenderer` on Day 2 (see decision log). Macro semantic loss in stored trees is the architectural debt that informs Phase 2 planning. Week 2 begins next session.
+**Status as of 2026-05-01:** **Weeks 1-3 closed.** Week 1 shipped the runtime POC foundation (iframe + postMessage + Supabase fetch + BottomNav nav + phone chrome). Week 2 hardened rendering (image fallbacks, icon coverage, scroll, form inputs, leaf-component sweep). Week 3 shipped click interactivity (generic `mokkoi:click` protocol, classifier, 3-tier resolution, dynamic toast) over Days 1-2, then on Day 3 pivoted strategically: rather than ship more heuristic patches Phase 2 macro-metadata replaces anyway, wrapped Week 3 short and used the time to design the Week 4 production swap. Two architectural ceilings empirically confirmed Days 1-3: FlowConnection canonical routing is dead code in dev DB (every routing success goes through fuzzy screen-name match), and most production primary nav is card-driven (cannot route under label-keyed model — Phase 2 macro-metadata fix). Renderer pivoted from `react-native-web` to existing `ScreenRenderer` Week 1 Day 2. **Week 4 ships the runtime production-ready behind a localStorage feature flag for dev burn-in. Week 5 contains the deliberate flag-flip decision** contingent on telemetry and signal — mokkoi.com users see the runtime in Week 5, not Week 4. Week 4 begins next session.
 
 ## Project goal
 
@@ -386,77 +386,143 @@ Render the fitness app, tap "Workouts" in the bottom tab bar — preview swaps t
 
   **Implementation:** [src/runtime/main.tsx](src/runtime/main.tsx) — log prefix rename, iframe-side log restructure, `computeToastBottom()` helper. [src/pages/RuntimePoc.tsx](src/pages/RuntimePoc.tsx) — parent-side log restructure with `tried=` and `matched=` fields. ScreenRenderer untouched. No new code paths.
 - [ ] ~~**Day 2 (original) — Pressable onPress.**~~ Delivered Week 3 Day 1 as part of the interactivity foundation. Click protocol routes Button/IconButton/BottomNavTab through `findNavigationTarget` + fuzzy fallback; compound clickables deferred to Phase 2 per Day 1 narrowing decision. Box left struck-through to preserve the original plan history.
-- [ ] **Day 3 — Two-way sync.** Iframe → parent: `{type: "navigated", screenId}` postMessage when in-app nav fires.
-- [ ] Parent → iframe: when chat panel tab clicks, update the iframe's `activeScreenId` via protocol.
-- [ ] **VALIDATION CHECKPOINT** — verify no ping-pong between parent and iframe state. Manual test: tap iframe tab, watch chat panel; tap chat panel tab, watch iframe.
-- [ ] **Day 4 — Scroll polish.** Confirm `ScrollView` scrolls smoothly. If `flexShrink: 0` on inner items isn't enough, add explicit `contentContainerStyle` pass.
-- [ ] Test on touch device (open dev server on phone).
-- [ ] Test scroll-vs-tap detection — ensure swiping doesn't accidentally trigger `onPress`.
-- [ ] **Day 5 — Pressable feedback.** Override RN-web's default press state to be slightly more visible (0.7 opacity) for demo clarity.
-- [ ] Add `delayPressIn: 50` to reduce perceived lag.
-- [ ] Test: tap each interactive button in the fitness app, verify visual feedback fires.
+- [x] **Day 3 (revised cadence, 2026-05-01) — Wrap Week 3 + Week 4 production swap design.** Strategic pivot day, not feature build. Days 1-2 surfaced the architectural ceiling on Phase 1 interactivity (FlowConnection canonical routing is empirically dead in dev DB; cards/list-rows make up most production primary nav and require macro metadata to resolve cleanly). The choice today: ship Days 4-5 as more heuristic patches that Phase 2 work would replace anyway, OR wrap Week 3 short and start Week 4 (production swap) early. Chose the second — don't ship temporary fixes when the time can buy production-readiness instead. Audited the production preview path (`InlineSnackPreview` overlaying `PreviewPhoneFrame` on the canvas; Snack hosted runtime times out in 15s and has been falling back to static for users); designed the Week 4 swap (decisions A-G in the Week 4 section below). Findings that reshaped Week 4 scope: theme propagation is a non-issue (theme is generation-time hint baked into per-component inline styles, not runtime tokens — saves ~half a day); existing `ErrorBoundary` component is already production-quality, just needs wiring inside the iframe; the dual-mount feature-flag pattern is already proven in the codebase (`InlineSnackPreview` overlays static fallback). New backlog entry: `[P2, INFRA]` runtime preview telemetry — blocker for Week 5 flag-flip to default-ON, not for Week 4 ship-behind-flag.
+- [ ] ~~**Day 3 (original) — Two-way sync.**~~ Deferred. The original "iframe ↔ chat panel tab" two-way sync presupposes a chat-panel-tab UI that the canvas does not currently expose. The behavior pattern (parent owns nav state, iframe posts back) is already in place from Day 1; if the chat panel grows tab UI later, the protocol handles it without changes. Box left struck-through to preserve original-plan history.
+- [ ] ~~**Day 4 (original) — Scroll polish.**~~ Deferred. Scroll behavior verified Week 2 Day 3 (the `mokkoi-screen-scroll` two-div pattern in ScreenRenderer). No production complaints surfaced.
+- [ ] ~~**Day 5 (original) — Pressable feedback.**~~ Delivered Week 2 Day 5 (`.mokkoi-touchable:active { opacity: 0.7 }` global rule).
 
 ### Risks for this week
-- Pressable-inside-ScrollView tap-vs-scroll detection edge case → standard `delayPressIn` of 130ms.
-- Two-way sync ping-pong (déjà vu from Phase 2) → use ref-based "origin" guard or single-source-of-truth pattern (parent always wins on prop change).
-- Flow connections that don't have explicit triggers (saw 4 unmatched connections in earlier wirer logs) → log + ignore, don't crash.
+- ~~Pressable-inside-ScrollView tap-vs-scroll detection edge case~~ — not surfaced in production trees this week. Defer.
+- ~~Two-way sync ping-pong~~ — chat-panel-tab UI doesn't exist; sync work deferred.
+- Flow connections without explicit triggers — empirically confirmed: **all** dev-DB connections lack triggers. Logged as `[P2, ARCHITECTURE]` Day 2.
 
-### Retrospective
-- [ ] Did the Done criterion land? Yes / No
-- [ ] Two-way sync stable? (no ping-pong)
-- [ ] Time spent: _____ hours
-- [ ] Adjustment for Week 4: _____________
+### Retrospective (filled 2026-05-01)
+
+**Did the Done criterion land?** The original Done criterion ("Render the fitness app, tap 'Workouts' in bottom tab bar — preview swaps to Workouts screen. Tap 'Upper Body Strength' list row — if planner connected it, navigate to Workout Detail. Scroll the Workouts list — smooth, native scroll feel.") landed *partially*. BottomNav nav works (Week 1 Day 4, verified again Day 1-2). Scroll feels native (Week 2 Day 3). But "tap a list row → navigate" did not land — the audit revealed list rows can't route under the FlowConnection model because data-bound text isn't a stable trigger label. Honest accounting: the Done criterion was written before we understood that list-row routing requires macro metadata Phase 2 will preserve.
+
+**What shipped (Days 1-3):**
+- **Day 1** — Interactivity foundation. Generic `mokkoi:click` protocol with `elementKind` discriminator, classifier for BottomNavTab/Button/IconButton/Deferred(list-row|compound|no-label), 3-tier resolution (FlowConnection → fuzzy screen-name → toast), iframe-side debounced toast UX. Narrow scope explicitly accepted: cards and list rows defer to Phase 2.
+- **Day 2** — Classifier hardening. Dynamic toast positioning (BottomNav heights vary up to 120px in production; static offsets failed). Structured single-prefix log shape `[mokkoi-click] kind=X label='Y' tried=<list> matched=<source>:<id|none>`. Phantom-bug withdrawal: Day 1's "empty-label Button" finding was a cross-window `instanceof HTMLElement` bug in my audit harness, not a runtime issue — withdrew the backlog entry with the rationale annotated rather than silently deleting.
+- **Day 3** — Strategic wrap + Week 4 production-swap design.
+
+**What didn't ship (Days 4-5 collapsed into Day 3):**
+- List-row interactivity — deferred to Phase 2 macro metadata.
+- Form submission detection — deferred (no real backend wired; protocol shape ready).
+- Cards / compound-clickable routing — deferred to Phase 2 macro metadata.
+- Two-way iframe ↔ chat-panel-tab sync — deferred (chat panel doesn't expose tab UI).
+
+**Architectural decisions made this week:**
+- Generic `mokkoi:click` protocol with `elementKind` discriminator (extensible without listener proliferation).
+- Single iframe-wrapper click handler (consistent with Week 1's "iframe stays dumb" decision; ScreenRenderer untouched per the shared-with-canvas hard rule).
+- 3-tier resolution: FlowConnection → fuzzy screen-name → visible "no screen wired" toast.
+- Reset-on-navigation for state retention (Phase 1 simplicity; React unmount/remount on tree-shape change resets state naturally).
+- Heuristic detection scoped narrowly to label-routable kinds (BottomNavTab, Button, IconButton). Compound clickables and list rows are explicitly deferred — toast UX makes this honest at demo time.
+- **Phase 1 ceiling explicitly accepted**: cards and list rows cannot route under the FlowConnection model because they lack a 1:1 label-to-trigger mapping. The right fix is server-side macro-metadata preservation (Phase 2). Heuristic patches (largest-text-wins, first-text-wins) produce brittle code that Phase 2 work replaces.
+
+**Critical findings:**
+- **FlowConnection canonical routing is empirically dead in dev DB.** Across all 4 projects, `findNavigationTarget` returns null 100% of the time. Every routing success has gone through `fuzzyMatchScreen`. Logged as `[P2, ARCHITECTURE]` Day 2 — strategic options: lean harder on fuzzy, make canvas FlowConnection drawing more prominent/automatic, or pull Phase 2 macro-metadata forward.
+- **Phantom-bug discovery** on the Day 1 "empty-label Button" entry. Audit-harness ran in parent window context; `instanceof HTMLElement` failed cross-window; counted icon glyph names as label text. Runtime classifier itself was always correct. Withdrew the entry with a phantom-bug annotation — leaving it standing would have misled future-me.
+- **Most production screens have card-driven primary nav.** The Day 1 demo-flow survey across all 4 projects found cards and compound clickables on roughly half of sampled screens, with cards as the *primary* user choice in onboarding goal-selection, food-delivery category pickers, fitness workout selection, and similar. Phase 1 narrow scope means demo screens have visibly inert primary content with toast fallback. Honest at demo time, but doesn't make those screens functional.
+- **Production preview path has been falling back to static for users.** `InlineSnackPreview`'s 15-second Snack-runtime boot timeout exceeds budget consistently. The static `PreviewPhoneFrame` (which uses `ScreenRenderer` directly — same renderer the runtime POC iframe uses) is what users actually see today. The Week 4 production swap is replacing a non-functional component, not a working one.
+
+**The strategic pivot — choosing to wrap Week 3 short:**
+
+Days 1-2 surfaced the architectural ceiling. By end of Day 2, the question on the table for Days 3-5 was: ship more heuristic patches (largest-text card routing, list-row data-binding hacks, etc.) that improve the surface but don't change the underlying limitation, OR wrap Week 3 short and start Week 4 production swap early?
+
+Chose to wrap. Rationale: don't ship temporary fixes when Phase 2 architecture solves the same problems cleanly later, and use the freed time for production-readiness work that genuinely matters — the broken Snack preview is what real users see today. Future-me dogfooding the runtime in Week 5 will value "production swap landed solid" more than "we shipped a card-routing heuristic that the macros work eventually replaced anyway."
+
+**Original plan assumed production-live by Week 4 end. Day 3 audit reveals reality:** Week 4 ships runtime production-ready behind a localStorage feature flag, dev burn-in for ~1 week, then deliberate flag-flip in Week 5 contingent on dogfood signal. mokkoi.com users see the runtime in **Week 5, not Week 4**. This is the right phasing for risk control but worth being explicit so future-me doesn't read "Week 4 ships" as "live for users." The flag-flip in Week 5 is a deliberate go/no-go gated on telemetry (which has its own backlog entry as a blocker for that flip).
+
+**What's working well:**
+- The audit → gap → approve → implement → verify rhythm caught the FlowConnection-dead-code finding empirically rather than after a week of building on a wrong assumption.
+- Backlog discipline — the week ended with multiple entries withdrawn or reframed (empty-label Button withdrawn as phantom; canonical seed apps bumped P3→P2; FlowConnection-dead-code added as P2 ARCHITECTURE; data-as-label and telemetry added). Honest documentation of architectural debt.
+- Verification that surfaces real findings vs. papering over. Day 1 verification caught the Signal 2 over-match in the list-row heuristic before commit. Day 2 verification caught the static-toast-still-overlaps-BottomNav issue before commit (forced the dynamic measurement pivot).
+- Strategic willingness to redraw the day-by-day plan based on what work actually surfaces. Days 1, 2, and 3 all re-scoped from the original plan.
+
+**What to watch in Week 4:**
+- Production swap is high-stakes — even behind a flag, regressions in `App.tsx` (where the runtime mounts) could break the canvas for users.
+- Auth integration "inherits from canvas" is the elegant path, but if the iframe somehow loses its same-origin cookie context (cross-origin cookie blocking, sandbox attribute drift), RLS reads silently fail and the iframe shows empty. Verify with a real signed-in dev account.
+- Theme propagation was confirmed as a non-issue, but the conclusion came from one search pass — if a theme system surfaces during Week 4 implementation, scope grows. Soft conclusion to recheck.
+- Error boundary needs *real* testing — force malformed trees (missing `type`, undefined `children`, circular references), partial fetch failures, RLS-denied responses. Not just "it looks fine in dev."
+- Streaming postMessage cost is a real perf concern. Day 4 has a fork: throttle posts inside the iframe, or fall back to in-process `PreviewPhoneFrame` during `isStreaming` and only swap to iframe at stream-complete. Decide with measurement, not feel.
 
 ---
 
-## Week 4 — Theme, error boundaries, static-renderer handoff (18-24 hours)
+## Week 4 — Production swap (runtime replaces InlineSnackPreview behind a flag) (16-22 hours)
+
+> **Note (designed 2026-05-01, Week 3 Day 3).** This plan replaces the original Week 4 plan ("Theme, error boundaries, static-renderer handoff") which was written before the Days 1-2 audit findings reshaped scope. Theme propagation is confirmed as a non-issue (theme is a generation-time AI hint baked into per-component inline styles — there is no runtime token system to propagate). Migration sanity-check across "257 existing Supabase trees" was based on a count that no longer matches dev DB reality (mostly kitchen-sink demo screens, not coherent multi-screen apps). The new plan is scoped to actually-needed work for the production swap, with explicit phasing: **Week 4 ships behind a localStorage flag, Week 5 contains the deliberate flag-flip decision** based on dev burn-in signal and telemetry.
 
 ### Goal
-The runtime is robust enough to be the default preview. Static renderer becomes a fallback only.
+Replace `InlineSnackPreview` with an iframe-based runtime preview that uses the existing `ScreenRenderer` + Week 1-3 click protocol. Ship behind a localStorage feature flag, with `PreviewPhoneFrame` as the no-flag default (zero behavior change for users who don't opt in). Land the building blocks for the Week 5 flag-flip: error boundary wired, dev-only chrome stripped, streaming integration measured.
 
 ### Concrete deliverables
-- `runtime/Theme.tsx` — context provider populated by parent via protocol.
-- `runtime/ErrorBoundary.tsx` — root-level boundary that posts errors to parent.
-- `src/App.tsx` — `InlineSnackPreview` import removed, `InlineRuntimePreview` wired in.
-- `src/components/InlineSnackPreview.tsx` deleted.
-- `package.json` — drop `snack-sdk` and `assert` deps.
+- `src/components/RuntimeIframePreview.tsx` — drop-in replacement shape for `InlineSnackPreview`. Overlays `PreviewPhoneFrame` (same overlay-on-fallback architecture). Reads localStorage flag `mokkoi.runtime.iframePreview`.
+- Error boundary wired around `<ScreenRenderer>` inside the iframe (using existing `src/components/ErrorBoundary.tsx`, no new component).
+- Light tree-validation pass before render (`validateTree(tree)` — fast object-shape check).
+- Streaming integration: throttled `mokkoi:render-tree` posts during `ai.isStreaming` (or fall back to `PreviewPhoneFrame` during streaming, decision point Day 4).
+- Dev-only diagnostic logs gated behind `import.meta.env.DEV`.
+- Existing `InlineSnackPreview` and `snack-sdk` dep **kept** through Week 4. Deletion is Week 5.
 
 ### "Done" criterion
-`git grep snack-sdk` returns zero matches in `src/`. Open any existing project on production — preview shows runtime, real RN-web rendering, real images, real icons. Generate a fresh app — static renderer briefly during streaming, smooth handoff to runtime when complete, no flicker. Force a render error (malformed tree) — error boundary catches, static fallback shows with notice.
+With `localStorage.setItem('mokkoi.runtime.iframePreview', '1')` set, open `/app/:projectId` on a real signed-in dev account. The right-pane preview shows the iframe runtime with the active screen rendered, BottomNav clicks navigate, button clicks toast or route, malformed trees show the ErrorBoundary fallback (force one to verify), generation streaming UX is no worse than current static `PreviewPhoneFrame`. Without the flag, behavior is byte-identical to today's canvas.
 
 ### Validation checkpoint
-**End of Day 3.** Batch-render all 257 existing Supabase trees through the new runtime in headless mode. If >30% of trees fail to render correctly even after a week of fixes, the JSON shape isn't actually portable — abort migration, keep static renderer as primary.
+**End of Day 4.** Real signed-in dev account, real production project from `mokkoi.com`, flag enabled. Generate a fresh app from a prompt, watch streaming, navigate via BottomNav, click a button, force a malformed tree. If first-paint is >500ms or streaming is visibly jankier than today's `PreviewPhoneFrame`, fork to "use PreviewPhoneFrame during streaming, swap to iframe at stream-complete" and re-verify. Telemetry backlog item gates the Week 5 flag-flip — does **not** gate Week 4 ship.
 
 ### Hours estimate
-18-24 hours.
+16-22 hours.
+
+### Architectural decisions log (made 2026-05-01, Week 3 Day 3)
+
+**A. URL routing — replace InlineSnackPreview in-place.** New `<RuntimeIframePreview>` component lives at `src/App.tsx:588`'s position in the tree. Iframe still served from `public/runtime/index.html`. No new top-level route. Public-share path (`/preview/:projectId/:screenId` → `PreviewPage` → direct ScreenRenderer) keeps current behavior — that wasn't broken, don't expand scope.
+
+**B. Auth integration — inherit from canvas.** Iframe is a child of authenticated `<App />`; same-origin → same supabase session → same RLS. Iframe knows nothing about auth. **Skip Supabase fetch from runtime entirely** — parent has `projectId`, `activeScreenId`, `screens.connections`, the active tree all in canvas memory; post directly via `mokkoi:render-tree` plus a new `mokkoi:set-connections` (or fold connections into the render-tree message).
+
+**C. UI cleanup from POC** — remove project/screen dropdowns, status indicator, URL param sync, RuntimePhoneFrame chassis (canvas owns the chassis via `PreviewPhoneFrame` underneath). Keep dev-only logs gated behind `import.meta.env.DEV`. Reuse canvas's existing device + zoom state (`screens.projectDeviceId`, `previewManualZoom`).
+
+**D. Theme propagation — nothing to do.** Confirmed by reading [api/_lib/design-system.ts](api/_lib/design-system.ts): theme is a generation-time hint that bakes into per-component inline `style.backgroundColor`/`style.color`. No runtime theme system exists. Trees carry their own theme. This frees ~half a day of original Week 4 scope.
+
+**E. Error boundaries — wire existing `<ErrorBoundary>` inside iframe + light tree validation.** No new ErrorBoundary component (the existing one in `src/components/ErrorBoundary.tsx` is already production-quality). Light pre-render `validateTree()` (object shape, type field, children-is-array) catches the most common malformed-tree case before ScreenRenderer even runs. Component-level isolation (per-recursion boundaries) deferred to backlog — over-engineering until we see real production crashes; would also require touching ScreenRenderer (forbidden under shared-with-canvas hard rule).
+
+**F. Replacing InlineSnackPreview — feature flag + dual-mount + delayed retirement.** localStorage `mokkoi.runtime.iframePreview = '1'` enables runtime, default disabled. Both components mounted in App.tsx but mutually exclusive based on flag. Week 4 ships flag-off-by-default. Week 5 contains the deliberate flag-flip decision (see Day 5 below). Snack deletion is Week 5 contingent on flag flipped + clean dogfood + telemetry.
+
+**G. Performance baseline.** First useful paint ≤500ms after parent has the tree. Subsequent posts ≤50ms incremental. Iframe boots once-per-canvas-session (don't unmount on screen change). Streaming posts throttled to one every 250ms; final post on stream-complete always fires. Day 4 measures and forks: throttled-iframe vs. PreviewPhoneFrame-during-streaming.
 
 ### Tasks
-- [ ] **Day 1 — Theme propagation.** Build `runtime/Theme.tsx` context provider.
-- [ ] Wire parent to send `{type: "theme", tokens}` on init.
-- [ ] Theme keys: surface-0/1/2/3, text-primary/secondary, accent, semantic colors.
-- [ ] AI-generated trees referencing theme keys (e.g., `color: "$accent"`) resolve through theme.
-- [ ] **Day 2 — Error boundary.** Build `runtime/ErrorBoundary.tsx` at the root.
-- [ ] On render error, post `{type: "error", message, stack}` to parent.
-- [ ] Render minimal fallback inside iframe ("Preview crashed — falling back to static. Bug logged.").
-- [ ] **Day 3 — Migration sanity.** Build `eval/migration-batch.ts` that headless-renders all 257 existing trees through the runtime, catalogs errors.
-- [ ] **VALIDATION CHECKPOINT** — fix top 5 most common errors. If pass rate is <70% even after fixes, abort migration and keep static as primary.
-- [ ] **Day 4 — Wire into App.tsx.** Replace `InlineSnackPreview` with `InlineRuntimePreview`.
-- [ ] Static `PreviewPhoneFrame` becomes during-streaming-only view.
-- [ ] Smooth handoff: when `isGenerating || isStreaming` flips to false, fade from static to runtime.
-- [ ] **Day 5 — Cleanup.** Delete `src/components/InlineSnackPreview.tsx` (290 lines).
-- [ ] Drop `snack-sdk` and `assert` from `package.json`.
-- [ ] Remove `assert: 'assert'` alias from `vite.config.ts`.
-- [ ] Run `npm run build` — confirm bundle smaller (-55KB gzipped).
-- [ ] Deploy to production. Verify on existing fitness project.
+
+- [ ] **Day 1 — `<RuntimeIframePreview>` component + auth integration.** Build the component as a drop-in replacement for `<InlineSnackPreview>`'s shape (same props, same overlay-on-PreviewPhoneFrame architecture). Reads localStorage flag; renders nothing when flag-off. Boots iframe pointing at `public/runtime/index.html`. Parent posts active tree via `mokkoi:render-tree` (already exists in protocol), posts connections via the click-protocol pipeline. Iframe renders ScreenRenderer + click handler — reuse `src/runtime/main.tsx` largely as-is, gating dev-only POC chrome behind `import.meta.env.DEV`.
+  - Acceptance: with flag set, iframe loads and renders the active screen of any real project. Without flag, App.tsx behavior is byte-identical to today.
+
+- [ ] **Day 2 — Error boundary + tree validation.** Wrap `<ScreenRenderer>` in `<ErrorBoundary fallbackMessage="Couldn't render this screen">` inside the iframe. Add `validateTree()` defensive pass — fast object-shape check, fails fast with a structured warning instead of a render crash.
+  - Acceptance: force-feed a malformed tree (missing `type`, undefined `children`, circular reference) → fallback UI shows inside iframe, click-routing still works to navigate away. Rest of runtime unaffected.
+
+- [ ] **Day 3 — Production UI cleanup.** Strip from the iframe entry: project/screen dropdowns, status indicator, URL param sync, RuntimePhoneFrame chassis. Reuse canvas's existing device + zoom state. Gate `[mokkoi-click]` and tree-receive logs behind `import.meta.env.DEV`. Keep ErrorBoundary's `console.error` (still wanted in production for telemetry hooking later).
+  - Acceptance: in flag-on production build, dev tools console is quiet on click; iframe renders only screen content with no debug chrome.
+
+- [ ] **Day 4 — Streaming integration + perf measurement.** Wire `ai.isGenerating`/`ai.isStreaming` from canvas state. Default approach: throttle `mokkoi:render-tree` posts to one every 250ms during streaming, with a guaranteed final post at stream-complete. Measure: first-paint latency from cold canvas, post-handshake render latency on screen change, perceived streaming smoothness vs. current `PreviewPhoneFrame`.
+  - **VALIDATION CHECKPOINT — Day 4 fork.** If iframe streaming is visibly jankier than current static, fork: keep `<PreviewPhoneFrame>` as the active visible preview during `isStreaming`, swap to iframe at stream-complete. PreviewPhoneFrame's static fallback already exists and is the cheap option. Decide with measurement, not feel.
+  - Acceptance: first-paint ≤500ms; streaming is smoother than the InlineSnack 15s timeout (low bar, but real) and not visibly worse than current PreviewPhoneFrame.
+
+- [ ] **Day 5 — Decision point: dev burn-in start, flag-flip plan, telemetry hook design.** This day is *not* "automatically flip on Day 5." Review dev burn-in signal from Days 1-4: did anything regress unexpectedly? Are there frequent ErrorBoundary catches? What's the click-routing miss rate in real use? Decide explicitly: **flip default ON in Week 5 contingent on telemetry**, OR **extend burn-in if any signal is concerning**. Document the decision criteria for the Week 5 flag-flip (e.g. "no ErrorBoundary catches in 7 days of dev use", "first-paint p50 under 400ms", "no click-routing surprises"). Also: scope the telemetry backlog item — even a console-aggregated dev metric would suffice for a deliberate Week 5 flip.
+  - Acceptance: written decision criteria for Week 5 flag-flip exist in this plan / commit message. Dev team uses flag-on as their default for Week 4-Week-5-Day-1 burn-in.
 
 ### Risks for this week
-- Some legacy trees rely on quirks of static renderer (HTML/CSS behaviors) → catalog on Day 3, fix top 5, accept the long tail.
-- Theme key references in trees that AI hasn't been generating yet → defer until Week 5 if not already in production trees.
-- Production rollout breaks user projects → deploy behind a feature flag (`?runtime=1` URL param) for first 24 hours, then flip default.
+
+- **Streaming UX regression** is the highest risk. Day 4 has a measured fork; don't let "throttled posts" feel like the right answer if measurement says PreviewPhoneFrame-during-streaming is visibly better.
+- **Auth inheritance silent failure.** If somehow the iframe loses same-origin cookie context (sandbox drift, cross-origin policy change), RLS reads silently fail and the iframe shows empty. Verify Day 1 with a real signed-in account, not just dev mode.
+- **App.tsx mount-order regressions.** Adding a new conditional overlay alongside InlineSnackPreview could cause subtle React state issues (effect cleanup ordering, ref attachment timing). Defensive: only one of the two overlays mounts at any time based on flag value, not both unconditionally.
+- **Production deployment is NOT this week.** mokkoi.com still serves the existing canvas with InlineSnackPreview behind it. Week 4 is dev-burn-in only. The actual cutover (default-flag-flip) is a Week 5 decision contingent on signal and telemetry.
+- **Theme-as-non-issue is a soft conclusion.** Re-confirm during Day 1 implementation; if a theme system surfaces (e.g. `<ThemeProvider>` wrapping ScreenRenderer somewhere not yet found), scope grows and this plan adjusts.
+- **Telemetry gap blocks Week 5 flip, not Week 4 ship.** `[P2, INFRA]` runtime preview telemetry is the explicit blocker for the deliberate go/no-go in Week 5. Land the flag-on dogfood path in Week 4, the telemetry in Week 5 Day 1, the flip Week 5 Day 2-3 if signal is clean.
 
 ### Retrospective
-- [ ] Did the Done criterion land? Yes / No
-- [ ] Migration pass rate: _____%
+- [ ] Did the Done criterion land (flag-on iframe runtime works on real production project for dev account)? Yes / No
+- [ ] Day 4 fork: throttled-iframe-during-streaming OR PreviewPhoneFrame-during-streaming? Decision and measurement: _____________
+- [ ] First-paint p50 latency: _____ ms
+- [ ] Errors caught by ErrorBoundary during burn-in: _____ (count + brief description per type)
+- [ ] Week 5 flag-flip decision criteria, written: Yes / No
+- [ ] Time spent: _____ hours
+- [ ] Adjustment for Week 5: _____________
 - [ ] Bundle delta: -_____ KB gzipped
 - [ ] Time spent: _____ hours
 - [ ] Adjustment for Week 5: _____________
