@@ -92,9 +92,9 @@ Current dev DB has only 4 projects (2 fitness + 1 MCP imports + 1 mokkoi). Missi
 
 ---
 
-### `[P3, RUNTIME]` Empty-label Buttons should classify as Deferred:no-label
+### `[WITHDRAWN]` Empty-label Buttons should classify as Deferred:no-label
 
-The runtime click classifier (`classifyClickedElement` in `src/runtime/main.tsx`) treats a TouchableOpacity with one non-empty Text descendant as `Button` and posts `{ kind: 'Button', label: '' }` when `extractLabel` returns empty (whitespace-only text, empty span, etc.). Parent then warns `[runtime-click] empty label for kind=Button — cannot route` and bounces back `mokkoi:click-unresolved` so the iframe toasts. Outcome is correct (toast fires, no false routing) but the round-trip is wasted work — cleaner classification is to treat an empty extracted label as `Deferred:no-label` directly inside the iframe. Discovered during Week 3 Day 1 verification on Velox Audio product screen (color-swatch buttons rendered as empty TouchableOpacity wrappers). Severity: low — current behavior is correct in outcome, just noisy.
+**Withdrawn 2026-05-01 during Week 3 Day 2 verification.** Originally filed Day 1 based on audit-harness data showing 8 of 9 buttons on the Velox Audio product screen classifying as "Button(empty-label)". Day 2 re-verification by triggering real clicks and capturing the actual runtime classifier's output found that all of those cases are correctly classified as `IconButton` by the production code (`arrow_back`, `circle`, `share`, `home`, `notifications`, etc.). The phantom data came from a cross-window `instanceof HTMLElement` bug in the audit harness — the harness ran in the parent window context examining iframe DOM nodes, where `cur instanceof HTMLElement` resolved against the parent window's constructor and returned false for elements from the iframe's window. The harness's `countText` therefore never recognized `.material-symbols-outlined` ancestors and counted icon glyph names as label text. The runtime classifier itself runs *inside* the iframe (correct `instanceof` resolution) and works correctly. No work to do.
 
 ---
 
@@ -103,6 +103,25 @@ The runtime click classifier (`classifyClickedElement` in `src/runtime/main.tsx`
 Surfaced during 2026-05-01 expense-tracker UAT. "GAS" appeared as a text node in a transaction row where it was likely intended as a station logo or brand badge. Could indicate the AI is conflating an `Image` (or icon-style brand mark) with a `Text` component, or attempting to label something without proper logo/icon context.
 
 **Investigation needed:** confirm whether this is a renderer issue (logo component not implemented / falling through to text) or a prompt issue (AI emitting `Text` where an icon/image macro is the right choice). Once root cause is known, fix in the appropriate layer. Low priority — single-instance issue, no SLA.
+
+---
+
+### `[P2, ARCHITECTURE]` FlowConnection canonical routing is dead code in production
+
+Across all 4 dev DB projects, **0 of 4 have any FlowConnection trigger fields populated**. Project 1 (fitness kitchen-sink) has 4 connections with only `fromScreenId` + `toScreenId` (no `trigger`). Projects 2/3/4 have empty connections arrays entirely. Every routing success since Week 1 Day 4 (BottomNav) and Week 3 Day 1 (Button/IconButton) has gone through `fuzzyMatchScreen` against screen names — the canonical `findNavigationTarget` lookup tier in `src/utils/previewNavigation.ts` is unreachable in current production data.
+
+Strategic implications, pick one or combine:
+1. Canvas UX should make FlowConnection drawing more prominent / automatic (today users probably don't realize triggers are needed for canonical routing).
+2. Runtime should lean harder on fuzzy matching — accept fuzzy as the canonical path, document the trade-off.
+3. Pull Phase 2 macro-metadata preservation forward — the planner emits macros with `targetScreenId` baked in, and FlowConnections become unnecessary as a label-keyed lookup table.
+
+Discovered Week 3 Day 2 by inspecting the actual `projects.connections` Supabase responses across all 4 projects. Severity: medium — affects every interactivity decision in Weeks 3-5 and reframes what "click resolution" actually means at runtime today.
+
+---
+
+### `[P3, RUNTIME]` Single-text data-as-label classifies as Button
+
+TouchableOpacity wrappers around data text (person names like "Nora Ward" in an activity feed, transaction amounts in a banking app, message previews in a messages list) classify as `Button` because they have exactly one Text descendant. The runtime then posts `{ kind: 'Button', label: 'Nora Ward' }`, the parent finds no FlowConnection or fuzzy screen-name match, and the toast says `No screen wired for 'Nora Ward'` — misleading because the data was never supposed to be wired. Same root cause as the compound-clickable data-vs-action discrimination: the runtime can't tell action labels from data without macro metadata. Discovered Week 3 Day 2 verification on a fitness Home screen with a friends-activity card. Severity: low — the toast is honest about lack of wiring, just framed awkwardly. Phase 2 macro-metadata preservation resolves this naturally (the macro emits `Card` with `kind:'activity-feed-row'` and the runtime knows the inner text is data).
 
 ---
 
