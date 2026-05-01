@@ -78,15 +78,23 @@ Not urgent — this isn't a broken-looking demo, just a polish issue. Punt to We
 
 ---
 
-### `[P3, INFRA]` Seed canonical archetype test apps in dev DB
+### `[P2, INFRA]` Seed canonical archetype test apps in dev DB
 
-Current dev DB has only 4 projects (2 fitness + 1 MCP imports + 1 mokkoi). Missing food-delivery, banking, e-commerce, and social archetypes for runtime verification testing. Seeding canonical test apps would let Week 2-5 verification cover archetype-spread properly. Lift from production via test-data export, or generate fresh ones. Surfaced during Week 1 Day 3 verification — could only test 3 of the 4 available projects, none of which were food-delivery or banking. Severity: low — affects test coverage, not user-facing.
+Current dev DB has only 4 projects (2 fitness + 1 MCP imports + 1 mokkoi). Missing food-delivery, banking, e-commerce, and social archetypes for runtime verification testing. Seeding canonical test apps would let Week 2-5 verification cover archetype-spread properly. Lift from production via test-data export, or generate fresh ones. Surfaced during Week 1 Day 3 verification — could only test 3 of the 4 available projects, none of which were food-delivery or banking.
+
+**Bumped P3 → P2 on 2026-05-01 during Week 3 Day 1 demo-flow survey.** Survey revealed dev DB is one focused workspace (project 2: MCP Imports, 10 single-screen demos) plus three kitchen-sink workspaces (projects 1/3/4: 80+/28+/44 screens of disconnected demos, version copies, and regenerations from one-off prompts). There is no canonical multi-screen demo flow per archetype to walk start-to-finish, which actively constrains Week 3-5 verification quality — can't honestly survey nav patterns across diverse archetypes when the underlying data is heterogeneous noise. Should be addressed before Week 4 production-swap testing, when verification needs to span food-delivery, banking, e-commerce, and social archetypes with real multi-screen flows.
 
 ---
 
 ### `[P3, RENDERER]` Fitness Home progress-ring text overlay
 
 "1,847 cal" text overlaps the green "Daily Goal" progress ring label on the fitness tracker's Home screen. Affects canvas AND runtime (fidelity preserved between them). Layering / positioning issue in the `ProgressRing` macro composition — the value text and the ring's own label end up at the same vertical position. Discovered during Week 1 Day 3 verification. Severity: low — visual quirk, not blocking.
+
+---
+
+### `[P3, RUNTIME]` Empty-label Buttons should classify as Deferred:no-label
+
+The runtime click classifier (`classifyClickedElement` in `src/runtime/main.tsx`) treats a TouchableOpacity with one non-empty Text descendant as `Button` and posts `{ kind: 'Button', label: '' }` when `extractLabel` returns empty (whitespace-only text, empty span, etc.). Parent then warns `[runtime-click] empty label for kind=Button — cannot route` and bounces back `mokkoi:click-unresolved` so the iframe toasts. Outcome is correct (toast fires, no false routing) but the round-trip is wasted work — cleaner classification is to treat an empty extracted label as `Deferred:no-label` directly inside the iframe. Discovered during Week 3 Day 1 verification on Velox Audio product screen (color-swatch buttons rendered as empty TouchableOpacity wrappers). Severity: low — current behavior is correct in outcome, just noisy.
 
 ---
 
