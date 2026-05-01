@@ -34,17 +34,16 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- @vitejs/plugin-react preamble. Required because public/ files are served
-         static (no HTML transform), so the preamble Vite normally injects is
-         missing. Without this, any JSX-containing module errors with
-         "@vitejs/plugin-react can't detect preamble". No-op in production. -->
-    <script type="module">
-      import RefreshRuntime from '/@react-refresh'
-      RefreshRuntime.injectIntoGlobalHook(window)
-      window.$RefreshReg$ = () => {}
-      window.$RefreshSig$ = () => (type) => type
-      window.__vite_plugin_react_preamble_installed__ = true
-    </script>
+    <!-- This HTML is a Vite build entry (declared in build.rollupOptions.input
+         in vite.config.ts). In dev, @vitejs/plugin-react auto-injects the
+         React Refresh preamble via the HTML transform; in production, vite
+         build hashes + bundles main.tsx and rewrites the script src below to
+         the emitted asset path. Both work without a manual preamble.
+         An earlier version of this file lived in public/runtime/ and shipped
+         a hand-rolled /@react-refresh import as a workaround for public/
+         skipping HTML transforms — that was production-broken (the output
+         referenced a dev-only virtual module + raw .tsx) and is what
+         motivated the move out of public/ in Week 4 Day 1.5. -->
     <script type="module" src="/src/runtime/main.tsx"></script>
   </body>
 </html>

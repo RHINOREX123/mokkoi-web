@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -16,5 +17,20 @@ export default defineConfig({
   },
   define: {
     global: 'globalThis',
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        // Main canvas SPA — served at /index.html.
+        main: resolve(__dirname, 'index.html'),
+        // Runtime iframe entry — served at /runtime/index.html. Declared as
+        // a separate Rollup entry so vite build emits dist/runtime/index.html
+        // with hashed/bundled JS instead of leaving it as an unprocessed
+        // public/ asset that points at dev-only source paths (the bug Week 4
+        // Day 1.5 fixed). Both iframe consumers reference /runtime/index.html
+        // (src/components/RuntimeIframePreview.tsx, src/pages/RuntimePoc.tsx).
+        runtime: resolve(__dirname, 'runtime/index.html'),
+      },
+    },
   },
 })
