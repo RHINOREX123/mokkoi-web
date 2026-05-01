@@ -14,6 +14,12 @@ Area tags: `RENDERER`, `PROMPT`, `RUNTIME`, `EVAL`, `INFRA`, `UX`, `DOCS`.
 
 ## Open
 
+### `[P3, RENDERER]` Empty/zero-content children squish in horizontal scroll
+
+Pre-existing in ScrollView, now also in FlatList: explicit-width Views with no inner text/image content collapse to minimal width inside horizontal scroll containers. Fix would be `min-width: max-content` on inner row, or `align-self: flex-start` on each child. Not observed in current production trees. Surfaced during Week 2 Day 3 verification. Severity: low — defensive only.
+
+---
+
 ### `[P2, PROMPT]` Document `filled` prop on Icon in iconography prompt section
 
 Renderer supports `filled: true|false` for outline vs filled icon variant. Currently undocumented in prompt, so AI never uses it. Result: active BottomNav tabs visually identical to inactive (only color differs). Documenting in iteration-2 lets AI generate proper active-state visual hierarchy. Discovered Week 2 Day 2 icon audit. Severity: medium — affects perceived polish on every nav.
