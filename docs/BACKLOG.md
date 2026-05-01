@@ -74,6 +74,24 @@ Surfaced during 2026-05-01 expense-tracker UAT. "GAS" appeared as a text node in
 
 ---
 
+### `[P2, ARCHITECTURE]` Stored trees have lost macro semantic structure
+
+`expandComponents()` runs server-side at generation time, converting macros (BottomNav, ListRow, ChipSelector, etc.) into raw primitive trees with no metadata about the original macro intent. This loses tab→screen mappings, list semantics, form submission targets, etc. Future runtime/interactivity work has to use brittle heuristics instead of clean metadata. Long-term fix: preserve macro metadata in stored trees, expand only at render time. Affects: navigation, form handling, smart layouts, accessibility. Discovered during Week 1 Day 4. Severity: medium-long-term — accept heuristic approach for Phase 1, plan refactor for Phase 2.
+
+---
+
+### `[P2, PROMPT]` AI generates BottomNav tabs without Text labels
+
+Production fitness tracker app has BottomNav with icon-only tabs (no Text children). Without labels, runtime navigation can only fall back to icon glyph names ("person", "fitness_center"), which often don't match screen names. Users see broken nav that should work. Fix in iteration-2 prompt: require Text labels on every BottomNav tab. Discovered during Week 1 Day 4 verification. Severity: medium — affects nav reliability across most generated apps with BottomNav.
+
+---
+
+### `[P3, RUNTIME]` Icon-name → screen-name synonym map
+
+When BottomNav tabs lack text labels, runtime falls back to icon glyph names. Adding a synonym map (person→Profile, fitness_center→Workouts, bar_chart→Progress, home→Home, search→Search) would lift nav hit-rate on icon-only navs from current ~40% to ~80%. Becomes obsolete once macro metadata is preserved in stored trees (P2 ARCHITECTURE entry). Severity: low — patch, not fix. Skip if Phase 2 macro-preservation work happens within ~1 month.
+
+---
+
 ## Closed
 
 ### `[P1, RENDERER]` Icon fallback for invalid names — resolved 2026-05-01 (commit `84f5656`)
