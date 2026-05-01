@@ -170,36 +170,45 @@ export default function RuntimePoc() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  // Handle nav clicks from inside the iframe (BottomNav tabs).
+  // Handle clicks from inside the iframe. Generic mokkoi:click protocol with an
+  // elementKind discriminator — Week 3 Day 1 generalisation of the BottomNav-only
+  // mokkoi:nav-click. Routing for every kind reuses the same hierarchy:
+  //   1. FlowConnection (canonical, planner-provided trigger)
+  //   2. Fuzzy screen-name match
+  //   3. Nothing → echo mokkoi:click-unresolved back so the iframe can toast.
   useEffect(() => {
-    function onNavClick(e: MessageEvent) {
+    function onClick(e: MessageEvent) {
       if (e.source !== iframeRef.current?.contentWindow) return
-      if (e.data?.type !== 'mokkoi:nav-click') return
+      if (e.data?.type !== 'mokkoi:click') return
+      const kind = String(e.data.elementKind ?? '')
       const label = String(e.data.label ?? '')
-      if (!label || !screenId) return
+      if (!screenId) return
+
+      if (!label) {
+        console.warn(`[runtime-click] empty label for kind=${kind} — cannot route`)
+        e.source?.postMessage({ type: 'mokkoi:click-unresolved', label: '', kind }, '*')
+        return
+      }
 
       const flowTarget = findNavigationTarget(connections, screenId, label)
       if (flowTarget) {
-        console.log(`[runtime-nav] mapping path: flowConnection`)
-        console.log(`[runtime-nav] resolved target: ${flowTarget}`)
+        console.log(`[runtime-click] kind=${kind} label='${label}' → flowConnection → ${flowTarget}`)
         if (flowTarget !== screenId) setScreenId(flowTarget)
         return
       }
 
       const fuzzy = fuzzyMatchScreen(label, screens)
       if (fuzzy) {
-        console.log(`[runtime-nav] mapping path: fuzzyName`)
-        console.log(`[runtime-nav] resolved target: ${fuzzy.id}`)
+        console.log(`[runtime-click] kind=${kind} label='${label}' → fuzzyName → ${fuzzy.id}`)
         if (fuzzy.id !== screenId) setScreenId(fuzzy.id)
         return
       }
 
-      console.log(`[runtime-nav] mapping path: none`)
-      console.log(`[runtime-nav] resolved target: null`)
-      console.warn(`[runtime-nav] no target for tab '${label}' on screen ${screenId}`)
+      console.warn(`[runtime-click] no target for kind=${kind} label='${label}' on screen ${screenId}`)
+      e.source?.postMessage({ type: 'mokkoi:click-unresolved', label, kind }, '*')
     }
-    window.addEventListener('message', onNavClick)
-    return () => window.removeEventListener('message', onNavClick)
+    window.addEventListener('message', onClick)
+    return () => window.removeEventListener('message', onClick)
   }, [connections, screens, screenId])
 
   // Sync URL params whenever any test-rig dimension changes.

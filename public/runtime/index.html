@@ -22,6 +22,14 @@
          for real onPress feedback — gives users acknowledgment that a tap was
          registered without wiring real handlers. */
       .mokkoi-touchable:active { opacity: 0.7; }
+      /* Click-feedback toast (Week 3 Day 1): fade in fast, hold, fade out.
+         Lifetime in JS = 1400ms; this animation matches that. */
+      @keyframes mokkoi-toast-fade {
+        0%   { opacity: 0; transform: translate(-50%, 6px); }
+        12%  { opacity: 1; transform: translate(-50%, 0); }
+        78%  { opacity: 1; transform: translate(-50%, 0); }
+        100% { opacity: 0; transform: translate(-50%, -2px); }
+      }
     </style>
   </head>
   <body>
