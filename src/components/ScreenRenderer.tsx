@@ -107,6 +107,73 @@ function ProxyImage({ searchQuery, width, height, style }: {
 }
 
 
+// --- Raw URI image rendering ---
+// Trees imported from HTML (import-html flow) carry source.uri pointing at
+// hot-linked external URLs (commonly lh3.googleusercontent.com/aida-public/...).
+// Those URLs expire or 403 at scale, leaving broken-image icons. RawUriImage
+// validates the URI, shows a brief shimmer on first paint, and on load failure
+// degrades to a styled placeholder that fills the original slot dimensions —
+// so a missing 300x200 hero looks intentional, not broken.
+const warnedFailedImageUrls = new Set<string>()
+
+function isValidImageUri(uri: unknown): uri is string {
+  if (typeof uri !== 'string') return false
+  const trimmed = uri.trim()
+  if (!trimmed) return false
+  return /^(https?:\/\/|data:image\/)/i.test(trimmed)
+}
+
+function ImagePlaceholder({ style }: { style: React.CSSProperties }) {
+  return (
+    <div style={{
+      ...style,
+      backgroundColor: 'rgba(255,255,255,0.05)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      borderRadius: style.borderRadius ?? 8,
+    }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="3" />
+        <circle cx="8.5" cy="8.5" r="1.5" fill="rgba(255,255,255,0.2)" />
+        <path d="M21 15l-5-5L5 21" />
+      </svg>
+    </div>
+  )
+}
+
+function RawUriImage({ uri, style }: { uri: string; style: React.CSSProperties }) {
+  const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  if (failed) return <ImagePlaceholder style={style} />
+
+  return (
+    <img
+      src={uri}
+      alt=""
+      loading="lazy"
+      onLoad={() => setLoaded(true)}
+      onError={() => {
+        if (!warnedFailedImageUrls.has(uri)) {
+          warnedFailedImageUrls.add(uri)
+          console.warn('[image] load failed:', uri)
+        }
+        setFailed(true)
+      }}
+      style={{
+        objectFit: 'cover',
+        backgroundColor: loaded ? 'transparent' : 'rgba(255,255,255,0.05)',
+        color: 'transparent',
+        fontSize: 0,
+        ...style,
+      }}
+    />
+  )
+}
+
+
 // Map React Native style properties to CSS equivalents
 function rnStyleToCSS(style?: Record<string, unknown>): React.CSSProperties {
   if (!style) return {}
@@ -367,11 +434,13 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
         )
       }
 
-      if (source?.uri) {
-        return (
-          <img key={key} src={source.uri} alt="" loading="lazy"
-            style={{ objectFit: 'cover', backgroundColor: '#2A2A3E', ...style }} />
-        )
+      if (source?.uri !== undefined) {
+        if (!isValidImageUri(source.uri)) {
+          // Empty / malformed / non-http URI — never request, render placeholder
+          // that fills the original slot dimensions (not the small 48px fallback).
+          return <ImagePlaceholder key={key} style={style} />
+        }
+        return <RawUriImage key={key} uri={source.uri.trim()} style={style} />
       }
 
       // No content source at all — render minimal placeholder, NOT a giant dark block
