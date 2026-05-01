@@ -337,6 +337,19 @@ export function toMaterialSymbol(raw: string): string {
 }
 
 /**
+ * Set of Material Symbols identifiers we know are valid glyphs in the
+ * Material Symbols Outlined font (everything we map to or reverse-map from).
+ * Used by the canvas renderer to detect unknown names and fall back to a
+ * neutral icon instead of leaking raw text through the font.
+ */
+export const KNOWN_MATERIAL_SYMBOLS: Set<string> = (() => {
+  const set = new Set<string>()
+  for (const v of Object.values(LUCIDE_TO_MATERIAL)) set.add(v)
+  for (const k of Object.keys(MATERIAL_TO_LUCIDE)) set.add(k)
+  return set
+})()
+
+/**
  * Normalize any icon name (Lucide or Material) to a lucide-react-native
  * component name (PascalCase).
  *

@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
-import { toMaterialSymbol } from '../utils/iconMap'
+import { toMaterialSymbol, KNOWN_MATERIAL_SYMBOLS } from '../utils/iconMap'
+
+// Track icon names we've already warned about, so console.warn fires once per
+// unknown name per session — feeds the "missing icon" backlog without spamming.
+const warnedUnknownIcons = new Set<string>()
 
 // --- Async image loader: calls /api/generate-image backend proxy ---
 // Client-side cache so we don't re-fetch the same query on every re-render.
@@ -518,6 +522,15 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
 
       // Normalize any icon name (Lucide kebab or Material snake) → Material Symbols glyph
       const materialName = toMaterialSymbol(rawName)
+      const isKnown = KNOWN_MATERIAL_SYMBOLS.has(materialName)
+      // Fallback: render a neutral 'circle' glyph at reduced opacity so missing
+      // icons are visually distinct during UAT instead of leaking raw text
+      // through the Material Symbols font.
+      const renderedName = isKnown ? materialName : 'circle'
+      if (!isKnown && !warnedUnknownIcons.has(rawName)) {
+        warnedUnknownIcons.add(rawName)
+        console.warn(`[Mokkoi] Unknown icon name: '${rawName}' (rendering fallback)`)
+      }
 
       return (
         <span
@@ -535,10 +548,11 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
             height: iconSize,
             userSelect: 'none' as const,
             flexShrink: 0,
+            opacity: isKnown ? undefined : 0.4,
             ...style,
           }}
         >
-          {materialName}
+          {renderedName}
         </span>
       )
     }
