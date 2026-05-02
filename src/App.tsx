@@ -568,7 +568,7 @@ function App() {
                           immediate-feedback view (paints in <100ms) and the
                           fallback if Snack fails / times out. */}
                       <PreviewPhoneFrame
-                        key={previewRefreshKey}
+                        key={`static-${previewRefreshKey}`}
                         screens={screens.generatedScreens.filter(s => s.tree || s.imageUrl)}
                         connections={screens.connections}
                         activeScreenId={screens.activeGeneratedId || ''}
@@ -593,7 +593,6 @@ function App() {
                         const useRuntime = typeof window !== 'undefined'
                           && window.localStorage.getItem('mokkoi_runtime_iframe_preview') === '1'
                         const sharedProps = {
-                          key: previewRefreshKey,
                           screens: screens.generatedScreens.filter(s => s.tree),
                           connections: screens.connections,
                           projectName: screens.projectName,
@@ -601,13 +600,19 @@ function App() {
                           manualZoom: previewManualZoom,
                           disabled: ai.isGenerating || ai.isStreaming,
                         }
+                        // Sibling keys are namespaced ("static-" on PreviewPhoneFrame
+                        // above, "live-" here) so they never collide while still
+                        // bumping in lockstep on refresh. Pre-namespace they both
+                        // resolved to the raw integer 0 → "two children with same
+                        // key 0" warning. Pass key directly, never via spread.
                         return useRuntime
                           ? <RuntimeIframePreview
+                              key={`live-${previewRefreshKey}`}
                               {...sharedProps}
                               activeScreenId={screens.activeGeneratedId || ''}
                               onActiveScreenChange={screens.setActiveGeneratedId}
                             />
-                          : <InlineSnackPreview {...sharedProps} />
+                          : <InlineSnackPreview key={`live-${previewRefreshKey}`} {...sharedProps} />
                       })()}
                     </div>
                   </>
