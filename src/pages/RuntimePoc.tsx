@@ -3,6 +3,7 @@ import { expandComponents } from '../../lib/component-library'
 import type { ComponentNode } from '../types/mokkoi'
 import type { FlowConnection } from '../components/FlowConnectors'
 import { findNavigationTarget } from '../utils/previewNavigation'
+import { fuzzyMatchScreen } from '../utils/fuzzyMatchScreen'
 import { RuntimePhoneFrame } from '../components/RuntimePhoneFrame'
 import { DEVICE_PRESETS, DEFAULT_DEVICE, getDevicePreset, resolveDeviceId } from '../constants/devices'
 import { MIN_ZOOM, MAX_ZOOM } from '../utils/computeFitScale'
@@ -28,22 +29,6 @@ function getDefaultZoom(deviceHeight: number): number {
 
 function clampZoom(z: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
-}
-
-/** Fuzzy fallback: match a tab label against a screen name when no FlowConnection exists.
- *  Strips a trailing "Screen" word + normalizes whitespace/case. Tries exact match first,
- *  then substring match in either direction (covers "Profile" tab → "ProfileScreen", and
- *  "Home" tab → "Home"). */
-function fuzzyMatchScreen(label: string, screens: RuntimeScreenSummary[]): RuntimeScreenSummary | null {
-  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/\s*screen$/, '').trim()
-  const target = norm(label)
-  if (!target) return null
-  for (const s of screens) if (norm(s.name) === target) return s
-  for (const s of screens) {
-    const n = norm(s.name)
-    if (n && (n.includes(target) || target.includes(n))) return s
-  }
-  return null
 }
 
 function readUrlParams() {

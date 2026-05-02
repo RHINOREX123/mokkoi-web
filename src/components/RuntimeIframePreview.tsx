@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { expandComponents } from '../../lib/component-library'
 import { computeFitScale } from '../utils/computeFitScale'
 import { findNavigationTarget } from '../utils/previewNavigation'
+import { fuzzyMatchScreen } from '../utils/fuzzyMatchScreen'
 import { getDevicePreset, DEFAULT_DEVICE } from '../constants/devices'
 import type { ComponentNode } from '../types/mokkoi'
 import type { FlowConnection } from './FlowConnectors'
@@ -17,22 +18,6 @@ interface RuntimeIframePreviewProps {
   deviceId?: DeviceId
   manualZoom?: number | null
   disabled?: boolean
-}
-
-/** Duplicated from src/pages/RuntimePoc.tsx (typed there against
- *  RuntimeScreenSummary; here against GeneratedScreen). De-dup tracked as
- *  P3 backlog item — extract to src/utils/fuzzyMatchScreen.ts with a generic
- *  shape parameter once Week 4 stabilizes. */
-function fuzzyMatchScreen(label: string, screens: GeneratedScreen[]): GeneratedScreen | null {
-  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/\s*screen$/, '').trim()
-  const target = norm(label)
-  if (!target) return null
-  for (const s of screens) if (norm(s.name) === target) return s
-  for (const s of screens) {
-    const n = norm(s.name)
-    if (n && (n.includes(target) || target.includes(n))) return s
-  }
-  return null
 }
 
 /** Production runtime preview. Drop-in replacement shape for InlineSnackPreview:
