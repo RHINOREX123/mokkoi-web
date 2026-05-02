@@ -55,6 +55,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const Stripe = (await import('stripe')).default
   const stripe = new Stripe(stripeKey)
 
+  const baseUrl = req.headers.origin || process.env.MOKKOI_PUBLIC_URL || 'https://mokkoi.com'
+
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -69,8 +71,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         userId: userId || user.id,
         plan,
       },
-      success_url: 'https://mokkoi.com/app?upgraded=true',
-      cancel_url: 'https://mokkoi.com/pricing',
+      success_url: `${baseUrl}/app?upgraded=true`,
+      cancel_url: `${baseUrl}/pricing`,
     })
 
     return res.status(200).json({ checkoutUrl: session.url })
