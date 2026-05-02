@@ -20,15 +20,18 @@ Layer 3 of error defense: wrap each render-recursion in its own boundary so one 
 
 ---
 
-### `[P3, RUNTIME]` De-duplicate `fuzzyMatchScreen` between RuntimePoc and RuntimeIframePreview
+### `[P2, RUNTIME]` Live iframe during streaming with progressive tree updates (Bolt-style UX)
 
-Two near-identical implementations of fuzzy screen-name matching exist after Week 4 Day 1: one in `src/pages/RuntimePoc.tsx` (typed against `RuntimeScreenSummary`), one inlined in `src/components/RuntimeIframePreview.tsx` (typed against `GeneratedScreen`). Both do the same normalize-and-match logic (strip trailing "Screen", lowercase, exact-then-substring). Extract to `src/utils/fuzzyMatchScreen.ts` with a generic shape parameter (`<T extends { id: string; name: string }>`) after Week 4 Day 1 stabilizes. Discovered Week 4 Day 1. Severity: low — code duplication, not a behavior bug.
+What Week 4 Day 4 became after the audit. Today the iframe is fully gated off during generation/streaming via `disabled = isGenerating || isStreaming` — when streaming, the user sees `PreviewPhoneFrame`'s static fallback, not the runtime. The original Day 4 plan (throttle `mokkoi:render-tree` posts during streaming) solves a non-problem: there's no active iframe to throttle posts to.
 
----
+Real product win is the inverse: drop the `disabled` gate during streaming, surface `useAIGeneration`'s `partialTree` as it accretes, and throttle posts to the iframe so the user watches the screen materialize live (Bolt/Lovable UX). Touches:
+- `src/App.tsx` — drop the `disabled` gate while streaming, route `partialTree` through to `RuntimeIframePreview` instead of waiting for completion.
+- `src/hooks/useAIGeneration.ts` (or wherever `partialTree` currently lives) — confirm partial trees are surfaceable without protocol changes; may need a new "in-progress" flag on the screen.
+- `src/components/RuntimeIframePreview.tsx` — add a throttle layer (~250ms rAF or interval) on `mokkoi:render-tree` posts when streaming, with a guaranteed final post on stream-complete. ErrorBoundary already absorbs partial-tree render crashes, but `validateTree` may need a softer mode that tolerates in-progress trees.
 
-### `[P3, INFRA]` Local dev environment has Chrome/auth redirect friction
+Multi-day scope. Real complexity (partial-tree validation, render-error tolerance during incomplete shapes, perceived-smoothness measurement). Worth doing once the Week 4 flag-off-by-default ship has soaked.
 
-Localhost dev (port 5174 / 5173) redirects through mokkoi.com auth, then HSTS upgrades break the return path. Tested with both `localhost` and `127.0.0.1`, blocked by different issues per host. Workaround: dev verification on production-like env or via trusted IP allowlist. Not blocking development, but slows manual browser-side testing — Week 4 Day 1 had to fall back to static-verification-only because the canvas couldn't be exercised live. Discovered Week 4 Day 1. Severity: low — friction not a bug.
+Discovered Week 4 Day 4 (2026-05-02) audit. Severity: medium — affects perceived AI-generation experience, gates competitive parity with Bolt/Lovable on the streaming UX axis.
 
 ---
 
@@ -186,6 +189,18 @@ When `ProxyImage`'s primary path fails, fallback to LoremFlickr requires the ima
 ---
 
 ## Closed
+
+### `[P3, RUNTIME]` De-duplicate `fuzzyMatchScreen` — resolved 2026-05-02 (commit `4328829`)
+
+Both copies (in `src/pages/RuntimePoc.tsx` and `src/components/RuntimeIframePreview.tsx`) were byte-identical except for the typed shape. Extracted to `src/utils/fuzzyMatchScreen.ts` with a generic `<T extends { name: string }>` parameter so both consumers share the implementation. Pure refactor — no behavior change. tsc + production build clean.
+
+---
+
+### `[P3, INFRA]` Localhost dev auth redirect friction — resolved 2026-05-02 (Supabase dashboard config)
+
+Resolved via Supabase Auth → URL Configuration → Redirect URLs allowlist update earlier today (no code change). Localhost dev now completes auth round-trip without HSTS-upgrade breakage. Confirmed clear when Day 3's live Pass A/B verification ran cleanly on localhost.
+
+---
 
 ### `[P1, RENDERER]` Icon fallback for invalid names — resolved 2026-05-01 (commit `84f5656`)
 
