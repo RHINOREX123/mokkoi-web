@@ -125,7 +125,7 @@ export function RuntimeIframePreview({
       const tried: string[] = []
 
       if (!label) {
-        console.warn(`[mokkoi-click] parent → kind=${kind} label='' tried= matched=none reason=empty-label`)
+        if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='' tried= matched=none reason=empty-label`)
         e.source?.postMessage({ type: 'mokkoi:click-unresolved', label: '', kind }, '*')
         return
       }
@@ -133,7 +133,7 @@ export function RuntimeIframePreview({
       tried.push('flowConnection')
       const flowTarget = findNavigationTarget(connections, activeScreenId, label)
       if (flowTarget) {
-        console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=flowConnection:${flowTarget}`)
+        if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=flowConnection:${flowTarget}`)
         if (flowTarget !== activeScreenId) onActiveScreenChange(flowTarget)
         return
       }
@@ -141,12 +141,12 @@ export function RuntimeIframePreview({
       tried.push('fuzzyName')
       const fuzzy = fuzzyMatchScreen(label, screens)
       if (fuzzy) {
-        console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=fuzzyName:${fuzzy.id}`)
+        if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=fuzzyName:${fuzzy.id}`)
         if (fuzzy.id !== activeScreenId) onActiveScreenChange(fuzzy.id)
         return
       }
 
-      console.warn(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=none`)
+      if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=none`)
       e.source?.postMessage({ type: 'mokkoi:click-unresolved', label, kind }, '*')
     }
     window.addEventListener('message', onClick)
