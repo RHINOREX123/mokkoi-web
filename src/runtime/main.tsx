@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ScreenRenderer } from '../components/ScreenRenderer'
+import { ErrorBoundary } from '../components/ErrorBoundary'
+import { validateTree } from '../utils/validateTree'
 import type { ComponentNode } from '../types/mokkoi'
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -228,6 +230,40 @@ function Toast({ state }: { state: ToastState | null }) {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
+ * Fallback UI — shown when validateTree rejects (root malformed) OR when the
+ * ErrorBoundary catches a crash inside ScreenRenderer. Single visual for both
+ * paths so the user can't tell which layer caught the failure. Matches the
+ * runtime's dark aesthetic.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+function RuntimeFallback({ message }: { message: string }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      height: '100%', width: '100%', gap: 12, padding: 24,
+      background: '#0A0A1A', color: '#e2e8f0',
+      fontFamily: 'system-ui, sans-serif',
+    }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: '50%',
+        background: 'rgba(248,113,113,0.1)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 22, color: '#f87171',
+      }}>
+        !
+      </div>
+      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
+        {message}
+      </h3>
+      <p style={{ margin: 0, fontSize: 12, color: '#94a3b8', textAlign: 'center', maxWidth: 260 }}>
+        The screen tree had an unexpected shape.
+      </p>
+    </div>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
  * Runtime app
  * ──────────────────────────────────────────────────────────────────────────── */
 
@@ -317,6 +353,20 @@ function RuntimeApp() {
       </div>
     )
   }
+
+  // Layer 1: light root validation. Catches malformed shapes before they reach
+  // ScreenRenderer (whose mid-tree code does node.children?.filter — would
+  // throw on string children, etc.). Failures render the fallback directly;
+  // no need to involve the ErrorBoundary for an expected guard.
+  const validation = validateTree(tree)
+  if (!validation.valid) {
+    console.warn('[runtime] tree validation failed:', validation.reason)
+    return <RuntimeFallback message="Couldn't render this screen" />
+  }
+
+  // Layer 2: ErrorBoundary catches anything that slips past validation and
+  // crashes mid-render (e.g., undefined property access deep in the tree).
+  // Same fallback UI as Layer 1 so the user sees one consistent state.
   return (
     <div
       onClickCapture={handleCapture}
@@ -329,7 +379,9 @@ function RuntimeApp() {
         position: 'relative',
       }}
     >
-      <ScreenRenderer tree={tree} />
+      <ErrorBoundary fallback={<RuntimeFallback message="Couldn't render this screen" />}>
+        <ScreenRenderer tree={validation.tree} />
+      </ErrorBoundary>
       <Toast state={toast} />
     </div>
   )
