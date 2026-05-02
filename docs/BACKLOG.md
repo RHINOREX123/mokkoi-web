@@ -14,6 +14,12 @@ Area tags: `RENDERER`, `PROMPT`, `RUNTIME`, `EVAL`, `INFRA`, `UX`, `DOCS`.
 
 ## Open
 
+### `[P3, RUNTIME]` Per-component error isolation in ScreenRenderer
+
+Layer 3 of error defense: wrap each render-recursion in its own boundary so one bad node doesn't kill its siblings. Useful for partial-render-on-error UX but requires modifying `ScreenRenderer` (shared with canvas, currently forbidden under hard rule). Defer until there's a real crash signal from production. Discovered Week 4 Day 2. Severity: low — Layers 1+2 (validateTree pre-render + ErrorBoundary at render) cover realistic failure modes.
+
+---
+
 ### `[P3, RUNTIME]` De-duplicate `fuzzyMatchScreen` between RuntimePoc and RuntimeIframePreview
 
 Two near-identical implementations of fuzzy screen-name matching exist after Week 4 Day 1: one in `src/pages/RuntimePoc.tsx` (typed against `RuntimeScreenSummary`), one inlined in `src/components/RuntimeIframePreview.tsx` (typed against `GeneratedScreen`). Both do the same normalize-and-match logic (strip trailing "Screen", lowercase, exact-then-substring). Extract to `src/utils/fuzzyMatchScreen.ts` with a generic shape parameter (`<T extends { id: string; name: string }>`) after Week 4 Day 1 stabilizes. Discovered Week 4 Day 1. Severity: low — code duplication, not a behavior bug.
