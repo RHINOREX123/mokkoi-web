@@ -58,8 +58,12 @@ When NOT to use: single-screen apps, modal flows, auth/onboarding screens.
 Props:
   items: array of { icon: string, label: string, active?: boolean }
     icon — one of the icon names from the STRICT RULE list above.
-    label — one word: "Home", "Search", "Cart", "Profile", etc.
+    label — the DESTINATION SCREEN NAME this tab navigates to (e.g. "Home", "Transactions", "Profile"). NEVER use the icon name as the label. The label must match a screen in the SCREEN PLAN.
     active — true on exactly one item per screen (the current screen).
+
+CORRECT: {"icon":"list","label":"Transactions"}   ← label is the screen name
+WRONG:   {"icon":"list","label":"list"}           ← label copies the icon name (FORBIDDEN)
+WRONG:   {"icon":"user","label":"person"}         ← label is an icon-ish word (FORBIDDEN)
 
 Example (food delivery app, Home screen):
 {"type":"BottomNav","props":{"items":[{"icon":"home","label":"Home","active":true},{"icon":"search","label":"Browse"},{"icon":"shopping-cart","label":"Cart"},{"icon":"user","label":"Profile"}]}}
@@ -72,11 +76,11 @@ SearchBar: {"type":"SearchBar","props":{"placeholder":"Search restaurants, food.
 Divider: {"type":"Divider"}
 
 DATA DISPLAY:
-StatCard: {"type":"StatCard","props":{"icon":"monitoring","iconColor":"#A78BFA","value":"8,450","label":"steps"}}
-ListRow: {"type":"ListRow","props":{"icon":"notifications","title":"Notifications","subtitle":"Push and email","trailing":"On","showChevron":true}}
+StatCard: {"type":"StatCard","props":{"icon":"activity","iconColor":"#A78BFA","value":"8,450","label":"steps"}}
+ListRow: {"type":"ListRow","props":{"icon":"bell","title":"Notifications","subtitle":"Push and email","trailing":"On","showChevron":true}}
 ProductCard: {"type":"ProductCard","props":{"image":"margherita pizza fresh basil","title":"Margherita Supreme","price":"$18.90","rating":"4.8","badge":"20% Off"}}
-TransactionRow: {"type":"TransactionRow","props":{"icon":"shopping_bag","iconColor":"#818CF8","merchant":"Amazon","date":"Today","amount":"-$42.99"}}
-FeatureCard: {"type":"FeatureCard","props":{"icon":"local_shipping","iconColor":"#22C55E","title":"Free Shipping","subtitle":"On orders over $50"}}
+TransactionRow: {"type":"TransactionRow","props":{"icon":"shopping-cart","iconColor":"#818CF8","merchant":"Amazon","date":"Today","amount":"-$42.99"}}
+FeatureCard: {"type":"FeatureCard","props":{"icon":"truck","iconColor":"#22C55E","title":"Free Shipping","subtitle":"On orders over $50"}}
 PriceBreakdown: {"type":"PriceBreakdown","props":{"items":[{"label":"Subtotal","value":"$24.99"},{"label":"Shipping","value":"Free"},{"label":"Total","value":"$24.99","bold":true}]}}
 RatingStars: {"type":"RatingStars","props":{"rating":4.5,"count":"(128 reviews)"}}
 StatusBadge: {"type":"StatusBadge","props":{"text":"Active","color":"#22C55E"}}

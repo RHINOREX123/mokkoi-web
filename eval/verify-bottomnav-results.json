@@ -1,0 +1,116 @@
+[
+  {
+    "id": "fitness",
+    "ev": {
+      "app": "FitTrack",
+      "navOnScreen": "Workouts",
+      "rows": [
+        {
+          "label": "Home",
+          "icon": "home",
+          "matchesScreen": true,
+          "labelEqualsIcon": true
+        },
+        {
+          "label": "Workouts",
+          "icon": "dumbbell",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        },
+        {
+          "label": "Progress",
+          "icon": "trending-up",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        },
+        {
+          "label": "Profile",
+          "icon": "user",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        }
+      ],
+      "matched": 4,
+      "total": 4,
+      "ok": false
+    }
+  },
+  {
+    "id": "recipe",
+    "ev": {
+      "app": "RecipeVault",
+      "navOnScreen": "Home",
+      "rows": [
+        {
+          "label": "Home",
+          "icon": "home",
+          "matchesScreen": true,
+          "labelEqualsIcon": true
+        },
+        {
+          "label": "Browse",
+          "icon": "utensils",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        },
+        {
+          "label": "Search",
+          "icon": "search",
+          "matchesScreen": true,
+          "labelEqualsIcon": true
+        },
+        {
+          "label": "Favorites",
+          "icon": "heart",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        },
+        {
+          "label": "Profile",
+          "icon": "user",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        }
+      ],
+      "matched": 5,
+      "total": 5,
+      "ok": false
+    }
+  },
+  {
+    "id": "expense",
+    "ev": {
+      "app": "ExpenseTracker",
+      "navOnScreen": "Home",
+      "rows": [
+        {
+          "label": "Home",
+          "icon": "home",
+          "matchesScreen": true,
+          "labelEqualsIcon": true
+        },
+        {
+          "label": "Transactions",
+          "icon": "list",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        },
+        {
+          "label": "Add Expense",
+          "icon": "plus-circle",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        },
+        {
+          "label": "Profile",
+          "icon": "user",
+          "matchesScreen": true,
+          "labelEqualsIcon": false
+        }
+      ],
+      "matched": 4,
+      "total": 4,
+      "ok": false
+    }
+  }
+]
