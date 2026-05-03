@@ -514,17 +514,38 @@ With `localStorage.setItem('mokkoi.runtime.iframePreview', '1')` set, open `/app
 - **Theme-as-non-issue is a soft conclusion.** Re-confirm during Day 1 implementation; if a theme system surfaces (e.g. `<ThemeProvider>` wrapping ScreenRenderer somewhere not yet found), scope grows and this plan adjusts.
 - **Telemetry gap blocks Week 5 flip, not Week 4 ship.** `[P2, INFRA]` runtime preview telemetry is the explicit blocker for the deliberate go/no-go in Week 5. Land the flag-on dogfood path in Week 4, the telemetry in Week 5 Day 1, the flip Week 5 Day 2-3 if signal is clean.
 
-### Retrospective
-- [ ] Did the Done criterion land (flag-on iframe runtime works on real production project for dev account)? Yes / No
-- [ ] Day 4 fork: throttled-iframe-during-streaming OR PreviewPhoneFrame-during-streaming? Decision and measurement: _____________
-- [ ] First-paint p50 latency: _____ ms
-- [ ] Errors caught by ErrorBoundary during burn-in: _____ (count + brief description per type)
-- [ ] Week 5 flag-flip decision criteria, written: Yes / No
-- [ ] Time spent: _____ hours
-- [ ] Adjustment for Week 5: _____________
-- [ ] Bundle delta: -_____ KB gzipped
-- [ ] Time spent: _____ hours
-- [ ] Adjustment for Week 5: _____________
+### Retrospective (filled 2026-05-03)
+- [x] Did the Done criterion land (flag-on iframe runtime works on real production project for dev account)? **Yes, with caveats.** Pass A (flag-OFF byte-identity) and Pass B (flag-ON iframe boots, renders, BottomNav routes, fuzzyName matches resolve, unresolved labels toast) both verified clean on localhost during Day 3 once the Supabase Redirect URLs allowlist was fixed. The Day 1.5 P0 production-build fix (`aefcea4`) cleared a separate latent break that had affected the iframe HTML in production for ~3 weeks. Caveat: live measurement of perf and error-rate signals deferred to Week 5 Day 0 telemetry — see flag-flip criteria below.
+- [x] Day 4 fork: throttled-iframe-during-streaming OR PreviewPhoneFrame-during-streaming? **Neither — Day 4 was deferred.** Audit at session-start (2026-05-02) found `RuntimeIframePreview` is consumed in App.tsx with `disabled={isGenerating || isStreaming}`, gating the iframe off entirely during streaming. The throttle plan presupposed a live iframe receiving posts during stream; there isn't one. PreviewPhoneFrame-during-streaming is *already* the active behavior, no fork needed. Filed the inverse work (drop the disabled gate, surface `partialTree`, throttle posts so users watch screens materialize live) as `[P2, RUNTIME]` in BACKLOG. **Not a Week 5 prerequisite** — see flag-flip criteria.
+- [x] First-paint p50 latency: **not measured.** No client-side instrumentation existed before Week 5 Day 0 telemetry lands. Subjective Pass B feel: iframe boots within ~1s of canvas mount on localhost; first useful paint appears immediately on `mokkoi:render-tree` post. Telemetry P2 (Week 5 Day 0) is the explicit job to capture this number with real distribution data; the 400ms p50 budget in the flag-flip criteria below is the proposed gate, not a measured baseline.
+- [x] Errors caught by ErrorBoundary during burn-in: **0 catches.** Day 2 wired the boundary inside the iframe entry (`src/runtime/main.tsx`) wrapping `<ScreenRenderer>`, plus `validateTree()` as Layer 1 pre-render. Days 2-3 dogfooding (real production projects on localhost, multiple devices, BottomNav nav, button clicks) produced zero ErrorBoundary fallback renders and zero `validateTree` rejections. Acceptable interpretation: production trees pass current shape checks cleanly; the boundary is genuine safety net, not a frequently-fired path. Re-evaluate after Week 5 Day 0 telemetry produces session-level rollups.
+- [x] Week 5 flag-flip decision criteria, written: **Yes — see new subsection below.**
+- [x] Time spent (Week 4 total): **~10 hours** across Days 1, 1.5, 2, 3 + 2026-05-02 cleanup session (Stripe URL fix, fuzzyMatchScreen dedupe, docs pass, duplicate-key fix). Estimate was 16-22 hours; came in well under because Day 1's IIFE absorbed Day 3's cleanup scope organically (Day 3 was a 4-line edit, not the larger strip the plan anticipated) and Day 4 deferred entirely.
+- [x] Bundle delta: **−14.31 KB gzipped (−22.15 KB raw)** vs pre-Week-4 baseline. Measured 2026-05-03: baseline build at commit `4d768de` (Week 3 Day 3 wrap) emitted single `index-DH9EqkX6.js` at 1,396.16 kB raw / 392.02 kB gzipped. Current `main` (commit `a842b81`) emits `main-g-oWP-fM.js` at 1,367.31 kB / 375.12 kB gzipped + `runtime-C3zI2t0i.js` at 6.70 kB / 2.59 kB gzipped (the iframe entry, separately chunked, only loaded by the iframe). Total app payload across both bundles: 1,374.01 kB raw / 377.71 kB gzipped. **Net reduction despite adding the entire runtime feature** — attributable to Vite's multi-page split moving the iframe entry into its own chunk (no longer bundled into main), Day 3's console gate trim, Day 1.5's removal of the manual `/@react-refresh` preamble, and `fuzzyMatchScreen` dedupe. `InlineSnackPreview` + `snack-sdk` deletion (Week 5 contingent on flag-flip) will be the next major reduction.
+- [x] Adjustment for Week 5: **Insert Day 0 telemetry instrumentation before Day 1 hot updates** — see new task in Week 5 Tasks list. Telemetry blocks the flag-flip per criteria below; landing it Day 0 keeps the Day 2-3 flip window achievable. If the original Week 5 estimate (16-20h) plus Day 0 (~4h estimate) overflows, compress Day 3 theme transitions (lowest-leverage day given no theme regression has surfaced in dogfooding). Live-iframe-during-streaming P2 stays out of Week 5 scope — committed to the polish + telemetry-first cutover path; that work is v1.1.
+
+### Week 5 flag-flip decision criteria (written 2026-05-03)
+
+The flag-flip is the moment `mokkoi_runtime_iframe_preview` defaults to ON for real users on `mokkoi.com`. Targeted for Week 5 Day 2-3 contingent on signals below. **Decide with data, not feel.** If any GO criterion is unmet, do not flip — extend burn-in or fix the gap first.
+
+**GO criteria (all must hold):**
+- **Telemetry coverage.** All five events from Week 5 Day 0 are firing in production with non-zero counts in the 24h preceding the flip: `runtime_iframe_ready`, `runtime_render_tree_posted`, `runtime_render_complete`, `runtime_error_boundary_catch`, `runtime_click_unresolved`. PostHog dashboard query confirms each event type has events from at least 3 distinct sessions.
+- **Error rate ceiling — ErrorBoundary.** ≤0.5% of sessions with at least one `runtime_error_boundary_catch` event over the 7-day burn-in window. Baseline from Days 2-3 dogfooding is 0% across ~dozens of manual sessions; 0.5% is the headroom for production trees we haven't tested.
+- **Error rate ceiling — click-routing.** ≤10% `runtime_click_unresolved` rate per session (events / total `runtime_click` events). Today's structured logs (Week 3 Day 2) show this rate is ~30-40% in dev DB because most projects have no `FlowConnection` triggers populated and rely on fuzzy matching. The 10% threshold assumes fresh-streamed iteration-1 generations (which include populated BottomNav with text labels) dominate production traffic; if dev-DB-style screens dominate, raise the ceiling to 25% rather than block the flip on a known data-shape issue.
+- **Perf floor — first-paint p50.** ≤400ms from `runtime_iframe_ready` to first `runtime_render_complete`, measured across ≥100 sessions in the 24h preceding the flip. 400ms is the proposed Bolt/Lovable competitive parity floor (their preview panes feel sub-second; sub-400ms is "instant" to humans on broadband). If measured p50 lands 400-600ms, evaluate whether the cause is fixable (memoization, avoid expandComponents on every post) before accepting a higher floor.
+- **Iframe-load reliability.** ≥99% of `runtime_iframe_mounted` events produce a subsequent `runtime_iframe_ready` within 5s. Catches the production-build class of failure (Day 1.5's HTML-MIME bug would have shown as 0% ready-rate).
+- **Burn-in duration.** ≥7 calendar days of flag-on dev usage by at least the solo founder, with no new failure modes surfaced. "New failure mode" = anything not already filed in BACKLOG. Cosmetic warnings don't count; behavioral regressions do.
+
+**NO-GO triggers (any one blocks the flip):**
+- Any `runtime_error_boundary_catch` event with a tree-shape we can't immediately explain (file a fix, then re-evaluate).
+- p50 first-paint >600ms with no identified fixable cause.
+- Click-unresolved rate >25% per session on fresh-streamed traffic (signals classifier or fuzzy-match regression).
+- Any RLS / auth failure surfaced in iframe (silent-empty-render class — Week 4 risks list called this out).
+- Telemetry events missing or undercounted vs flag-OFF baseline (suggests instrumentation gap, fly-blind risk).
+
+**Rollback trigger (post-flip).** Flag flips back to default-OFF within 1 hour if any of: ErrorBoundary catch rate >2% of sessions in any 1h window, p50 first-paint regresses >20% from pre-flip baseline, or qualitative report from any user that screens render incorrectly. PostHog alerting on the first two; Discord/email watch for the third.
+
+**Explicitly out-of-scope for the flip.** The `[P2, RUNTIME]` live-iframe-during-streaming work is **not** a flag-flip prerequisite. Today's behavior (PreviewPhoneFrame's static fallback during streaming, runtime-iframe overlay after stream-complete) is acceptable — it's what the flag-on path *already does*. The streaming UX upgrade is a v1.1 user-visible win, not a v1.0 cutover gate. Same applies to Week 5 Day 4 inspector tool and Day 5 README — both nice-to-have, neither blocks the flip.
 
 ---
 
@@ -550,6 +571,41 @@ Generate a fitness app. Edit "Make it darker" via chat. Watch the runtime smooth
 16-20 hours.
 
 ### Tasks
+
+- [ ] **Day 0 (added 2026-05-03) — Telemetry instrumentation.** Lands the events that gate the Week 5 Day 2-3 flag-flip per the criteria in the Week 4 retrospective. **Transport: PostHog.** No new infra, no migration, no new table. PostHog is already wired (`src/lib/analytics.ts:22` `trackEvent(event, properties)`) and consumed from 12+ call sites including `useAIGeneration`, `Dashboard`, `AuthPage`, `useScreenExport`. `usage_logs` (Supabase) is intentionally NOT used — it's an API-side billing ledger, wrong shape for client-side latency/error rollups, would need RLS reshaping. Sentry was considered and rejected as scope creep for the cutover.
+
+  **Event list:**
+
+  | Event name | Fires from | When | Properties |
+  |---|---|---|---|
+  | `runtime_iframe_mounted` | `src/components/RuntimeIframePreview.tsx` (new — onMount effect, before iframe element renders) | Once per `RuntimeIframePreview` mount (canvas opens with flag on, project switch, refresh-button bump) | `{ project_id, screen_count, device_id, flag_namespace: 'live' }` |
+  | `runtime_iframe_ready` | `RuntimeIframePreview.tsx:90` (existing handler — add `trackEvent` call alongside `setIframeReady(true)`) | On receiving `mokkoi:runtime-ready` postMessage from iframe | `{ project_id, ms_since_mounted }` (latency measures iframe boot) |
+  | `runtime_render_tree_posted` | `RuntimeIframePreview.tsx:157` (existing post — add `trackEvent` after `postMessage`) | On every `mokkoi:render-tree` post to iframe | `{ project_id, screen_id, tree_node_count, tree_byte_size }` |
+  | `runtime_render_complete` | `src/runtime/main.tsx` (new — post a new `mokkoi:render-complete` message after each ScreenRenderer render commit; parent listens and tracks) AND `RuntimeIframePreview.tsx` (new handler) | On render commit inside iframe, with parent computing `ms_since_posted` | `{ project_id, screen_id, ms_since_posted, tree_node_count }` (this is the first-paint p50 source) |
+  | `runtime_error_boundary_catch` | `src/components/ErrorBoundary.tsx:27` `componentDidCatch` (add `trackEvent` call alongside the existing console.error) | On any render error caught by the boundary inside the iframe | `{ error_message, error_name, component_stack_first_line, surface: 'runtime' }` (`surface` distinguishes this from any future canvas-side boundary use; component_stack_first_line is the failing component name, sliced for cardinality) |
+  | `runtime_click` | `RuntimeIframePreview.tsx` click handler (existing parent-side resolution path, ~line 100-135) | On every received `mokkoi:click` from iframe | `{ project_id, kind, has_label, resolution: 'flow_connection' \| 'fuzzy_name' \| 'unresolved' }` |
+  | `runtime_click_unresolved` | `RuntimeIframePreview.tsx:114, 135` (where `mokkoi:click-unresolved` is echoed) | When neither FlowConnection nor fuzzy match resolves a click | `{ project_id, kind, label }` (label is user-facing screen text — low PII risk; if concerns emerge, hash to first 8 chars) |
+
+  **Sample payload** (PostHog `capture` call):
+  ```js
+  trackEvent('runtime_render_complete', {
+    project_id: 'a3f8...',
+    screen_id: 'b1e2...',
+    ms_since_posted: 287,
+    tree_node_count: 124,
+  })
+  ```
+
+  **Implementation notes:**
+  - Add `runtime_render_complete` requires extending the postMessage protocol with one new message type `mokkoi:render-complete` (iframe → parent). Hard rules upheld: no payload-shape change to existing messages. New optional message; parent ignores if absent (back-compat with any cached iframe HTML in browsers between deploy and cache clear).
+  - All `trackEvent` calls are no-ops when `VITE_POSTHOG_KEY` is unset (see `analytics.ts:9`), so dev environments without PostHog credentials don't error or pollute production.
+  - `runtime_iframe_mounted` and `runtime_iframe_ready` together compute boot latency. `runtime_render_tree_posted` and `runtime_render_complete` together compute render latency. PostHog can derive p50/p95 from these directly via the Insights query builder; no parent-side aggregation needed.
+  - `import_meta.env.DEV` does NOT gate these calls — telemetry only matters in production, and PostHog's dev-mode auto-captures pageviews already (so dev sessions don't pollute the dashboard meaningfully when `VITE_POSTHOG_KEY` is set).
+
+  **Acceptance test (2-hour budget):** With `VITE_POSTHOG_KEY` set, flag enabled (`localStorage.setItem('mokkoi_runtime_iframe_preview', '1')`), open `/app/:projectId` for a real project, switch screens 3x, click a BottomNav tab, force a malformed tree (paste a tree with `type: 123` into a screen via the canvas) to trigger ErrorBoundary. Within 5 minutes, PostHog Live Events shows ≥1 event for each of the 7 event types above, with non-empty properties matching the spec. If any event type produces 0 rows, instrumentation is broken — fix before progressing to Day 1.
+
+  **Hours estimate:** ~3-4 hours. Touches 3 files (`RuntimeIframePreview.tsx`, `ErrorBoundary.tsx`, `runtime/main.tsx`), one new postMessage type, no new dependencies. **If this pushes the week over 20h:** compress Day 3 (theme transitions). Theme-as-non-issue is documented in the Week 4 architectural decision log section D — no theme regression has surfaced in dogfooding, so the 200ms transition is genuine polish, not a blocker. Hot updates (Day 1) and perf pass (Day 2) directly support the flag-flip; inspector (Day 4) and README (Day 5) close the project. Day 3 is the most compressible.
+
 - [ ] **Day 1 — Hot updates.** Replace full iframe re-mount with delta-render. Parent posts `{type: "render", tree}` on every change; iframe re-renders via React reconciliation.
 - [ ] Test: edit Home screen, observe runtime updates without scroll reset.
 - [ ] **Day 2 — Performance pass.** Profile a 200-node tree render. If >100ms, add memoization at macro-component level.
