@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import type { ReactNode, ErrorInfo } from 'react'
+import { trackEvent } from '../lib/analytics'
 
 interface Props {
   children: ReactNode
@@ -7,6 +8,11 @@ interface Props {
   /** Optional custom fallback. If provided, replaces the default inline fallback
    *  markup entirely. `fallbackMessage` is ignored when `fallback` is set. */
   fallback?: ReactNode
+  /** When set, `componentDidCatch` fires a PostHog `runtime_error_boundary_catch`
+   *  event tagged with this surface label (e.g. "runtime"). Existing canvas-side
+   *  usage of ErrorBoundary leaves this unset and remains telemetry-free.
+   *  Added Week 5 Day 0 (telemetry instrumentation). */
+  telemetrySurface?: string
 }
 
 interface State {
@@ -26,6 +32,21 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo)
+    if (this.props.telemetrySurface) {
+      // First non-empty line of the component stack — the failing component
+      // name + immediate parent. Sliced to keep PostHog property cardinality
+      // bounded (full stacks vary per render and would explode unique values).
+      const firstStackLine = (errorInfo.componentStack || '')
+        .split('\n')
+        .map(s => s.trim())
+        .find(s => s.length > 0) || ''
+      trackEvent('runtime_error_boundary_catch', {
+        error_message: error.message.slice(0, 200),
+        error_name: error.name,
+        component_stack_first_line: firstStackLine.slice(0, 200),
+        surface: this.props.telemetrySurface,
+      })
+    }
   }
 
   handleReload = () => {

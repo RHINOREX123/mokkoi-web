@@ -4,6 +4,7 @@ import { computeFitScale } from '../utils/computeFitScale'
 import { findNavigationTarget } from '../utils/previewNavigation'
 import { fuzzyMatchScreen } from '../utils/fuzzyMatchScreen'
 import { getDevicePreset, DEFAULT_DEVICE } from '../constants/devices'
+import { trackEvent } from '../lib/analytics'
 import type { ComponentNode } from '../types/mokkoi'
 import type { FlowConnection } from './FlowConnectors'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
@@ -18,6 +19,22 @@ interface RuntimeIframePreviewProps {
   deviceId?: DeviceId
   manualZoom?: number | null
   disabled?: boolean
+  /** Stable project identifier (Supabase row id). Threaded through for Week 5
+   *  Day 0 telemetry properties. Optional — if absent, events fire without it. */
+  projectId?: string
+}
+
+/** Recursive node count — used as a tree-size dimension on render telemetry.
+ *  Cheap (~O(n) one-pass) and only fires on actual posts, not on every render.
+ *  Children can be `ComponentNode | string` per the schema; strings (text leaves)
+ *  count as 1 node each. */
+function countTreeNodes(node: ComponentNode | string): number {
+  if (typeof node === 'string') return 1
+  let n = 1
+  if (Array.isArray(node.children)) {
+    for (const c of node.children) n += countTreeNodes(c)
+  }
+  return n
 }
 
 /** Production runtime preview. Drop-in replacement shape for InlineSnackPreview:
@@ -42,11 +59,23 @@ export function RuntimeIframePreview({
   deviceId,
   manualZoom = null,
   disabled = false,
+  projectId,
 }: RuntimeIframePreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
   const [iframeReady, setIframeReady] = useState(false)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
+
+  // Telemetry refs (Week 5 Day 0). mountTimeMs feeds runtime_iframe_ready's
+  // ms_since_mounted. lastPostMs feeds runtime_render_complete's ms_since_posted
+  // — set on every mokkoi:render-tree post, cleared on receipt of
+  // mokkoi:render-complete. Race condition (back-to-back posts produce one
+  // complete) is benign for a p50 metric and keeps us from changing the
+  // existing render-tree message shape with a postId field.
+  const mountTimeMs = useRef<number>(Date.now())
+  const lastPostMs = useRef<number | null>(null)
+  const lastPostScreenId = useRef<string | null>(null)
+  const lastPostNodeCount = useRef<number>(0)
 
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const isAndroid = device.category === 'Android'
@@ -83,18 +112,55 @@ export function RuntimeIframePreview({
     }
   }, [])
 
-  // Iframe ready handshake.
+  // Mount-time telemetry (Week 5 Day 0). Fires once per RuntimeIframePreview
+  // instance — i.e. canvas open with flag on, project switch, refresh-button
+  // bump (key change → new instance). flag_namespace is hardcoded 'live' to
+  // match the App.tsx key prefix; if the prefix scheme ever expands, lift this
+  // into a prop.
+  useEffect(() => {
+    mountTimeMs.current = Date.now()
+    lastPostMs.current = null
+    trackEvent('runtime_iframe_mounted', {
+      project_id: projectId,
+      screen_count: screens.length,
+      device_id: deviceId,
+      flag_namespace: 'live',
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Iframe ready handshake + render-complete listener (Week 5 Day 0).
+  // mokkoi:render-complete is the additive iframe-side signal posted after
+  // every ScreenRenderer commit; parent computes ms_since_posted from
+  // lastPostMs ref. Old iframe HTML cached in browsers won't post it; that
+  // session simply produces no runtime_render_complete events, no error.
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.source !== iframeRef.current?.contentWindow) return
       if (e.data?.type === 'mokkoi:runtime-ready') {
         console.log('[runtime-preview] runtime ready')
         setIframeReady(true)
+        trackEvent('runtime_iframe_ready', {
+          project_id: projectId,
+          ms_since_mounted: Date.now() - mountTimeMs.current,
+        })
+        return
+      }
+      if (e.data?.type === 'mokkoi:render-complete') {
+        const postedAt = lastPostMs.current
+        if (postedAt == null) return
+        trackEvent('runtime_render_complete', {
+          project_id: projectId,
+          screen_id: lastPostScreenId.current,
+          ms_since_posted: Date.now() - postedAt,
+          tree_node_count: lastPostNodeCount.current,
+        })
+        lastPostMs.current = null
       }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [])
+  }, [projectId])
 
   // Click routing — mirrors src/pages/RuntimePoc.tsx:179-221. FlowConnection,
   // then fuzzy name match, then echo mokkoi:click-unresolved so the runtime
@@ -108,10 +174,13 @@ export function RuntimeIframePreview({
       if (!activeScreenId) return
 
       const tried: string[] = []
+      const has_label = label.length > 0
 
       if (!label) {
         if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='' tried= matched=none reason=empty-label`)
         e.source?.postMessage({ type: 'mokkoi:click-unresolved', label: '', kind }, '*')
+        trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'unresolved' })
+        trackEvent('runtime_click_unresolved', { project_id: projectId, kind, label: '' })
         return
       }
 
@@ -120,6 +189,7 @@ export function RuntimeIframePreview({
       if (flowTarget) {
         if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=flowConnection:${flowTarget}`)
         if (flowTarget !== activeScreenId) onActiveScreenChange(flowTarget)
+        trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'flow_connection' })
         return
       }
 
@@ -128,11 +198,14 @@ export function RuntimeIframePreview({
       if (fuzzy) {
         if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=fuzzyName:${fuzzy.id}`)
         if (fuzzy.id !== activeScreenId) onActiveScreenChange(fuzzy.id)
+        trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'fuzzy_name' })
         return
       }
 
       if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=none`)
       e.source?.postMessage({ type: 'mokkoi:click-unresolved', label, kind }, '*')
+      trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'unresolved' })
+      trackEvent('runtime_click_unresolved', { project_id: projectId, kind, label })
     }
     window.addEventListener('message', onClick)
     return () => window.removeEventListener('message', onClick)
@@ -153,10 +226,23 @@ export function RuntimeIframePreview({
       console.error('[runtime-preview] expandComponents failed', err)
       return
     }
+    const treeJson = JSON.stringify(expanded)
+    const nodeCount = countTreeNodes(expanded)
     iframeRef.current?.contentWindow?.postMessage(
       { type: 'mokkoi:render-tree', tree: expanded },
       '*',
     )
+    // Telemetry (Week 5 Day 0). Stamp post-time refs BEFORE the message lands;
+    // they're consumed by the mokkoi:render-complete handler above.
+    lastPostMs.current = Date.now()
+    lastPostScreenId.current = activeScreen.id
+    lastPostNodeCount.current = nodeCount
+    trackEvent('runtime_render_tree_posted', {
+      project_id: projectId,
+      screen_id: activeScreen.id,
+      tree_node_count: nodeCount,
+      tree_byte_size: treeJson.length,
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeReady, treeFingerprint, disabled])
 

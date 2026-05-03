@@ -367,6 +367,7 @@ function RuntimeApp() {
   // Layer 2: ErrorBoundary catches anything that slips past validation and
   // crashes mid-render (e.g., undefined property access deep in the tree).
   // Same fallback UI as Layer 1 so the user sees one consistent state.
+  // `telemetrySurface="runtime"` enables Week 5 Day 0 PostHog tracking on catch.
   return (
     <div
       onClickCapture={handleCapture}
@@ -379,12 +380,47 @@ function RuntimeApp() {
         position: 'relative',
       }}
     >
-      <ErrorBoundary fallback={<RuntimeFallback message="Couldn't render this screen" />}>
+      <ErrorBoundary
+        fallback={<RuntimeFallback message="Couldn't render this screen" />}
+        telemetrySurface="runtime"
+      >
         <ScreenRenderer tree={validation.tree} />
+        <RenderCompleteSignal treeId={validation.tree} />
       </ErrorBoundary>
       <Toast state={toast} />
     </div>
   )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Render-complete signal
+ *
+ * Posts `mokkoi:render-complete` (iframe → parent) immediately after the
+ * ScreenRenderer commit settles. ADDITIVE new message type introduced Week 5
+ * Day 0 for first-paint p50 telemetry — old parent code that doesn't listen
+ * for it just ignores the message harmlessly. Existing message shapes are
+ * unchanged.
+ *
+ * Implementation: a useEffect keyed on the tree object fires after every
+ * render where the tree reference changed. Sits as a sibling of ScreenRenderer
+ * inside the same boundary so it only fires when the render actually committed
+ * (if ScreenRenderer throws, the boundary catches and this never runs — which
+ * is correct: a crashed render didn't "complete").
+ *
+ * No payload — parent correlates by maintaining its own "last post time" ref
+ * and computes the latency on receipt. We intentionally do NOT add a postId or
+ * screen_id field here, to avoid touching the existing `mokkoi:render-tree`
+ * shape. Race condition (back-to-back posts) is benign for a p50 metric.
+ *
+ * TODO (Week 5 Day 5 README): document `mokkoi:render-complete` in the
+ * runtime protocol message-types section when runtime/README.md is written.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+function RenderCompleteSignal({ treeId }: { treeId: ComponentNode }) {
+  useEffect(() => {
+    window.parent.postMessage({ type: 'mokkoi:render-complete' }, '*')
+  }, [treeId])
+  return null
 }
 
 createRoot(document.getElementById('root')!).render(<RuntimeApp />)

@@ -599,6 +599,10 @@ function App() {
                           deviceId: screens.projectDeviceId,
                           manualZoom: previewManualZoom,
                           disabled: ai.isGenerating || ai.isStreaming,
+                          // Threaded for Week 5 Day 0 telemetry — RuntimeIframePreview
+                          // tags PostHog events with project_id. InlineSnackPreview
+                          // ignores the extra prop (extra props pass through harmlessly).
+                          projectId,
                         }
                         // Sibling keys are namespaced ("static-" on PreviewPhoneFrame
                         // above, "live-" here) so they never collide while still
