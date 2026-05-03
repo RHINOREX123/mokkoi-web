@@ -156,6 +156,16 @@ const CREDIT_COSTS: Record<string, Record<string, number>> = {
   max:   { new_screen: 5, edit: 2, flow: 15, screenshot: 8, app: 20 }, // legacy alias for team
 }
 
+// Monthly credit allowance per plan. Aligned with src/lib/pricing.ts creditsPerMonth.
+// Re-used by stripe-webhook.ts when resetting credits on plan change / invoice.paid.
+export const PLAN_MONTHLY_CREDITS: Record<string, number> = {
+  free: 50,
+  hobby: 100,
+  pro: 250,
+  team: 750,
+  max: 750, // legacy alias
+}
+
 /**
  * Admin bypass: users whose email is listed in the ADMIN_EMAILS env var
  * skip all credit checks, rate limits, and deductions. Intended for founders

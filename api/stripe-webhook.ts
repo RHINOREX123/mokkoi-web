@@ -6,10 +6,10 @@ import { getSupabaseConfig } from './_lib/auth-helper.js'
 // `max` retained as legacy alias for `team`.
 const PLAN_CREDITS: Record<string, number> = {
   free: 50,
-  hobby: 110,
-  pro: 260,
-  team: 700,
-  max: 700, // legacy alias
+  hobby: 100,
+  pro: 250,
+  team: 750,
+  max: 750, // legacy alias
 }
 
 export const config = {
