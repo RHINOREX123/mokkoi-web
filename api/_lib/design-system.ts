@@ -70,6 +70,15 @@ Example (food delivery app, Home screen):
 
 NAVIGATION & LAYOUT (other macros):
 HeaderBar: {"type":"HeaderBar","props":{"title":"Settings","showBack":true,"rightIcons":["bell","more-horizontal"]}}
+
+HEADER BAR LEADING ICON RULES — back-arrow placement is a UX correctness rule, not a style choice:
+- Home / entry screens (the screens BottomNav tabs navigate to — typically named Home, Feed, Browse, Dashboard, and the other top-level tab destinations): set "showBack": false. There is nothing to go back TO from a top-level tab screen, so a back arrow is wrong.
+- Detail / sub-screens (e.g. "Entry Detail", "Session Detail", "Habit Detail", "Order Confirmation", "Edit Profile"): set "showBack": true. The user navigated FROM a parent screen, so the back arrow is correct.
+- Auth / Onboarding flow screens: "showBack": true on every screen except the very first.
+
+CORRECT (Home screen):    {"type":"HeaderBar","props":{"title":"Home","showBack":false,"rightIcons":["bell"]}}
+CORRECT (detail screen):  {"type":"HeaderBar","props":{"title":"Entry Detail","showBack":true,"rightIcons":["more-horizontal"]}}
+WRONG   (Home screen):    {"type":"HeaderBar","props":{"title":"Home","showBack":true,...}}   ← back arrow on a tab destination — FORBIDDEN
 TabBar: {"type":"TabBar","props":{"tabs":[{"label":"Posts","active":true},{"label":"Reels"},{"label":"Tagged"}]}}
 SectionHeader: {"type":"SectionHeader","props":{"title":"Recent Activity","actionText":"See All"}}
 SearchBar: {"type":"SearchBar","props":{"placeholder":"Search restaurants, food..."}}
