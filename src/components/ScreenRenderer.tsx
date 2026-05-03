@@ -398,7 +398,11 @@ function InteractiveSwitch({
 
 // Filter out prop-like junk strings the AI sometimes puts as children
 // (e.g. "_HORIZONTAL", "true", "false", prop names starting with _)
-const JUNK_CHILD_RE = /^[_A-Z][_A-Z0-9]+$|^(true|false|null|undefined|horizontal|vertical)$/i
+// First alternation must NOT be case-insensitive — with /i it matches single-word
+// capitalized labels like "Home"/"Entries"/"Calendar"/"Profile", silently
+// stripping BottomNav tab text and breaking the runtime click classifier
+// (which then falls back to the Material Symbols glyph name, e.g. "menu_book").
+const JUNK_CHILD_RE = /^[_A-Z][_A-Z0-9]+$|^(true|false|null|undefined|horizontal|vertical)$/
 
 function renderNode(node: ComponentNode | string, key: number): React.ReactNode {
   if (typeof node === 'string') {
