@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './_lib/auth-helper.js'
 import { normalizeComponentTree } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
+import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, buildPlannerSystem } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
 import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
@@ -233,10 +234,24 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
       }
     }
 
+    // Screen-name list for the BottomNav label validator. Built from the AI's
+    // own screen array so positional fallback (tab[i] → screenNames[i]) lines
+    // up with the order the AI thought about the app in.
+    const flowScreenNames: string[] = (screens as Array<{ id?: string; name?: string }>).map(
+      (s, i) => s.name || s.id || `Screen ${i + 1}`,
+    )
+
     screens = screens.map((s: any, i: number) => ({
       id: s.id || `screen-${i + 1}`,
       name: s.name || `Screen ${i + 1}`,
-      tree: normalizeComponentTree(expandComponents(s.tree || { type: 'View', style: {}, children: [] })),
+      tree: normalizeComponentTree(
+        expandComponents(
+          validateBottomNavLabels(
+            s.tree || { type: 'View', style: {}, children: [] },
+            flowScreenNames,
+          ),
+        ),
+      ),
     }))
 
     if (!user.isMCP) await deductCredits(user.id, 'flow', user.email)
@@ -392,9 +407,35 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     // re-generating the same app gives the same user.
     const persona = buildPersona(plan.appName || prompt)
 
+    // Screen-name list for the BottomNav label validator. Prefer the
+    // planner's tabScreens order (the canonical tab sequence) so positional
+    // substitution lines up with what the BottomNav items[] array represents.
+    // Fall back to the planner's full screen list in plan order.
+    const planScreenById = new Map<string, { id: string; name?: string }>()
+    for (const ps of (plan.screens || []) as Array<{ id: string; name?: string }>) {
+      if (ps?.id) planScreenById.set(ps.id, ps)
+    }
+    const tabScreenNames: string[] = Array.isArray(plan.navigation?.tabScreens)
+      ? (plan.navigation!.tabScreens as string[])
+          .map(id => planScreenById.get(id)?.name)
+          .filter((n): n is string => typeof n === 'string' && n.length > 0)
+      : []
+    const planScreenNames: string[] = tabScreenNames.length > 0
+      ? tabScreenNames
+      : ((plan.screens || []) as Array<{ name?: string }>)
+          .map(s => s.name)
+          .filter((n): n is string => typeof n === 'string' && n.length > 0)
+
     const normalizedScreens = screens.map((s: any, i: number) => {
       const screenId = crypto.randomUUID()
-      const tree = normalizeComponentTree(expandComponents(s.tree || { type: 'View', style: {}, children: [] }))
+      const tree = normalizeComponentTree(
+        expandComponents(
+          validateBottomNavLabels(
+            s.tree || { type: 'View', style: {}, children: [] },
+            planScreenNames,
+          ),
+        ),
+      )
       // Walk the tree and replace any invented person-name/email with the shared persona.
       applyPersonaToTree(tree, persona)
       const normalized = {
