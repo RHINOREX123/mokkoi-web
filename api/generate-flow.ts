@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './_lib/auth-helper.js'
 import { normalizeComponentTree } from './_lib/normalizer.js'
+import { expandComponents } from '../lib/component-library.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, buildPlannerSystem } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
 import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
@@ -235,7 +236,7 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
     screens = screens.map((s: any, i: number) => ({
       id: s.id || `screen-${i + 1}`,
       name: s.name || `Screen ${i + 1}`,
-      tree: normalizeComponentTree(s.tree || { type: 'View', style: {}, children: [] }),
+      tree: normalizeComponentTree(expandComponents(s.tree || { type: 'View', style: {}, children: [] })),
     }))
 
     if (!user.isMCP) await deductCredits(user.id, 'flow', user.email)
@@ -393,7 +394,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
 
     const normalizedScreens = screens.map((s: any, i: number) => {
       const screenId = crypto.randomUUID()
-      const tree = normalizeComponentTree(s.tree || { type: 'View', style: {}, children: [] })
+      const tree = normalizeComponentTree(expandComponents(s.tree || { type: 'View', style: {}, children: [] }))
       // Walk the tree and replace any invented person-name/email with the shared persona.
       applyPersonaToTree(tree, persona)
       const normalized = {
