@@ -572,7 +572,7 @@ Generate a fitness app. Edit "Make it darker" via chat. Watch the runtime smooth
 
 ### Tasks
 
-- [x] **Day 0 (added 2026-05-03; landed 2026-05-03) — Telemetry instrumentation.** Lands the events that gate the Week 5 Day 2-3 flag-flip per the criteria in the Week 4 retrospective. **Transport: PostHog.** No new infra, no migration, no new table. PostHog is already wired (`src/lib/analytics.ts:22` `trackEvent(event, properties)`) and consumed from 12+ call sites including `useAIGeneration`, `Dashboard`, `AuthPage`, `useScreenExport`. `usage_logs` (Supabase) is intentionally NOT used — it's an API-side billing ledger, wrong shape for client-side latency/error rollups, would need RLS reshaping. Sentry was considered and rejected as scope creep for the cutover.
+- [~] **Day 0 (added 2026-05-03; code shipped 2026-05-03, live verification pending) — Telemetry instrumentation.** Lands the events that gate the Week 5 Day 2-3 flag-flip per the criteria in the Week 4 retrospective. **Transport: PostHog.** No new infra, no migration, no new table. PostHog is already wired (`src/lib/analytics.ts:22` `trackEvent(event, properties)`) and consumed from 12+ call sites including `useAIGeneration`, `Dashboard`, `AuthPage`, `useScreenExport`. `usage_logs` (Supabase) is intentionally NOT used — it's an API-side billing ledger, wrong shape for client-side latency/error rollups, would need RLS reshaping. Sentry was considered and rejected as scope creep for the cutover.
 
   **Event list:**
 

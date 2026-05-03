@@ -14,6 +14,21 @@ Area tags: `RENDERER`, `PROMPT`, `RUNTIME`, `EVAL`, `INFRA`, `UX`, `DOCS`.
 
 ## Open
 
+### `[P3, RUNTIME]` Day 0 telemetry render-complete correlation: single-slot lastPostMs drops samples on back-to-back posts
+
+Week 5 Day 0 telemetry (commit `4c9c5e0`) correlates `mokkoi:render-complete` (iframe → parent) with the most recent `mokkoi:render-tree` post via a single-slot `lastPostMs` ref in `RuntimeIframePreview.tsx:55-58`, cleared on receipt. Acceptable today because the iframe is `disabled = isGenerating || isStreaming` from App.tsx, so back-to-back posts don't happen — every post has time to round-trip its complete before the next one arrives.
+
+**Day 1 hot-updates breaks this assumption.** Once the parent posts a delta tree on every canvas edit (no longer waiting for stream-complete), back-to-back posts within a single render cycle will produce one `mokkoi:render-complete` that the parent attributes to the latest post — earlier posts in the burst silently drop their `runtime_render_complete` event. P50 rollups would still be roughly correct (latest sample dominates frequency); p95 and burst-latency analysis would be misleading.
+
+**Three options, decide as a Day 1 design step:**
+- **(a) Add `postId: number` to `mokkoi:render-tree`.** Parent maintains `Map<postId, timestamp>`, iframe echoes `postId` in `mokkoi:render-complete`, parent computes per-post latency and deletes the map entry on receipt. **Strict correlation, but a shape change to an existing protocol message** — requires re-confirmation against the hard rule. Backwards-compatible for old iframes (parent ignores completes with unknown postId).
+- **(b) Iframe self-reports paint latency without parent correlation.** Iframe records its own `Date.now()` on `mokkoi:render-tree` receipt and on render commit, computes the delta itself, posts `mokkoi:render-complete` with the latency in payload. Parent just records the number. Loses parent-side post-receipt latency (postMessage transit time + React scheduler delay) but gains strict per-render correlation.
+- **(c) Accept sample drops as a known measurement limitation during hot-updates.** Document the gap in the Week 5 Day 1 commit and the `runtime/README.md` (Day 5). Burst-latency analysis becomes "best-effort", p50 across long sessions remains valid.
+
+Discovered Week 5 Day 0 (2026-05-03) implementation review. Severity: medium for Week 5 Day 1 onward; zero today (no back-to-back posts happen). **Capture the decision as a Day 1 design checkpoint before writing any hot-update code** — picking (a) blocks on re-confirming the protocol-shape rule; (b) is implementable without that confirmation; (c) ships fastest but degrades the perf-floor measurement that gates the flag-flip.
+
+---
+
 ### `[P3, RUNTIME]` Per-component error isolation in ScreenRenderer
 
 Layer 3 of error defense: wrap each render-recursion in its own boundary so one bad node doesn't kill its siblings. Useful for partial-render-on-error UX but requires modifying `ScreenRenderer` (shared with canvas, currently forbidden under hard rule). Defer until there's a real crash signal from production. Discovered Week 4 Day 2. Severity: low — Layers 1+2 (validateTree pre-render + ErrorBoundary at render) cover realistic failure modes.
