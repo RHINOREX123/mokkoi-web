@@ -276,7 +276,7 @@ export default function PricingPage() {
               marginLeft: 6, fontSize: 11, fontWeight: 700,
               background: 'rgba(52,211,153,0.15)', color: '#34d399',
               padding: '2px 6px', borderRadius: 4,
-            }}>Save 20%</span>
+            }}>Save 15%</span>
           </button>
         </div>
       </div>
@@ -339,7 +339,7 @@ export default function PricingPage() {
                     )}
                     {isAnnual && plan.monthlyPrice > 0 && !plan.perSeat && (
                       <div style={{ fontSize: 12, color: '#34d399', marginTop: 4 }}>
-                        Save 20% vs monthly
+                        Save 15% vs monthly
                       </div>
                     )}
                   </div>

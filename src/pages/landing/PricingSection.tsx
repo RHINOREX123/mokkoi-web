@@ -193,7 +193,7 @@ export function PricingSection() {
               marginLeft: 6, fontSize: 11, fontWeight: 700,
               background: 'rgba(20,184,166,0.18)', color: COLORS.teal,
               padding: '2px 6px', borderRadius: 4,
-            }}>Save 20%</span>
+            }}>Save 15%</span>
           </button>
         </div>
       </div>

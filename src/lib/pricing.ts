@@ -22,7 +22,7 @@ export interface Plan {
   features: string[]            // bullet list, plain text
 }
 
-export const ANNUAL_DISCOUNT_PCT = 20
+export const ANNUAL_DISCOUNT_PCT = 15
 
 export const PLANS: Plan[] = [
   {
@@ -46,12 +46,12 @@ export const PLANS: Plan[] = [
     name: 'Hobby',
     tagline: 'Build on the side',
     monthlyPrice: 12,
-    annualPrice: 115,
-    creditsPerMonth: 150,
+    annualPrice: 122,
+    creditsPerMonth: 110,
     cta: 'Start Hobby',
     ctaMode: 'waitlist',
     features: [
-      '150 credits / month',
+      '110 credits / month',
       'Everything in Free',
       'GitHub export',
       'Unlimited projects',
@@ -63,19 +63,19 @@ export const PLANS: Plan[] = [
     name: 'Pro',
     tagline: 'Ship products',
     monthlyPrice: 29,
-    annualPrice: 279,
-    creditsPerMonth: 400,
+    annualPrice: 296,
+    creditsPerMonth: 260,
     badge: 'most-popular',
     cta: 'Start Pro',
     ctaMode: 'waitlist',
-    overage: '$0.08 / credit',
+    overage: '$0.12 / credit',
     features: [
-      '400 credits / month',
+      '260 credits / month',
       'Everything in Hobby',
       'MCP API access',
       'Custom branding (no Mokkoi watermark)',
       'Priority generation queue',
-      'Overage at $0.08 / credit',
+      'Overage at $0.12 / credit',
     ],
   },
   {
@@ -83,28 +83,28 @@ export const PLANS: Plan[] = [
     name: 'Team',
     tagline: 'Build together',
     monthlyPrice: 79,
-    annualPrice: 759,
+    annualPrice: 806,
     perSeat: true,
     minSeats: 3,
-    creditsPerMonth: 1000,
+    creditsPerMonth: 700,
     cta: 'Talk to a founder',
     ctaMode: 'mailto',
     ctaTarget: 'sahil@mokkoi.com',
-    overage: '$0.06 / credit',
+    overage: '$0.10 / credit',
     features: [
-      '1,000 pooled credits / seat / month',
+      '700 pooled credits / seat / month',
       'Everything in Pro',
       'Shared workspace + project handoff',
       'Centralized billing',
       'SSO (Google Workspace, Okta)',
       'Dedicated Slack with founders',
-      'Overage at $0.06 / credit',
+      'Overage at $0.10 / credit',
     ],
   },
 ]
 
 export const CREDIT_COSTS = [
-  { credits: 1, label: 'Single screen edit' },
+  { credits: 2, label: 'Single screen edit' },
   { credits: 5, label: 'New screen' },
   { credits: 8, label: 'Screenshot → screen' },
   { credits: 15, label: '3-screen flow' },
@@ -114,7 +114,7 @@ export const CREDIT_COSTS = [
 export const FAQS = [
   {
     q: 'Why credits, not "messages"?',
-    a: "A one-line tweak shouldn't cost the same as a full 8-screen app. Credits scale with the work: 1 for an edit, 5 for a new screen, 20 for a full app.",
+    a: "A one-line tweak shouldn't cost the same as a full 8-screen app. Credits scale with the work: 2 for an edit, 5 for a new screen, 20 for a full app.",
   },
   {
     q: 'What if I run out?',

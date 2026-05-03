@@ -145,10 +145,15 @@ export async function checkRateLimit(
 
 // --- Credit-based system ---
 
+// Credit costs by plan + generation type. Aligned with src/lib/pricing.ts CREDIT_COSTS.
+// Edit bumped 1 → 2 to keep edit-heavy users above 50% gross margin.
+// `max` retained as legacy alias for `team` so existing DB rows keep working.
 const CREDIT_COSTS: Record<string, Record<string, number>> = {
-  free: { new_screen: 5, edit: 1, flow: 15, screenshot: 8, app: 20 },
-  pro: { new_screen: 5, edit: 1, flow: 15, screenshot: 8, app: 20 },
-  max: { new_screen: 3, edit: 1, flow: 10, screenshot: 5, app: 15 },
+  free:  { new_screen: 5, edit: 2, flow: 15, screenshot: 8, app: 20 },
+  hobby: { new_screen: 5, edit: 2, flow: 15, screenshot: 8, app: 20 },
+  pro:   { new_screen: 5, edit: 2, flow: 15, screenshot: 8, app: 20 },
+  team:  { new_screen: 5, edit: 2, flow: 15, screenshot: 8, app: 20 },
+  max:   { new_screen: 5, edit: 2, flow: 15, screenshot: 8, app: 20 }, // legacy alias for team
 }
 
 /**
