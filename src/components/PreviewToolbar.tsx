@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Minus, Plus, RotateCw, Smartphone } from 'lucide-react'
 import { DEVICE_PRESETS, getDevicePreset } from '../constants/devices'
 import { MIN_ZOOM, MAX_ZOOM } from '../utils/computeFitScale'
@@ -43,27 +44,52 @@ function DeviceDropdown({
   onDeviceChange: (deviceId: DeviceId) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [buttonRect, setButtonRect] = useState<{ top: number; left: number } | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const device = getDevicePreset(deviceId)
+
+  // Re-measure the trigger button's screen position when the dropdown opens, and
+  // again on scroll/resize while open. The dropdown panel is rendered into a
+  // portal (document.body) to escape the toolbar's backdrop-filter stacking
+  // context, so we position it via fixed coords from the trigger's rect.
+  useEffect(() => {
+    if (!open) return
+    const measure = () => {
+      const r = triggerRef.current?.getBoundingClientRect()
+      if (r) setButtonRect({ top: r.bottom + 6, left: r.left })
+    }
+    measure()
+    window.addEventListener('scroll', measure, true)
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('resize', measure)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
     const onDocMouseDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      // Dropdown panel lives in a portal, so it's NOT a DOM descendant of
+      // wrapRef. Accept clicks inside either the wrapper (trigger button) or
+      // the portal'd panel.
+      const insideWrap = wrapRef.current?.contains(t) ?? false
+      const insidePanel = dropdownRef.current?.contains(t) ?? false
+      if (!insideWrap && !insidePanel) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDocMouseDown)
     document.addEventListener('keydown', onKey)
 
-    // Stop wheel events from bubbling out of the dropdown. The canvas-side div
-    // higher up the tree has a non-passive wheel listener that preventDefaults
-    // every wheel event outside `.phone-screen` to drive canvas pan/zoom — that
-    // killed scrolling inside this dropdown. A class-based exception in the
-    // canvas wheel handler should already cover us, but stopPropagation here
-    // is defense in depth: wheel events simply don't reach canvas-side, so
-    // there's no way for it to interfere. Native scroll on the inner listbox
-    // proceeds because we never call preventDefault.
+    // Stop wheel events from bubbling out of the portal'd panel. Defense in
+    // depth — the canvas-side wheel listener already exempts
+    // `.mokkoi-device-menu`, but the panel is now in document.body so this
+    // is also belt-and-braces against any other ancestor wheel handlers.
+    // Native scroll on the inner listbox proceeds because we never call
+    // preventDefault.
     const dropdown = dropdownRef.current
     const onWheel = (e: WheelEvent) => { e.stopPropagation() }
     if (dropdown) dropdown.addEventListener('wheel', onWheel, { passive: false })
@@ -98,6 +124,7 @@ function DeviceDropdown({
         .mokkoi-device-menu::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.85); border: 2px solid #ffffff; background-clip: padding-box; }
       `}</style>
       <button
+        ref={triggerRef}
         type="button"
         aria-label="Device"
         aria-haspopup="listbox"
@@ -112,16 +139,25 @@ function DeviceDropdown({
           style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b' }}
         />
       </button>
-      {open && (
+      {open && buttonRect && createPortal(
         // Outer wrapper holds the scrollable list AND a sticky fade-gradient
         // overlay that signals "more below." Without the overlay, users on
         // Windows Chrome who don't notice the scrollbar (even when styled)
         // assume the visible iPhones are the entire list and miss the
         // visually-different devices (Pixel/Galaxy/iPad) below.
+        //
+        // Rendered via createPortal into document.body. The toolbar has
+        // `backdrop-filter: blur(8px)` which forms a stacking context, and
+        // App.tsx's preview wrapper (later in DOM, position: relative) painted
+        // on top of it — so the in-tree dropdown was visually visible but
+        // pointer events at those coordinates went to the preview wrapper
+        // instead. Portaling escapes the toolbar's stacking context entirely
+        // so the panel sits at the document root with z-index 200 winning
+        // unambiguously over everything else.
         <div ref={dropdownRef} style={{
-          position: 'absolute',
-          top: 'calc(100% + 6px)',
-          left: 0,
+          position: 'fixed',
+          top: buttonRect.top,
+          left: buttonRect.left,
           minWidth: 240,
           background: '#ffffff',
           border: '1px solid rgba(0,0,0,0.08)',
@@ -219,7 +255,8 @@ function DeviceDropdown({
           <span style={{ animation: 'mokkoi-bounce-y 1.6s ease-in-out infinite', display: 'inline-block' }}>↓</span>
         </div>
         <style>{`@keyframes mokkoi-bounce-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }`}</style>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
