@@ -26,13 +26,20 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 const apiKey = process.env.ANTHROPIC_API_KEY
 if (!apiKey) { console.error('ANTHROPIC_API_KEY missing'); process.exit(1) }
 
+// Model override for the generator phase. Planner stays Haiku (cheap+fast,
+// matches production). Set via env: MODEL=claude-sonnet-4-20250514 node …
+// Defaults to Haiku to stay cheap.
+const MODEL = process.env.MODEL || 'claude-haiku-4-5-20251001'
+console.log(`[verify-bottomnav] generator model: ${MODEL}`)
+
 const { default: prompts } = await import('./_load-prompts.mjs')
 const { plannerSystem, appGenerationSystem } = prompts
 
 const TEST_PROMPTS = [
-  { id: 'fitness', prompt: 'Build a fitness tracker with home, workouts, progress, and profile screens' },
-  { id: 'recipe', prompt: 'Build a recipe app with browse, search, favorites, and profile' },
-  { id: 'expense', prompt: 'Build an expense tracker with home, transactions, add expense, and profile' },
+  { id: 'meditation', prompt: 'Build a meditation app with home, sessions, library, and profile' },
+  { id: 'habit',     prompt: 'Build a habit tracker with home, habits, stats, and profile' },
+  { id: 'photos',    prompt: 'Build a photo gallery app with feed, albums, search, and profile' },
+  { id: 'news',      prompt: 'Build a news reader with feed, categories, saved, and profile' },
 ]
 
 const TOKEN_BUDGET = 10_000, WINDOW_MS = 60_000
@@ -89,6 +96,45 @@ function findBottomNavs(tree, out = []) {
   const kids = Array.isArray(tree.children) ? tree.children : []
   for (const k of kids) findBottomNavs(k, out)
   return out
+}
+
+// Inline mirror of api/_lib/bottomnav-validator.ts. Keep in sync if that file
+// changes. Toggled via VALIDATE=1 env so we can capture a raw baseline first
+// and a post-validator pass second.
+function normalizeName(s) {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/\s*screen$/, '').trim()
+}
+function matchesAnyScreen(label, screenNames) {
+  const target = normalizeName(label)
+  if (!target) return false
+  for (const n of screenNames) {
+    const ns = normalizeName(n)
+    if (!ns) continue
+    if (ns === target) return true
+    if (ns.includes(target) || target.includes(ns)) return true
+  }
+  return false
+}
+function validateBottomNavLabels(tree, screenNames) {
+  if (!Array.isArray(screenNames) || screenNames.length === 0) return tree
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'BottomNav' && node.props && Array.isArray(node.props.items)) {
+      const items = node.props.items
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (!item || typeof item !== 'object') continue
+        const label = String(item.label ?? '').trim()
+        if (matchesAnyScreen(label, screenNames)) continue
+        if (i < screenNames.length && screenNames[i]) {
+          item.label = screenNames[i]
+        }
+      }
+    }
+    if (Array.isArray(node.children)) for (const c of node.children) walk(c)
+  }
+  walk(tree)
+  return tree
 }
 
 async function generateApp(testPrompt) {
@@ -151,7 +197,7 @@ Return ONLY a JSON object with this exact shape, no markdown, no explanation:
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const resp = await callAnthropic({
-          model: 'claude-haiku-4-5-20251001', max_tokens: 5500,
+          model: MODEL, max_tokens: 5500,
           system: appGenerationSystem,
           messages: [{ role: 'user', content: userPrompt }],
         })
@@ -164,6 +210,16 @@ Return ONLY a JSON object with this exact shape, no markdown, no explanation:
       } catch (err) { lastErr = err; if (attempt < 2) await new Promise(r => setTimeout(r, 2000)) }
     }
     if (screen) {
+      // Mirror production: apply BottomNav label validator before evaluation.
+      // Toggled off by VALIDATE=0 to capture a pre-validator baseline.
+      if (process.env.VALIDATE !== '0') {
+        const tabIds = plan.navigation?.tabScreens
+        const planScreenById = new Map(planScreens.map(p => [p.id, p]))
+        const screenNames = Array.isArray(tabIds) && tabIds.length > 0
+          ? tabIds.map(id => planScreenById.get(id)?.name).filter(Boolean)
+          : planScreens.map(p => p.name).filter(Boolean)
+        validateBottomNavLabels(screen.tree, screenNames)
+      }
       generatedScreens.push(screen)
       console.log(`    ✓ ${i+1}/${planScreens.length} "${s.name}"`)
     } else {
@@ -229,6 +285,7 @@ for (const r of results) {
 }
 console.log(`\n${pass}/${results.length} apps pass`)
 
-writeFileSync(new URL('./verify-bottomnav-results.json', import.meta.url), JSON.stringify(results, null, 2))
-console.log('saved → eval/verify-bottomnav-results.json')
+const outFile = process.env.OUT || 'verify-bottomnav-results.json'
+writeFileSync(new URL(`./${outFile}`, import.meta.url), JSON.stringify(results, null, 2))
+console.log(`saved → eval/${outFile}`)
 process.exit(pass >= 2 ? 0 : 1)

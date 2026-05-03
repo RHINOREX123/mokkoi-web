@@ -2,7 +2,7 @@
   {
     "id": "meditation",
     "ev": {
-      "app": "MindfulFlow",
+      "app": "ZenFlow",
       "navOnScreen": "Home",
       "rows": [
         {
@@ -13,15 +13,15 @@
         },
         {
           "label": "Sessions",
-          "icon": "music",
+          "icon": "play",
           "matchesScreen": true,
           "labelEqualsIcon": false
         },
         {
           "label": "Library",
-          "icon": "library",
+          "icon": "bookmark",
           "matchesScreen": true,
-          "labelEqualsIcon": true
+          "labelEqualsIcon": false
         },
         {
           "label": "Profile",
@@ -49,13 +49,13 @@
         },
         {
           "label": "Habits",
-          "icon": "check-circle",
+          "icon": "list",
           "matchesScreen": true,
           "labelEqualsIcon": false
         },
         {
           "label": "Stats",
-          "icon": "bar-chart-2",
+          "icon": "bar-chart",
           "matchesScreen": true,
           "labelEqualsIcon": false
         },
@@ -79,13 +79,13 @@
       "rows": [
         {
           "label": "Feed",
-          "icon": "home",
+          "icon": "image",
           "matchesScreen": true,
           "labelEqualsIcon": false
         },
         {
           "label": "Albums",
-          "icon": "bookmark",
+          "icon": "folder",
           "matchesScreen": true,
           "labelEqualsIcon": false
         },
@@ -132,21 +132,15 @@
           "labelEqualsIcon": false
         },
         {
-          "label": "Search",
-          "icon": "search",
-          "matchesScreen": true,
-          "labelEqualsIcon": true
-        },
-        {
           "label": "Profile",
           "icon": "user",
           "matchesScreen": true,
           "labelEqualsIcon": false
         }
       ],
-      "matched": 5,
-      "total": 5,
-      "ok": false
+      "matched": 4,
+      "total": 4,
+      "ok": true
     }
   }
 ]
