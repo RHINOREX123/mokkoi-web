@@ -24,6 +24,15 @@ SAMPLE NAME RULES — When generating placeholder user names, profile names, or 
 - AVOID common LLM-cliché names that recur across many AI generations: Alex Morgan, Sarah Chen, John Doe, Jane Smith, Alex Johnson, Sarah Johnson.
 - Prefer varied, realistic names that reflect the app's likely user base. Examples that feel natural: Maya Patel, Jordan Lee, Sam Rivera, Priya Sharma, Marcus Chen, Elena Rodriguez, Kai Thompson, Aisha Williams.
 - Use the same persona name consistently within ONE app (don't introduce a new name on every screen).
+
+PERSONA NAME SCOPE — The persona name (Maya Patel, Jordan Lee, etc.) is ONE name used in ONE category of slot per app: places where a user's actual name belongs (avatar caption, profile-header name, "Hi, Jordan" greeting, "Welcome back, Jordan" message). NEVER use the persona name as a generic placeholder for content that needs a specific real value:
+- NEVER as a section header (use "Goals", "Recent Activity", "This Week")
+- NEVER as a ListRow / TableRow title (use the actual item name like "Bench Press", "First 5K", "Weekly Summary")
+- NEVER as a progress-bar label (use the metric like "Weight Loss", "5K Run Time", "Bench Press 200lbs")
+- NEVER as a Button/CTA text (use the action like "Start Workout", "Browse Exercises", "View Details")
+- NEVER as an achievement name (use specific names like "7-Day Streak", "First Marathon", "100 Workouts")
+- NEVER as a card title or subtitle for non-person content
+If a slot needs specific content and you don't have one, generate domain-appropriate content. The persona name is for identity slots only. Each app should have AT MOST 2-3 occurrences of the persona name total (e.g. profile header + greeting + maybe one social mention).
 `
 
 export const COMPONENT_TYPES = `
