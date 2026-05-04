@@ -546,7 +546,7 @@ export default function Dashboard() {
           <div style={{
             width: 28, height: 28, borderRadius: 8,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
             color: '#fff', fontSize: 12, fontWeight: 800,
           }}>M</div>
           <span style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>Mokkoi</span>
@@ -587,7 +587,7 @@ export default function Dashboard() {
                 </div>
                 <button onClick={() => { navigate('/pricing'); setShowCreditsDropdown(false) }} style={{
                   width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff',
+                  background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)', color: '#fff',
                   border: 'none', cursor: 'pointer',
                 }}>
                   {credits.plan === 'free' ? 'Upgrade to Pro' : 'View Plans'}
@@ -601,7 +601,7 @@ export default function Dashboard() {
         <div ref={userMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
           <div onClick={() => setShowUserMenu(!showUserMenu)} style={{
             width: 32, height: 32, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer',
             transition: 'box-shadow 0.2s',
@@ -616,7 +616,7 @@ export default function Dashboard() {
               <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                  background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
                 }}>{userInitial}</div>
@@ -677,9 +677,9 @@ export default function Dashboard() {
         alignItems: 'center', justifyContent: 'center',
         padding: '40px 24px',
         background: `
-          radial-gradient(ellipse 700px 480px at 22% 28%, rgba(20,184,166,0.32) 0%, transparent 55%),
-          radial-gradient(ellipse 640px 460px at 78% 72%, rgba(6,182,212,0.28) 0%, transparent 55%),
-          radial-gradient(ellipse 900px 600px at 50% 50%, rgba(45,212,191,0.10) 0%, transparent 65%),
+          radial-gradient(ellipse 1300px 520px at 50% 110%, rgba(20,184,166,0.28) 0%, transparent 60%),
+          radial-gradient(ellipse 700px 360px at 30% 95%, rgba(6,182,212,0.18) 0%, transparent 65%),
+          radial-gradient(ellipse 700px 360px at 72% 95%, rgba(45,212,191,0.14) 0%, transparent 65%),
           #000000
         `,
         }}>
