@@ -308,7 +308,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 {msg.role === 'assistant' && (
                   <div style={{
                     width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                    background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                    background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 8, fontWeight: 800, color: '#fff',
                   }}>
@@ -457,7 +457,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
               <div style={{
                 width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 8, fontWeight: 800, color: '#fff',
               }}>
@@ -661,7 +661,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 Editing
               </div>
               <div style={{
-                fontSize: 12, color: '#818cf8', fontWeight: 600,
+                fontSize: 12, color: '#f1f5f9', fontWeight: 600,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {selectedScreenName}
@@ -737,7 +737,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
         }}>
           <div style={{
             width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 9, fontWeight: 800, color: '#fff',
             boxShadow: '0 1px 4px rgba(99,102,241,0.4)',
@@ -807,7 +807,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 padding: '8px 20px',
                 borderRadius: 10,
                 background: (input.trim() || attachedImage) && !isGenerating
-                  ? 'linear-gradient(135deg, #6366f1, #818cf8)'
+                  ? 'linear-gradient(135deg, #2dd4bf, #06b6d4)'
                   : 'rgba(255,255,255,0.06)',
                 boxShadow: (input.trim() || attachedImage) && !isGenerating
                   ? '0 2px 12px rgba(99,102,241,0.2)'
