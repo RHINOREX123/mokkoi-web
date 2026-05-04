@@ -404,6 +404,42 @@ function InteractiveSwitch({
 // (which then falls back to the Material Symbols glyph name, e.g. "menu_book").
 const JUNK_CHILD_RE = /^[_A-Z][_A-Z0-9]+$|^(true|false|null|undefined|horizontal|vertical)$/
 
+// Subtree size of a generated chip — text label + maybe one icon. Cards/list
+// rows have 5+ descendants. Used by isChipRowView below to spot horizontal
+// chip rows that the AI emits as plain View+TouchableOpacity (no ScrollView),
+// which then word-break on labels like "Beginner" into "Begi nner" when the
+// row overflows the screen.
+function shallowNodeSize(node: ComponentNode): number {
+  let n = 1
+  if (Array.isArray(node.children)) {
+    for (const c of node.children) {
+      if (typeof c === 'string') n += 1
+      else if (c && typeof c === 'object') n += shallowNodeSize(c)
+    }
+  }
+  return n
+}
+
+// Detects chip rows: a horizontal View whose direct children are 3+ small
+// TouchableOpacity (or Pressable/Button) chips. Distinguishes from full card
+// rows (size > 6) and from regular toolbars.
+function isChipRowView(node: ComponentNode, style: React.CSSProperties): boolean {
+  if (style.flexDirection !== 'row') return false
+  const children = Array.isArray(node.children) ? node.children : []
+  if (children.length < 3) return false
+  let touchables = 0
+  let chipLike = 0
+  for (const c of children) {
+    if (typeof c !== 'object' || c == null) continue
+    const t = c.type
+    if (t === 'TouchableOpacity' || t === 'Pressable' || t === 'Button') {
+      touchables++
+      if (shallowNodeSize(c) <= 6) chipLike++
+    }
+  }
+  return touchables >= 3 && chipLike >= 3
+}
+
 function renderNode(node: ComponentNode | string, key: number): React.ReactNode {
   if (typeof node === 'string') {
     // Filter junk strings at every level, not just direct children
@@ -435,8 +471,21 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       const rootOverrides: React.CSSProperties = isRoot
         ? { flex: 1, minHeight: '100%', overflow: 'hidden' }
         : {}
+      // Chip-row override: AI emits horizontal filter chips as plain
+      // flexDirection:row Views with no scroll wrapper; long labels wrap mid-
+      // word ("Begi nner") when the row overflows. Force nowrap + horizontal
+      // overflow + className so the global CSS (.mokkoi-chip-row) can hide
+      // the scrollbar and pin children to flex-shrink:0 / nowrap text.
+      const isChipRow = node.type === 'View' && !isRoot && isChipRowView(node, style)
+      const chipRowOverrides: React.CSSProperties = isChipRow
+        ? { flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }
+        : {}
       return (
-        <div key={key} style={{ ...VIEW_BASE, ...style, ...rootOverrides }}>
+        <div
+          key={key}
+          className={isChipRow ? 'mokkoi-chip-row' : undefined}
+          style={{ ...VIEW_BASE, ...style, ...rootOverrides, ...chipRowOverrides }}
+        >
           {children}
         </div>
       )

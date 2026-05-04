@@ -41,6 +41,33 @@ function isBottomNavRow(el: Element | null): boolean {
   return el.querySelectorAll(':scope > [role="button"]').length >= 2
 }
 
+/** Filter/segment chip-row detector. Generated screens often emit a horizontal
+ *  row of TouchableOpacity chips (All / Easy / Tempo / Intervals / Advanced)
+ *  which the wirer may pre-resolve to nav targets — but these are local UI
+ *  state, not navigation. Heuristic: parent flexDirection:row, ALL children
+ *  are [role="button"] (no title Text mixed in — that's a header, not a
+ *  chip row), 3+ buttons total, each with a small subtree (≤4 descendants on
+ *  the median). BottomNav is filtered out earlier in classifyClickedElement
+ *  (its row has paddingBottom>=24 + borderTopWidth>=1). */
+function isFilterChipClick(btn: HTMLElement): boolean {
+  const parent = btn.parentElement
+  if (!(parent instanceof HTMLElement)) return false
+  if (parent.style.flexDirection !== 'row') return false
+  const allChildren = Array.from(parent.children).filter(
+    c => c instanceof HTMLElement,
+  ) as HTMLElement[]
+  // Header rows (back arrow + title + actions) mix buttons with a Text title.
+  // Real chip rows are 100% buttons. If anything non-button sits in the row,
+  // bail — this is the fix for back-arrow being swallowed in detail-screen
+  // headers like "← 5K Race Prep ♡ ↗".
+  const buttons = allChildren.filter(c => c.getAttribute('role') === 'button')
+  if (buttons.length !== allChildren.length) return false
+  if (buttons.length < 3) return false
+  const counts = buttons.map(s => s.querySelectorAll('*').length).sort((a, b) => a - b)
+  const median = counts[Math.floor(counts.length / 2)] ?? 0
+  return median <= 4
+}
+
 /** Did the click happen inside a list-row pattern (FlatList content, or a
  *  hand-built column of repeating clickable rows)?
  *
@@ -134,7 +161,14 @@ function classifyClickedElement(target: EventTarget | null): Classified | null {
     return { kind: 'BottomNavTab', label, tabIndex: siblings.indexOf(btn) }
   }
 
-  // 3. List-row pattern? Defer (Phase 2 macro metadata problem).
+  // 3. Filter/segment chip row? Defer with no toast — these are local UI state,
+  // not navigation. The wirer may have wired chips to a destination; this is
+  // the runtime safety net.
+  if (isFilterChipClick(btn)) {
+    return { kind: 'Deferred', label: extractButtonLabel(btn), deferReason: 'filter-chip' }
+  }
+
+  // 4. List-row pattern? Defer (Phase 2 macro metadata problem).
   if (isListRowClick(btn)) {
     return { kind: 'Deferred', label: '', deferReason: 'list-row' }
   }
@@ -337,6 +371,13 @@ function RuntimeApp() {
           },
           '*',
         )
+        return
+      }
+      if (c.deferReason === 'filter-chip') {
+        // Filter chips are local UI state. Suppress navigation entirely; no
+        // toast (a "not wired" message here would be wrong — this is the
+        // intended behaviour). The chip's pressed-opacity + active CSS
+        // already gives the user tap feedback.
         return
       }
       showToast('This click type is not yet wired')

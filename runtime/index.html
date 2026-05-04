@@ -19,6 +19,14 @@
       /* Hide scrollbars on Mokkoi scroll containers in Chromium/Safari.
          Pairs with inline scrollbarWidth:'none' (Firefox-only). */
       .mokkoi-screen-scroll::-webkit-scrollbar { display: none; }
+      /* Chip-row: horizontal filter/segment row that must scroll, not wrap.
+         Pairs with isChipRowView in ScreenRenderer — applied to flexDirection:row
+         Views with 3+ small TouchableOpacity children. Children are pinned to
+         flex-shrink:0 and their text labels never wrap so we never see
+         "Begi nner" / "Intermed iate" word-breaks. */
+      .mokkoi-chip-row::-webkit-scrollbar { display: none; }
+      .mokkoi-chip-row > * { flex-shrink: 0 !important; }
+      .mokkoi-chip-row span { white-space: nowrap; word-break: normal; }
       /* Pressed-state visual feedback for TouchableOpacity. Pre-Week-3 stand-in
          for real onPress feedback — gives users acknowledgment that a tap was
          registered without wiring real handlers. */

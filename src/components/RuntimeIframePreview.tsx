@@ -77,6 +77,14 @@ export function RuntimeIframePreview({
   const lastPostScreenId = useRef<string | null>(null)
   const lastPostNodeCount = useRef<number>(0)
 
+  // In-session back-stack for the iframe preview. Generated trees rarely wire a
+  // back arrow via FlowConnection (the wirer keys on forward triggers like
+  // "select_workout"), so without this every IconButton{label='arrow_back'} tap
+  // would land in the runtime's "no screen wired" toast. We push the previous
+  // screen on every forward navigation and pop on back-glyph clicks; if the
+  // stack is empty we fall back to screens[0] (entry/home).
+  const historyRef = useRef<string[]>([])
+
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const isAndroid = device.category === 'Android'
 
@@ -111,6 +119,14 @@ export function RuntimeIframePreview({
       observerRef.current = ro
     }
   }, [])
+
+  // Reset back-stack when the project switches. activeScreenId can also change
+  // for non-click reasons (canvas-editor tile selection); we only push in the
+  // click handler, so a stale stack across project boundaries would be the
+  // worst kind of pointer — clear it.
+  useEffect(() => {
+    historyRef.current = []
+  }, [projectId])
 
   // Mount-time telemetry (Week 5 Day 0). Fires once per RuntimeIframePreview
   // instance — i.e. canvas open with flag on, project switch, refresh-button
@@ -166,6 +182,24 @@ export function RuntimeIframePreview({
   // then fuzzy name match, then echo mokkoi:click-unresolved so the runtime
   // can toast.
   useEffect(() => {
+    // Back-button glyphs the runtime can emit. Material Symbols + lucide aliases.
+    // Compared case-insensitively against the IconButton label.
+    const BACK_GLYPHS = new Set([
+      'arrow_back', 'arrow_back_ios', 'arrow_back_ios_new',
+      'chevron_left', 'keyboard_backspace', 'west',
+      'arrow-left', 'arrow-back', 'chevron-left',
+    ])
+
+    function navigateForward(target: string) {
+      if (target === activeScreenId) return
+      // Avoid pushing duplicates back-to-back (defensive against double-click).
+      const stack = historyRef.current
+      if (stack[stack.length - 1] !== activeScreenId) {
+        stack.push(activeScreenId)
+      }
+      onActiveScreenChange(target)
+    }
+
     function onClick(e: MessageEvent) {
       if (e.source !== iframeRef.current?.contentWindow) return
       if (e.data?.type !== 'mokkoi:click') return
@@ -177,6 +211,35 @@ export function RuntimeIframePreview({
       const tried: string[] = []
       const has_label = label.length > 0
       const isListRowDefer = kind === 'Deferred' && deferReason === 'list-row'
+
+      // Back-glyph short-circuit. The wirer doesn't reliably wire back arrows
+      // (planner connections key on forward triggers), so we maintain an
+      // in-session history stack and pop on back. Empty stack falls back to
+      // the project's entry screen — typically the first generated screen.
+      if (kind === 'IconButton' && BACK_GLYPHS.has(label.trim().toLowerCase())) {
+        const stack = historyRef.current
+        let target: string | undefined
+        while (stack.length) {
+          const candidate = stack.pop()!
+          if (candidate !== activeScreenId && screens.some(s => s.id === candidate)) {
+            target = candidate
+            break
+          }
+        }
+        if (!target) {
+          const entry = screens[0]?.id
+          if (entry && entry !== activeScreenId) target = entry
+        }
+        if (target) {
+          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=backHistory matched=${target}`)
+          onActiveScreenChange(target)
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'back_history' })
+        } else {
+          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=backHistory matched=none`)
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'back_noop' })
+        }
+        return
+      }
 
       if (!label && !isListRowDefer) {
         if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='' tried= matched=none reason=empty-label`)
@@ -193,7 +256,7 @@ export function RuntimeIframePreview({
         const flowTarget = findNavigationTarget(connections, activeScreenId, label)
         if (flowTarget) {
           if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=flowConnection:${flowTarget}`)
-          if (flowTarget !== activeScreenId) onActiveScreenChange(flowTarget)
+          navigateForward(flowTarget)
           trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'flow_connection' })
           return
         }
@@ -202,7 +265,7 @@ export function RuntimeIframePreview({
         const fuzzy = fuzzyMatchScreen(label, screens)
         if (fuzzy) {
           if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=fuzzyName:${fuzzy.id}`)
-          if (fuzzy.id !== activeScreenId) onActiveScreenChange(fuzzy.id)
+          navigateForward(fuzzy.id)
           trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'fuzzy_name' })
           return
         }
@@ -217,7 +280,7 @@ export function RuntimeIframePreview({
       if (outgoing.length === 1) {
         const target = outgoing[0].toScreenId
         if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=singleTarget:${target}`)
-        if (target !== activeScreenId) onActiveScreenChange(target)
+        navigateForward(target)
         trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'single_target' })
         return
       }
