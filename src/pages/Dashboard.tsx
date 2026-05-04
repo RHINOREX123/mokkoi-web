@@ -672,23 +672,29 @@ export default function Dashboard() {
 
       {/* Main content area — full width, prompt-first */}
       <div style={{
-        flex: 1, overflowY: 'auto',
+        flex: 1, overflowY: 'auto', position: 'relative',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: hasProjects ? 'flex-start' : 'center',
         padding: hasProjects ? '80px 24px 40px' : '40px 24px',
+        background: hasProjects
+          ? 'radial-gradient(ellipse 1100px 600px at 50% 180px, rgba(20,184,166,0.18) 0%, rgba(6,182,212,0.10) 35%, transparent 70%)'
+          : 'radial-gradient(ellipse 1100px 600px at 50% 50%, rgba(20,184,166,0.18) 0%, rgba(6,182,212,0.10) 35%, transparent 70%)',
         }}>
-          <div style={{ width: '100%', maxWidth: 720, opacity: loading ? 0 : 1, transition: 'opacity 0.15s' }}>
+          <div style={{ width: '100%', maxWidth: 720, opacity: loading ? 0 : 1, transition: 'opacity 0.15s', position: 'relative', zIndex: 1 }}>
             {/* Welcome */}
             <h1 style={{
-              fontSize: hasProjects ? 32 : 48, fontWeight: 700, color: '#f1f5f9',
+              fontSize: hasProjects ? 40 : 52, fontWeight: 700, color: '#f1f5f9',
               margin: '0 0 12px', letterSpacing: '-0.02em', textAlign: 'center',
               fontFamily: "'Outfit', 'DM Sans', sans-serif", lineHeight: 1.1,
             }}>
               {hasProjects ? (
-                `Welcome back, ${firstName}`
+                <>Welcome back, <span style={{
+                  background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                }}>{firstName}</span></>
               ) : (
                 <>What will you <span style={{
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                  background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
                   WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                   fontStyle: 'italic',
                 }}>build</span> today?</>
@@ -703,10 +709,12 @@ export default function Dashboard() {
             {/* Chat input area */}
             <div style={{
               position: 'relative',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(15,23,42,0.6)',
+              border: '1px solid rgba(45,212,191,0.25)',
               borderRadius: 16,
-              transition: 'border-color 0.2s',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
+              boxShadow: '0 8px 32px rgba(20,184,166,0.12), 0 0 0 1px rgba(45,212,191,0.05) inset',
+              backdropFilter: 'blur(8px)',
             }}>
               <textarea
                 ref={textareaRef}
@@ -724,8 +732,16 @@ export default function Dashboard() {
                   resize: 'none', fontFamily: "'DM Sans', sans-serif",
                   lineHeight: 1.5, boxSizing: 'border-box',
                 }}
-                onFocus={e => { (e.currentTarget.parentElement as HTMLElement).style.borderColor = 'rgba(99,102,241,0.4)' }}
-                onBlur={e => { (e.currentTarget.parentElement as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)' }}
+                onFocus={e => {
+                  const p = e.currentTarget.parentElement as HTMLElement
+                  p.style.borderColor = 'rgba(45,212,191,0.6)'
+                  p.style.boxShadow = '0 8px 32px rgba(20,184,166,0.25), 0 0 0 3px rgba(45,212,191,0.12)'
+                }}
+                onBlur={e => {
+                  const p = e.currentTarget.parentElement as HTMLElement
+                  p.style.borderColor = 'rgba(45,212,191,0.25)'
+                  p.style.boxShadow = '0 8px 32px rgba(20,184,166,0.12), 0 0 0 1px rgba(45,212,191,0.05) inset'
+                }}
               />
               <button
                 onClick={handleSubmitPrompt}
@@ -733,10 +749,11 @@ export default function Dashboard() {
                 style={{
                   position: 'absolute', bottom: 10, right: 10,
                   width: 32, height: 32, borderRadius: 8,
-                  background: prompt.trim() ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,0.06)',
+                  background: prompt.trim() ? 'linear-gradient(135deg, #2dd4bf, #06b6d4)' : 'rgba(255,255,255,0.06)',
                   border: 'none', cursor: prompt.trim() ? 'pointer' : 'default',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.2s',
+                  boxShadow: prompt.trim() ? '0 4px 12px rgba(20,184,166,0.4)' : 'none',
                 }}
               >
                 <ArrowUp size={16} color={prompt.trim() ? '#fff' : '#64748b'} />
