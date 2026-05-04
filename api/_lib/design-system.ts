@@ -180,6 +180,44 @@ Do NOT: stack cards vertically when they fit side-by-side, show >3 list items on
 
 export const PLATFORM_RULES = `
 iOS LAYOUT: paddingTop 54 (status bar), paddingBottom 34 (home indicator). Tab bar: 49+34=83px. Nav bar: 44px.
+
+SAFE AREA — STATUS BAR CLEARANCE (CRITICAL):
+The web/canvas preview does NOT apply real safe-area insets to SafeAreaView
+— it renders SafeAreaView as a plain View. This means SafeAreaView alone
+is NOT enough to keep content below the status bar.
+
+Every screen MUST guarantee status bar clearance via ONE of:
+  1. Use the HeaderBar macro as the FIRST child (it has built-in 54px clearance)
+  2. Set paddingTop: 54 on the root View / ScrollView (not just SafeAreaView)
+  3. Wrap the title element in a View with paddingTop: 54
+
+NEVER place a Text title or any visible element with paddingTop:0 (or no
+padding) at the top of a screen — it will overlap the iPhone status bar
+text/time/battery. This is the most common AI-generation visual bug.
+
+CORRECT (using HeaderBar):
+{"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0A0A1A"},"children":[
+  {"type":"HeaderBar","props":{"title":"Exercises","showBack":false}},
+  ...rest of screen
+]}
+
+CORRECT (raw title with explicit padding):
+{"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0A0A1A"},"children":[
+  {"type":"View","style":{"paddingTop":54,"paddingHorizontal":16},"children":[
+    {"type":"Text","style":{"fontSize":28,"fontWeight":"700","color":"#FFFFFF"},"children":["Exercises"]}
+  ]},
+  ...rest
+]}
+
+WRONG (title overlaps status bar — FORBIDDEN):
+{"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0A0A1A"},"children":[
+  {"type":"Text","style":{"fontSize":28,"fontWeight":"700"},"children":["Exercises"]},
+  ...rest
+]}
+
+This rule applies to EVERY screen — Home, list screens, profile, settings,
+detail screens, all of them.
+
 Root: View with flex:1, surface-0 bg. Horizontal padding 16-20px.
 Spacing between sections by screen type:
   Dashboard: 12-16px. Auth/Login: 12-16px (keep compact). Detail: 16-20px. Settings: 20-24px. Onboarding: 20-32px.
