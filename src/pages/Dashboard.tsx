@@ -674,12 +674,24 @@ export default function Dashboard() {
       <div style={{
         flex: 1, overflowY: 'auto', position: 'relative',
         display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: hasProjects ? 'flex-start' : 'center',
-        padding: hasProjects ? '80px 24px 40px' : '40px 24px',
-        background: hasProjects
-          ? 'radial-gradient(ellipse 1100px 600px at 50% 180px, rgba(20,184,166,0.18) 0%, rgba(6,182,212,0.10) 35%, transparent 70%)'
-          : 'radial-gradient(ellipse 1100px 600px at 50% 50%, rgba(20,184,166,0.18) 0%, rgba(6,182,212,0.10) 35%, transparent 70%)',
+        alignItems: 'center', justifyContent: 'center',
+        padding: '40px 24px',
+        background: `
+          radial-gradient(ellipse 700px 480px at 22% 28%, rgba(20,184,166,0.32) 0%, transparent 55%),
+          radial-gradient(ellipse 640px 460px at 78% 72%, rgba(6,182,212,0.28) 0%, transparent 55%),
+          radial-gradient(ellipse 900px 600px at 50% 50%, rgba(45,212,191,0.10) 0%, transparent 65%),
+          #000000
+        `,
         }}>
+          {/* Subtle grid texture overlay for depth */}
+          <div aria-hidden style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0)',
+            backgroundSize: '32px 32px',
+            maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 40%, transparent 100%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 40%, transparent 100%)',
+          }} />
           <div style={{ width: '100%', maxWidth: 720, opacity: loading ? 0 : 1, transition: 'opacity 0.15s', position: 'relative', zIndex: 1 }}>
             {/* Welcome */}
             <h1 style={{
@@ -797,64 +809,20 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Recent projects — returning users */}
+            {/* Compact "your projects" hint — links to sidebar — for returning users */}
             {hasProjects && (
-              <div style={{ marginTop: 48 }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  marginBottom: 16,
-                }}>
-                  <h2 style={{
-                    fontSize: 13, fontWeight: 600, color: '#64748b',
-                    margin: 0, textTransform: 'uppercase', letterSpacing: 0.5,
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}>Your projects</h2>
-                  {projects.length > 6 && (
-                    <button onClick={() => setMobileSidebarOpen(true)} style={{
-                      background: 'none', border: 'none', color: '#818cf8',
-                      fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                    }}>View all ({projects.length})</button>
-                  )}
-                </div>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                  gap: 12,
-                }}>
-                  {projects.slice(0, 6).map(p => {
-                    const [g1, g2] = GRADIENT_PAIRS[hashString(p.id) % GRADIENT_PAIRS.length]
-                    return (
-                      <button key={p.id} onClick={() => navigate(`/app/${p.id}`)} style={{
-                        textAlign: 'left', padding: 14, borderRadius: 12,
-                        background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                        cursor: 'pointer', transition: 'all 0.15s',
-                        display: 'flex', flexDirection: 'column', gap: 10,
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.25)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)' }}
-                      >
-                        <div style={{
-                          width: 32, height: 32, borderRadius: 8,
-                          background: `linear-gradient(135deg, ${g1}, ${g2})`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#fff', fontSize: 14, fontWeight: 700,
-                        }}>{p.name.charAt(0).toUpperCase()}</div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{
-                            fontSize: 14, fontWeight: 600, color: '#f1f5f9',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                            marginBottom: 3,
-                          }}>{p.name}</div>
-                          <div style={{ fontSize: 11, color: '#64748b' }}>
-                            {p.screen_count ?? 0} screen{p.screen_count === 1 ? '' : 's'} · {formatDate(p.updated_at)}
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+              <div style={{ marginTop: 24, textAlign: 'center' }}>
+                <button onClick={() => setMobileSidebarOpen(true)} style={{
+                  background: 'rgba(45,212,191,0.08)',
+                  border: '1px solid rgba(45,212,191,0.20)',
+                  color: '#5eead4', fontSize: 12, fontWeight: 500,
+                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif",
+                  transition: 'all 0.2s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(45,212,191,0.14)'; e.currentTarget.style.borderColor = 'rgba(45,212,191,0.35)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(45,212,191,0.08)'; e.currentTarget.style.borderColor = 'rgba(45,212,191,0.20)' }}
+                >View your {projects.length} project{projects.length === 1 ? '' : 's'} →</button>
               </div>
             )}
 
