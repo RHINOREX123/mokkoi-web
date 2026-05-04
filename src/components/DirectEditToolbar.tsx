@@ -97,6 +97,7 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
       target.contentEditable = 'false'
       target.style.outline = ''
       target.removeEventListener('blur', handleBlur)
+      target.removeEventListener('keydown', handleKeyDown)
       onChanged()
     }
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -331,18 +332,21 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
         )}
       </div>
 
-      {/* Size / Type — single popover, but for text elements it expands into
-          a "Type" panel with bold / italic / alignment beneath the size row. */}
+      {/* Size / Type — text-only. Non-text elements use the Style popover for
+          radius / border / opacity / visibility instead; the previous "Size"
+          variant adjusted padding, which made inner content look smaller when
+          users pressed +, opposite of intent. */}
+      {isTextElement && (
       <div style={{ position: 'relative' }}>
         <button
           style={btnStyle}
           onClick={() => { const next = !showSizePicker; closeAllPopovers(); setShowSizePicker(next) }}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-          title={isTextElement ? 'Text formatting' : 'Change size'}
+          title="Text formatting"
         >
           <Type size={12} />
-          {isTextElement ? 'Type' : 'Size'}
+          Type
         </button>
         {showSizePicker && (
           <div style={{
@@ -354,14 +358,15 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
             padding: 6,
             display: 'flex', flexDirection: 'column', gap: 4,
           }}>
-            {/* Size row — present for both text and non-text */}
+            {/* Size row — text only (parent is gated on isTextElement). */}
+            {isTextElement && (
             <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
               <button
                 onClick={() => changeSize(-2)}
                 style={{ ...btnStyle, padding: '6px 10px' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                title={isTextElement ? 'Smaller text' : 'Less padding'}
+                title="Smaller text"
               >
                 <Minus size={14} />
               </button>
@@ -370,11 +375,12 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
                 style={{ ...btnStyle, padding: '6px 10px' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                title={isTextElement ? 'Larger text' : 'More padding'}
+                title="Larger text"
               >
                 <Plus size={14} />
               </button>
             </div>
+            )}
 
             {/* Text-only controls — bold / italic and alignment.
                 Hidden for non-text elements where they'd do nothing useful. */}
@@ -436,6 +442,7 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
           </div>
         )}
       </div>
+      )}
 
       {/* Move */}
       <div style={{ position: 'relative' }}>

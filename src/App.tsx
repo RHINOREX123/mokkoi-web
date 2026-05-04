@@ -396,7 +396,7 @@ function App() {
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (canvas.didPan.current || canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvasBg === 'true') {
-      if (directEdit.directEditMode) { directEdit.exitDirectEdit(false); return }
+      if (directEdit.directEditMode) { directEdit.exitDirectEdit(directEdit.directEditDirty); return }
       screens.setActiveGeneratedId(null)
     }
   }
