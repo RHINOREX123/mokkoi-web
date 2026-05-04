@@ -49,10 +49,7 @@ interface ChatPanelProps {
 }
 
 const PLACEHOLDERS = [
-  'Ask Mokkoi to build any app or screen...',
-  'Ask Mokkoi to add, edit, or restyle anything...',
-  'Ask Mokkoi for a redesign, theme change, or new flow...',
-  'Ask Mokkoi: "Make it darker", "Add a settings screen"...',
+  'Ask Mokkoi…',
 ]
 
 const EXAMPLE_CARDS = [

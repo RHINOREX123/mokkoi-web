@@ -171,12 +171,14 @@ export function RuntimeIframePreview({
       if (e.data?.type !== 'mokkoi:click') return
       const kind = String(e.data.elementKind ?? '')
       const label = String(e.data.label ?? '')
+      const deferReason = String(e.data.deferReason ?? '')
       if (!activeScreenId) return
 
       const tried: string[] = []
       const has_label = label.length > 0
+      const isListRowDefer = kind === 'Deferred' && deferReason === 'list-row'
 
-      if (!label) {
+      if (!label && !isListRowDefer) {
         if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='' tried= matched=none reason=empty-label`)
         e.source?.postMessage({ type: 'mokkoi:click-unresolved', label: '', kind }, '*')
         trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'unresolved' })
@@ -184,22 +186,26 @@ export function RuntimeIframePreview({
         return
       }
 
-      tried.push('flowConnection')
-      const flowTarget = findNavigationTarget(connections, activeScreenId, label)
-      if (flowTarget) {
-        if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=flowConnection:${flowTarget}`)
-        if (flowTarget !== activeScreenId) onActiveScreenChange(flowTarget)
-        trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'flow_connection' })
-        return
-      }
+      // List-row defers have no label to match on — skip flow/fuzzy and go
+      // straight to the singleTarget fallback.
+      if (!isListRowDefer) {
+        tried.push('flowConnection')
+        const flowTarget = findNavigationTarget(connections, activeScreenId, label)
+        if (flowTarget) {
+          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=flowConnection:${flowTarget}`)
+          if (flowTarget !== activeScreenId) onActiveScreenChange(flowTarget)
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'flow_connection' })
+          return
+        }
 
-      tried.push('fuzzyName')
-      const fuzzy = fuzzyMatchScreen(label, screens)
-      if (fuzzy) {
-        if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=fuzzyName:${fuzzy.id}`)
-        if (fuzzy.id !== activeScreenId) onActiveScreenChange(fuzzy.id)
-        trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'fuzzy_name' })
-        return
+        tried.push('fuzzyName')
+        const fuzzy = fuzzyMatchScreen(label, screens)
+        if (fuzzy) {
+          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=fuzzyName:${fuzzy.id}`)
+          if (fuzzy.id !== activeScreenId) onActiveScreenChange(fuzzy.id)
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'fuzzy_name' })
+          return
+        }
       }
 
       tried.push('singleTarget')
@@ -217,9 +223,15 @@ export function RuntimeIframePreview({
       }
 
       if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=none`)
-      e.source?.postMessage({ type: 'mokkoi:click-unresolved', label, kind }, '*')
+      // For unresolved list-row defers, post click-deferred so the iframe shows
+      // the macro-metadata toast. Otherwise fall back to click-unresolved.
+      if (isListRowDefer) {
+        e.source?.postMessage({ type: 'mokkoi:click-deferred', reason: 'list-row' }, '*')
+      } else {
+        e.source?.postMessage({ type: 'mokkoi:click-unresolved', label, kind }, '*')
+        trackEvent('runtime_click_unresolved', { project_id: projectId, kind, label })
+      }
       trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'unresolved' })
-      trackEvent('runtime_click_unresolved', { project_id: projectId, kind, label })
     }
     window.addEventListener('message', onClick)
     return () => window.removeEventListener('message', onClick)

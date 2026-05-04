@@ -319,14 +319,27 @@ function RuntimeApp() {
     if (!c) return
 
     // Deferred: handle iframe-side (toast + diagnostic), don't bother parent.
+    // Exception: list-row defers are forwarded so the parent can attempt
+    // singleTarget routing. If the parent can't resolve, it posts back
+    // mokkoi:click-deferred which fires the toast via the message handler.
     if (c.kind === 'Deferred') {
       e.stopPropagation()
       console.log(
         `[mokkoi-click] iframe → kind=Deferred reason=${c.deferReason} label='${c.label}'`,
       )
-      showToast(c.deferReason === 'list-row'
-        ? 'List-row taps need macro metadata (Phase 2)'
-        : 'This click type is not yet wired')
+      if (c.deferReason === 'list-row') {
+        window.parent.postMessage(
+          {
+            type: 'mokkoi:click',
+            elementKind: c.kind,
+            label: c.label,
+            deferReason: c.deferReason,
+          },
+          '*',
+        )
+        return
+      }
+      showToast('This click type is not yet wired')
       return
     }
 
