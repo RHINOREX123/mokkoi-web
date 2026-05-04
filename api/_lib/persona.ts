@@ -93,7 +93,12 @@ interface TreeLike {
  * Bounded recursion + type-guarded property access so this never throws on
  * the varied trees the LLM produces.
  */
-export function applyPersonaToTree(node: unknown, persona: Persona, depth = 0): void {
+export function applyPersonaToTree(
+  node: unknown,
+  persona: Persona,
+  depth = 0,
+  insideIdentitySubtree = false,
+): void {
   if (depth > 100 || !node || typeof node !== 'object') return
   const n = node as TreeLike
 
@@ -110,8 +115,11 @@ export function applyPersonaToTree(node: unknown, persona: Persona, depth = 0): 
     }
   }
 
-  // Normalize Text children (person-name, greeting with inline name, or email)
-  if (n.type === 'Text' && Array.isArray(n.children)) {
+  // Text-child rewrites must only fire inside an identity-component subtree.
+  // Otherwise PERSON_NAME_RE matches generic two-Capitalized-word UI strings
+  // ("Bench Press", "Recent Activity", "Quick Actions", "Browse Exercises")
+  // and clobbers them all to the persona name.
+  if (insideIdentitySubtree && n.type === 'Text' && Array.isArray(n.children)) {
     n.children = n.children.map(c => {
       if (typeof c !== 'string') return c
       const trimmed = c.trim()
@@ -130,10 +138,11 @@ export function applyPersonaToTree(node: unknown, persona: Persona, depth = 0): 
     })
   }
 
-  // Recurse
+  // Recurse — flip the flag when entering an identity-type subtree
+  const childInside = insideIdentitySubtree || (typeof n.type === 'string' && IDENTITY_TYPES.has(n.type))
   if (Array.isArray(n.children)) {
     for (const c of n.children) {
-      if (typeof c !== 'string') applyPersonaToTree(c, persona, depth + 1)
+      if (typeof c !== 'string') applyPersonaToTree(c, persona, depth + 1, childInside)
     }
   }
 }
