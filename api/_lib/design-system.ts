@@ -19,6 +19,11 @@ COLORS (Light Theme): surface-0 "#F5F5FA", surface-1 "#FFFFFF", surface-2 "#F0F0
 
 export const CONTENT_LIBRARY = `
 CONTENT: Use realistic, category-appropriate content. NEVER use "Lorem ipsum", "John Doe", or generic placeholders. Match names, stats, prices, and labels to the app domain. Use specific numbers, real-sounding brand names, and contextual actions. Default currency: USD ($). Default locale: US English. Only use other currencies/locales if the user explicitly requests them.
+
+SAMPLE NAME RULES — When generating placeholder user names, profile names, or persona content:
+- AVOID common LLM-cliché names that recur across many AI generations: Alex Morgan, Sarah Chen, John Doe, Jane Smith, Alex Johnson, Sarah Johnson.
+- Prefer varied, realistic names that reflect the app's likely user base. Examples that feel natural: Maya Patel, Jordan Lee, Sam Rivera, Priya Sharma, Marcus Chen, Elena Rodriguez, Kai Thompson, Aisha Williams.
+- Use the same persona name consistently within ONE app (don't introduce a new name on every screen).
 `
 
 export const COMPONENT_TYPES = `
