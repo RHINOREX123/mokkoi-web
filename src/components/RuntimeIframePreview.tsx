@@ -202,6 +202,20 @@ export function RuntimeIframePreview({
         return
       }
 
+      tried.push('singleTarget')
+      const outgoing = connections.filter(c =>
+        c.fromScreenId === activeScreenId &&
+        c.trigger !== 'nav_back' &&
+        c.trigger !== 'back'
+      )
+      if (outgoing.length === 1) {
+        const target = outgoing[0].toScreenId
+        if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=singleTarget:${target}`)
+        if (target !== activeScreenId) onActiveScreenChange(target)
+        trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'single_target' })
+        return
+      }
+
       if (import.meta.env.DEV) console.warn(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=${tried.join(',')} matched=none`)
       e.source?.postMessage({ type: 'mokkoi:click-unresolved', label, kind }, '*')
       trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'unresolved' })
