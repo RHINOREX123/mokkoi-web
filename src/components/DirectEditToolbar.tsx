@@ -203,7 +203,20 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
   const changeRadius = (delta: number) => {
     const computed = window.getComputedStyle(target)
     const current = parseFloat(computed.borderRadius) || 0
-    target.style.borderRadius = `${Math.max(0, Math.min(64, current + delta))}px`
+    let next: number
+    if (current >= 100) {
+      // Currently pill-shaped (design system uses 9999). Plus is a no-op
+      // (already maximally rounded); minus snaps to 32 to visibly break the
+      // pill instead of the previous behavior, which clamped to 64 and made
+      // a single + click look like "less rounded".
+      if (delta > 0) return
+      next = 32
+    } else {
+      // Normal radius range. Allow growing back into pill territory by
+      // raising the cap from 64 to 9999.
+      next = Math.max(0, Math.min(9999, current + delta))
+    }
+    target.style.borderRadius = `${next}px`
     onChanged()
   }
 
