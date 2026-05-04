@@ -67,11 +67,14 @@ export function useDirectEdit(deps: DirectEditDeps): DirectEdit {
         if (phoneScreen) phoneScreen.innerHTML = snapshot
       }
     }
+    if (save && directEditDirty) {
+      setToastMessage('✓ Edits saved')
+    }
     setDirectEditMode(false)
     setDirectEditSelectedEl(null)
     setDirectEditDirty(false)
     directEditSnapshotRef.current.clear()
-  }, [directEditDirty, activeGeneratedId, phoneFrameRefs])
+  }, [directEditDirty, activeGeneratedId, phoneFrameRefs, setToastMessage])
 
   const saveDirectEdits = useCallback(() => {
     if (!activeGeneratedId) return

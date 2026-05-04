@@ -60,8 +60,11 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
     onClose()
   }
 
-  const isTextElement = ['SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'A', 'LABEL', 'BUTTON'].includes(target.tagName) ||
-    (target.childNodes.length > 0 && Array.from(target.childNodes).every(n => n.nodeType === Node.TEXT_NODE))
+  const tagInTextList = ['SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'A', 'LABEL'].includes(target.tagName)
+  const onlyTextChildren = target.childNodes.length > 0 &&
+    Array.from(target.childNodes).every(n => n.nodeType === Node.TEXT_NODE)
+  const buttonWithTextOnly = target.tagName === 'BUTTON' && onlyTextChildren
+  const isTextElement = tagInTextList || onlyTextChildren || buttonWithTextOnly
 
   // Position the toolbar near the selected element
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -70,10 +73,14 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
     const updatePosition = () => {
       const rect = target.getBoundingClientRect()
       const frameRect = phoneFrameEl.getBoundingClientRect()
-      // Position above the element, relative to the phone frame's parent (canvas)
+      // Position above the element, relative to the phone frame's parent (canvas).
+      // If there's no room above (e.g. element is the screen title), flip below.
+      // Clamp left so the toolbar (~120px wide w/ translateX(-50%)) stays inside
+      // the phone frame.
+      const proposedTop = rect.top - frameRect.top - 44
       setPos({
-        top: rect.top - frameRect.top - 44,
-        left: rect.left - frameRect.left + rect.width / 2,
+        top: proposedTop < 4 ? rect.bottom - frameRect.top + 8 : proposedTop,
+        left: Math.max(60, Math.min(rect.left - frameRect.left + rect.width / 2, frameRect.width - 60)),
       })
     }
     updatePosition()
@@ -141,6 +148,20 @@ export function DirectEditToolbar({ target, phoneFrameEl, onClose, onChanged, on
     const computed = window.getComputedStyle(target)
     if (computed.position === 'static') {
       target.style.position = 'relative'
+    }
+    // Constrain to parent so repeated nudges can't push the element off-screen
+    // with no way to bring it back. Snap-reject the move when it would leave
+    // less than 4px of the element visible inside its parent.
+    const parent = target.parentElement
+    if (parent) {
+      const parentRect = parent.getBoundingClientRect()
+      const targetRect = target.getBoundingClientRect()
+      const newLeftViewport = targetRect.left + dx
+      const newTopViewport = targetRect.top + dy
+      if (newLeftViewport + targetRect.width < parentRect.left + 4) return
+      if (newLeftViewport > parentRect.right - 4) return
+      if (newTopViewport + targetRect.height < parentRect.top + 4) return
+      if (newTopViewport > parentRect.bottom - 4) return
     }
     const currentTop = parseFloat(target.style.top) || 0
     const currentLeft = parseFloat(target.style.left) || 0
