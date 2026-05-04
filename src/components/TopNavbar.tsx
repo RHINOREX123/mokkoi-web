@@ -156,7 +156,7 @@ export function TopNavbar({
       <div onClick={() => navigate('/')} style={{
         width: 26, height: 26, borderRadius: 7, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+        background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
         color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', transition: 'opacity 0.2s',
       }} title="Go to projects"
         onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
@@ -387,7 +387,7 @@ export function TopNavbar({
             flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
             padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
             background: viewMode === 'canvas-editor'
-              ? 'linear-gradient(135deg, #6366f1, #818cf8)'
+              ? 'linear-gradient(135deg, #2dd4bf, #06b6d4)'
               : 'transparent',
             border: viewMode === 'canvas-editor' ? 'none' : '1px solid rgba(255,255,255,0.12)',
             color: viewMode === 'canvas-editor' ? '#fff' : '#94a3b8',
@@ -472,7 +472,7 @@ export function TopNavbar({
                 {credits.plan === 'free' ? (
                   <button onClick={() => { navigate('/pricing'); setShowCreditsDropdown(false) }} style={{
                     width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                    background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff',
+                    background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)', color: '#fff',
                     border: 'none', cursor: 'pointer',
                   }}>
                     Upgrade to Pro
@@ -513,7 +513,7 @@ export function TopNavbar({
         {/* User avatar */}
         <div ref={userMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
           <div onClick={() => setShowUserMenu(!showUserMenu)} style={{
-            width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', transition: 'box-shadow 0.2s',
             boxShadow: showUserMenu ? '0 0 0 2px rgba(99,102,241,0.4)' : 'none',
@@ -528,7 +528,7 @@ export function TopNavbar({
             }}>
               <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{
-                  width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                  width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
                 }}>{(user?.user_metadata?.full_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}</div>
