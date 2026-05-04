@@ -86,10 +86,12 @@ describe('intent detection — SINGLE-screen prompts', () => {
 })
 
 describe('intent detection — priority semantics', () => {
-  it('screen-noun short-circuit wins even when "app" appears (v1 acceptable edge)', () => {
-    // Flagged for post-YC refinement: "todo app with a login screen" routes
-    // to single-screen because SINGLE_SCREEN_NOUN_PATTERN matches first.
-    expect(classify('Build a todo app with a login screen')).toBe('SINGLE')
+  it('app intent wins when prompt mentions both "app" and a single-screen noun', () => {
+    // Resolves the v1 edge: "build a habit tracking app with a stats screen"
+    // previously routed single-screen because SINGLE_SCREEN_NOUN_PATTERN
+    // short-circuited. Now APP_INTENT_PATTERN takes priority.
+    expect(classify('Build a todo app with a login screen')).toBe('APP')
+    expect(classify('Build a habit tracking app with stats screen and profile page')).toBe('APP')
   })
 
   it('isAppPrompt and isFlowPrompt are independent predicates', () => {

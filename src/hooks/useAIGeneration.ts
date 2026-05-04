@@ -16,8 +16,9 @@ import type { DeviceId } from '../constants/devices'
 // an app-category noun (or literal 'flow'), which matches natural phrasing reliably.
 
 // Short-circuit: if the user explicitly names a single-screen artifact, skip app/flow
-// routing even if they also say 'app'. Acceptable v1 edge: "todo app with a login
-// screen" will fall through to single-screen — flagged for post-YC refinement.
+// routing — UNLESS the prompt also matches APP_INTENT_PATTERN, in which case the
+// "build an app" framing wins. Resolves the v1 edge where "build a todo app with
+// a stats screen" routed single-screen because it mentioned the word "screen".
 const SINGLE_SCREEN_NOUN_PATTERN = /\b(screen|page|card|modal|dialog|widget|state|component|form|section|popup|tooltip|banner|header|footer|sidebar)\b/i
 
 // App-category nouns cover the common archetypes users actually ask for. Expanded
@@ -48,10 +49,14 @@ const STRONG_NEW_PATTERN = /\bnew\b/i
 // Exported for unit testing (src/hooks/__tests__/intent-detection.test.ts).
 // Keep in lock-step with the regex patterns above.
 export function isAppPrompt(prompt: string): boolean {
-  // If the prompt names a single-screen artifact (screen/page/card/modal/…),
-  // route to single-screen generation even if 'app' appears elsewhere.
+  // App intent ("Build a fitness tracker app …") wins over single-screen-noun
+  // mentions inside the same prompt. Only treat as single-screen when the
+  // prompt names a single-screen artifact AND lacks app intent (e.g. "Design
+  // a login screen"). This unblocks prompts like "build a habit tracking app
+  // with a stats screen" that previously short-circuited to 1 screen.
+  if (APP_INTENT_PATTERN.test(prompt)) return true
   if (SINGLE_SCREEN_NOUN_PATTERN.test(prompt)) return false
-  return APP_INTENT_PATTERN.test(prompt)
+  return false
 }
 
 export function isFlowPrompt(prompt: string): boolean {
