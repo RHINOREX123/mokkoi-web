@@ -179,7 +179,7 @@ Do NOT: stack cards vertically when they fit side-by-side, show >3 list items on
 `
 
 export const PLATFORM_RULES = `
-iOS LAYOUT: paddingTop 54 (status bar), paddingBottom 34 (home indicator). Tab bar: 49+34=83px. Nav bar: 44px.
+iOS LAYOUT: paddingTop 64 (status bar), paddingBottom 40 (home indicator). Tab bar: 49+34=83px. Nav bar: 44px.
 
 SAFE AREA — STATUS BAR CLEARANCE (CRITICAL):
 The web/canvas preview does NOT apply real safe-area insets to SafeAreaView
@@ -187,9 +187,9 @@ The web/canvas preview does NOT apply real safe-area insets to SafeAreaView
 is NOT enough to keep content below the status bar.
 
 Every screen MUST guarantee status bar clearance via ONE of:
-  1. Use the HeaderBar macro as the FIRST child (it has built-in 54px clearance)
-  2. Set paddingTop: 54 on the root View / ScrollView (not just SafeAreaView)
-  3. Wrap the title element in a View with paddingTop: 54
+  1. Use the HeaderBar macro as the FIRST child (it has built-in 64px clearance)
+  2. Set paddingTop: 64 on the root View / ScrollView (not just SafeAreaView)
+  3. Wrap the title element in a View with paddingTop: 64
 
 NEVER place a Text title or any visible element with paddingTop:0 (or no
 padding) at the top of a screen — it will overlap the iPhone status bar
@@ -203,7 +203,7 @@ CORRECT (using HeaderBar):
 
 CORRECT (raw title with explicit padding):
 {"type":"SafeAreaView","style":{"flex":1,"backgroundColor":"#0A0A1A"},"children":[
-  {"type":"View","style":{"paddingTop":54,"paddingHorizontal":16},"children":[
+  {"type":"View","style":{"paddingTop":64,"paddingHorizontal":16},"children":[
     {"type":"Text","style":{"fontSize":28,"fontWeight":"700","color":"#FFFFFF"},"children":["Exercises"]}
   ]},
   ...rest
@@ -221,7 +221,7 @@ detail screens, all of them.
 Root: View with flex:1, surface-0 bg. Horizontal padding 16-20px.
 Spacing between sections by screen type:
   Dashboard: 12-16px. Auth/Login: 12-16px (keep compact). Detail: 16-20px. Settings: 20-24px. Onboarding: 20-32px.
-  NEVER use paddingTop/paddingBottom >48px on content sections (except root paddingTop:54 for status bar).
+  NEVER use paddingTop/paddingBottom >48px on content sections (except root paddingTop:64 for status bar).
 Cards: borderRadius 12-16, padding 16, surface-1 bg. Buttons: height 48, borderRadius 24, bold text. Inputs: height 48, borderRadius 12, surface-3 bg.
 `
 
@@ -343,7 +343,7 @@ FORM SCREENS:
 `
 
 export const QUALITY_CHECKLIST = `
-VERIFY: 1) Root has flex:1, surface-0, paddingTop:54, paddingBottom:34. 2) All spacing/fontSize from scales. 3) Clear type hierarchy. 4) Realistic content. 5) Professional quality. 6) ALL TextInputs have useState. 7) ALL buttons have onPress. 8) ALL switches toggle.
+VERIFY: 1) Root has flex:1, surface-0, paddingTop:64, paddingBottom:40. 2) All spacing/fontSize from scales. 3) Clear type hierarchy. 4) Realistic content. 5) Professional quality. 6) ALL TextInputs have useState. 7) ALL buttons have onPress. 8) ALL switches toggle.
 `
 
 export const APP_PLANNER_SYSTEM_PROMPT = `You are an expert mobile app architect. Given a user's app description, produce a structured JSON plan for a mobile app.
