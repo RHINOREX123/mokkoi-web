@@ -151,6 +151,9 @@ function App() {
     deviceId: screens.activeDeviceId,
     onPaywall: () => setShowPaywallModal(true),
     onAppGenerated: userPlan.refresh,
+    projectName: screens.projectName,
+    setProjectName: screens.setProjectName,
+    saveProjectName: screens.saveProjectName,
   })
 
   // Direct Edit

@@ -143,10 +143,18 @@ export default function ProjectsPage() {
 
   const deleteProject = async (id: string) => {
     if (!supabase) return
-    await supabase.from('projects').delete().eq('id', id)
+    setMenuOpen(null)
+    const prevProjects = projects
+    const prevImports = importProjects
     setProjects(prev => prev.filter(p => p.id !== id))
     setImportProjects(prev => prev.filter(p => p.id !== id))
-    setMenuOpen(null)
+    const { error } = await supabase.from('projects').delete().eq('id', id)
+    if (error) {
+      console.error('[mokkoi] failed to delete project', id, error)
+      setProjects(prevProjects)
+      setImportProjects(prevImports)
+      setToastMessage(`Failed to delete: ${error.message}`)
+    }
   }
 
   const renameProject = async (id: string, name: string) => {
