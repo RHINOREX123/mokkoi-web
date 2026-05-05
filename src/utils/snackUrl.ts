@@ -289,6 +289,12 @@ export interface SnackFilesOpts {
    *  Ensures Expo Go opens to the same first screen as the Mokkoi canvas
    *  instead of whichever screen the LLM happened to emit first. */
   homeScreenId?: string
+  /** When true, each screen file embeds the "Made with Mokkoi" watermark.
+   *  Used for free-tier previews via Mokkoi's Preview/QR → Expo Go flow. The
+   *  watermark renders bottom-right of every screen on the user's real device.
+   *  Mirrors the export path so free-tier users see consistent attribution
+   *  whenever their app leaves Mokkoi's private web canvas. */
+  addWatermark?: boolean
 }
 
 export interface SnackPayload {
@@ -298,7 +304,7 @@ export interface SnackPayload {
 }
 
 export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
-  const { projectName, screens, connections, homeScreenId } = opts
+  const { projectName, screens, connections, homeScreenId, addWatermark } = opts
 
   if (screens.length === 0) throw new Error('No screens to preview')
 
@@ -365,7 +371,10 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
     const name = names[i]
     const { bindings, unmatched } = wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
     allUnmatched.push(...unmatched)
-    const tsx = convertTreeToTSX(processedTrees[i], name, { bindings: bindings.size > 0 ? bindings : undefined })
+    const tsx = convertTreeToTSX(processedTrees[i], name, {
+      bindings: bindings.size > 0 ? bindings : undefined,
+      addWatermark,
+    })
     files[`screens/${name}.tsx`] = { type: 'CODE', contents: tsx }
   }
 

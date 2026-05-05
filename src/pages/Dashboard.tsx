@@ -8,6 +8,9 @@ import {
   FolderOpen, Users, Smartphone, ArrowUp, Download,
   Zap, Copy, Menu, X,
 } from 'lucide-react'
+import { useUserPlan } from '../hooks/useUserPlan'
+import { PlanChip } from '../components/PlanChip'
+import { PaywallModal } from '../components/PaywallModal'
 
 interface Project {
   id: string
@@ -97,8 +100,8 @@ export default function Dashboard() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [showCreditsDropdown, setShowCreditsDropdown] = useState(false)
-  const [credits, setCredits] = useState<{ plan: string; remaining: number; limit: number } | null>(null)
+  const [showPaywallModal, setShowPaywallModal] = useState(false)
+  const userPlanState = useUserPlan()
   const [toastMessage, setToastMessage] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -107,41 +110,15 @@ export default function Dashboard() {
 
 
   const userMenuRef = useRef<HTMLDivElement>(null)
-  const creditsRef = useRef<HTMLDivElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load user + projects + credits
+  // Load user + projects. Plan + free-app count handled by useUserPlan() hook above.
   useEffect(() => {
     const sb = supabase
     if (!sb) return
-    let realtimeSub: ReturnType<typeof sb.channel> | null = null
-
-    sb.auth.getUser().then(({ data: { user: u } }) => {
-      setUser(u)
-      if (!u) return
-      // Credits
-      sb.from('subscriptions').select('plan, credits_remaining, credits_monthly_limit')
-        .eq('user_id', u.id).maybeSingle()
-        .then(({ data }) => {
-          if (data) setCredits({ plan: data.plan || 'free', remaining: data.credits_remaining, limit: data.credits_monthly_limit })
-          else setCredits({ plan: 'free', remaining: 50, limit: 50 })
-        })
-      // Realtime credits
-      realtimeSub = sb.channel('dashboard-credits')
-        .on('postgres_changes', {
-          event: 'UPDATE', schema: 'public', table: 'subscriptions',
-          filter: `user_id=eq.${u.id}`,
-        }, (payload: { new: { plan?: string; credits_remaining?: number; credits_monthly_limit?: number } }) => {
-          const row = payload.new
-          setCredits({ plan: row.plan || 'free', remaining: row.credits_remaining ?? 0, limit: row.credits_monthly_limit ?? 50 })
-        })
-        .subscribe()
-    })
-
+    sb.auth.getUser().then(({ data: { user: u } }) => { setUser(u) })
     loadProjects()
-
-    return () => { if (realtimeSub) sb.removeChannel(realtimeSub) }
   }, [])
 
   useEffect(() => {
@@ -151,7 +128,6 @@ export default function Dashboard() {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false)
-      if (creditsRef.current && !creditsRef.current.contains(e.target as Node)) setShowCreditsDropdown(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -554,46 +530,14 @@ export default function Dashboard() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Credits */}
-        {credits && (
-          <div ref={creditsRef} style={{ position: 'relative', flexShrink: 0, marginRight: 8 }}>
-            <button onClick={() => setShowCreditsDropdown(!showCreditsDropdown)} style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-              cursor: 'pointer', transition: 'all 0.2s',
-              color: credits.remaining === 0 ? '#ef4444' : credits.remaining < 20 ? '#f97316' : '#94a3b8',
-            }}>
-              <Zap size={12} /> {credits.remaining} remaining
-            </button>
-            {showCreditsDropdown && (
-              <div style={{
-                position: 'absolute', top: 34, right: 0, background: '#1A1A1A',
-                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12,
-                boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 100, padding: 16, minWidth: 220,
-              }}>
-                <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 8 }}>
-                  {credits.remaining} of {credits.limit} screens remaining
-                </div>
-                <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', marginBottom: 12, overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', borderRadius: 3, transition: 'width 0.3s',
-                    width: `${Math.max(0, Math.min(100, (credits.remaining / credits.limit) * 100))}%`,
-                    background: credits.remaining === 0 ? '#ef4444' : credits.remaining < 20 ? '#f97316' : 'linear-gradient(90deg, #6366f1, #818cf8)',
-                  }} />
-                </div>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {credits.plan} plan
-                </div>
-                <button onClick={() => { navigate('/pricing'); setShowCreditsDropdown(false) }} style={{
-                  width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                  background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)', color: '#fff',
-                  border: 'none', cursor: 'pointer',
-                }}>
-                  {credits.plan === 'free' ? 'Upgrade to Pro' : 'View Plans'}
-                </button>
-              </div>
-            )}
+        {/* Plan / free-trial chip */}
+        {!userPlanState.loading && (
+          <div style={{ marginRight: 8 }}>
+            <PlanChip
+              plan={userPlanState.plan}
+              freeAppCount={userPlanState.freeAppCount}
+              onOpenPaywall={() => setShowPaywallModal(true)}
+            />
           </div>
         )}
 
@@ -877,6 +821,8 @@ export default function Dashboard() {
         }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
       `}</style>
+
+      <PaywallModal open={showPaywallModal} onClose={() => setShowPaywallModal(false)} />
     </div>
   )
 }

@@ -162,23 +162,33 @@ function formatStyleSheet(styles: StyleEntry[]): string {
   }).join('\n')
 }
 
-function convertTreeToTSX(tree: ComponentNode, screenName?: string): string {
+function convertTreeToTSX(tree: ComponentNode, screenName?: string, addWatermark = false): string {
   const name = screenName ? screenName.replace(/[^a-zA-Z0-9]/g, '') + 'Screen' : 'GeneratedScreen'
   const componentName = name.charAt(0).toUpperCase() + name.slice(1)
 
   const ctx: ConvertContext = { styles: [], usedComponents: new Set(), styleNameCounts: new Map() }
-  const jsx = nodeToJSX(tree, 0, 0, ctx, '    ')
+  const innerIndent = addWatermark ? '      ' : '    '
+  const jsx = nodeToJSX(tree, 0, 0, ctx, innerIndent)
 
   ctx.usedComponents.add('StyleSheet')
+  if (addWatermark) {
+    ctx.usedComponents.add('View')
+    ctx.usedComponents.add('Text')
+  }
+
   const rnImports = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar', 'StyleSheet']
     .filter(c => ctx.usedComponents.has(c))
+
+  const body = addWatermark
+    ? `    <View style={{ flex: 1 }}>\n${jsx}\n      <Watermark />\n    </View>`
+    : jsx
 
   return `import React from 'react';
 import { ${rnImports.join(', ')} } from 'react-native';
 
 export default function ${componentName}() {
   return (
-${jsx}
+${body}
   );
 }
 
@@ -194,9 +204,9 @@ ${formatStyleSheet(ctx.styles)}
 
 interface FlowScreen { id: string; name: string; tree: ComponentNode }
 
-function convertFlowToTSX(screens: FlowScreen[]): string {
+function convertFlowToTSX(screens: FlowScreen[], addWatermark = false): string {
   if (screens.length === 0) return '// No screens to export\n'
-  if (screens.length === 1) return convertTreeToTSX(screens[0].tree, screens[0].name)
+  if (screens.length === 1) return convertTreeToTSX(screens[0].tree, screens[0].name, addWatermark)
 
   const allImports = new Set<string>(['StyleSheet'])
   const componentBlocks: string[] = []
@@ -205,7 +215,7 @@ function convertFlowToTSX(screens: FlowScreen[]): string {
   const RN_COMPONENT_ORDER = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar']
 
   for (const screen of screens) {
-    const fullTSX = convertTreeToTSX(screen.tree, screen.name)
+    const fullTSX = convertTreeToTSX(screen.tree, screen.name, addWatermark)
 
     const importMatch = fullTSX.match(/import \{ (.+?) \} from 'react-native'/)
     if (importMatch) {
@@ -241,6 +251,78 @@ ${componentBlocks.join('\n\n')}
 
 ${styleBlocks.join('\n\n')}
 `
+}
+
+// ============================================================
+// Watermark suffix (free-tier exports)
+// ============================================================
+
+/**
+ * Watermark function + styles appended to free-tier exports. Persists in the
+ * exported code — user cannot remove without editing the file. Paid users get
+ * no watermark and no Watermark code in their export.
+ */
+function watermarkSuffix(): string {
+  return `
+function Watermark() {
+  return (
+    <View style={watermarkStyles.badge} pointerEvents="none">
+      <View style={watermarkStyles.dot} />
+      <Text style={watermarkStyles.text}>Made with Mokkoi</Text>
+    </View>
+  );
+}
+
+const watermarkStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(17, 17, 19, 0.85)',
+    borderColor: 'rgba(45, 212, 191, 0.4)',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    zIndex: 9999,
+  },
+  dot: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: '#2dd4bf',
+    marginRight: 6,
+  },
+  text: {
+    color: '#f1f5f9',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+});
+`
+}
+
+/**
+ * Determines if the user is on a paid plan. Mirrors the active-status check in
+ * api/_lib/userPlan.ts so backend gate and export gate stay consistent:
+ * paid iff plan IN ('pro','max') AND status IN ('active','trialing').
+ *
+ * `supabase` typed as `any` because Vercel's per-file TS check on api/ files
+ * runs without the project's bundler tsconfig and can't infer the schema-typed
+ * row type from a generic SupabaseClient. Caller is internal (this file only).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function isUserPaid(supabase: any, userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('plan, status')
+    .eq('user_id', userId)
+    .in('status', ['active', 'trialing'])
+    .maybeSingle()
+  if (error || !data) return false
+  return data.plan === 'pro' || data.plan === 'max'
 }
 
 // ============================================================
@@ -289,14 +371,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
+  // Free-tier exports get a "Made with Mokkoi" watermark embedded in the TSX.
+  // MCP / anonymous callers bypass — they're not consumer-facing exports.
+  const isInternal = user.isMCP || user.id === 'anonymous' || user.id === 'mcp'
+  const paid = isInternal ? true : await isUserPaid(supabase, user.id)
+  const addWatermark = !paid
+
+  let code: string
   if (screens.length === 1) {
-    const code = convertTreeToTSX(screens[0].component_tree, screens[0].name)
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-    return res.status(200).send(code)
+    code = convertTreeToTSX(screens[0].component_tree, screens[0].name, addWatermark)
+  } else {
+    const flowScreens = screens.map(s => ({ id: s.id, name: s.name, tree: s.component_tree }))
+    code = convertFlowToTSX(flowScreens, addWatermark)
   }
 
-  const flowScreens = screens.map(s => ({ id: s.id, name: s.name, tree: s.component_tree }))
-  const code = convertFlowToTSX(flowScreens)
+  if (addWatermark) {
+    code = code + watermarkSuffix()
+  }
+
   res.setHeader('Content-Type', 'text/plain; charset=utf-8')
   return res.status(200).send(code)
 }

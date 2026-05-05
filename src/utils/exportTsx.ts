@@ -65,19 +65,78 @@ const RN_SET = new Set(['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity
 export interface TSXExportOpts {
   /** Map of ComponentNode → target screen PascalCase name for navigation.navigate() */
   bindings?: Map<ComponentNode, string>
+  /**
+   * When true, wraps the screen JSX with a `<View style={{flex:1}}>...<Watermark /></View>`
+   * and appends a self-contained Watermark component + styles. Used for free-tier
+   * exports to embed "Made with Mokkoi" attribution that persists in the exported
+   * file. Mirrors the server-side path in api/export.ts.
+   */
+  addWatermark?: boolean
+}
+
+/**
+ * Watermark function + styles appended to free-tier exports. Persists in the
+ * exported code — user cannot remove without editing the file.
+ */
+function watermarkSuffix(): string {
+  return `
+function Watermark() {
+  return (
+    <View style={watermarkStyles.badge} pointerEvents="none">
+      <View style={watermarkStyles.dot} />
+      <Text style={watermarkStyles.text}>Made with Mokkoi</Text>
+    </View>
+  );
+}
+
+const watermarkStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(17, 17, 19, 0.85)',
+    borderColor: 'rgba(45, 212, 191, 0.4)',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    zIndex: 9999,
+  },
+  dot: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: '#2dd4bf',
+    marginRight: 6,
+  },
+  text: {
+    color: '#f1f5f9',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+});
+`
 }
 
 export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?: TSXExportOpts): string {
   const name = screenName ? screenName.replace(/[^a-zA-Z0-9]/g, '') + 'Screen' : 'GeneratedScreen'
   const compName = name.charAt(0).toUpperCase() + name.slice(1)
+  const addWatermark = opts?.addWatermark === true
 
   const ctx: Ctx = { styles: [], usedComponents: new Set(), usesIonicons: false, nameCount: new Map() }
   const navTargets = opts?.bindings
   const usesNavigation = { value: false }
-  const jsx = nodeJSXWithNav(tree, 0, 0, ctx, '    ', navTargets, usesNavigation)
+  const innerIndent = addWatermark ? '      ' : '    '
+  const jsx = nodeJSXWithNav(tree, 0, 0, ctx, innerIndent, navTargets, usesNavigation)
 
   const rnOrder = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar', 'StyleSheet']
   ctx.usedComponents.add('StyleSheet')
+  if (addWatermark) {
+    ctx.usedComponents.add('View')
+    ctx.usedComponents.add('Text')
+  }
   const imports = rnOrder.filter(c => ctx.usedComponents.has(c))
 
   const navImport = usesNavigation.value ? "\nimport { useNavigation } from '@react-navigation/native';" : ''
@@ -96,12 +155,16 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
     return `  ${n}: {\n${entries}\n  },`
   }).join('\n')
 
-  return `import React from 'react';
+  const body = addWatermark
+    ? `    <View style={{ flex: 1 }}>\n${jsx}\n      <Watermark />\n    </View>`
+    : jsx
+
+  const baseFile = `import React from 'react';
 import { ${imports.join(', ')} } from 'react-native';${navImport}${iconsImport}
 
 export default function ${compName}() {${navHook}
   return (
-${jsx}
+${body}
   );
 }
 
@@ -109,6 +172,8 @@ const styles = StyleSheet.create({
 ${styleLines}
 });
 `
+
+  return addWatermark ? baseFile + watermarkSuffix() : baseFile
 }
 
 /** Extended nodeJSX that can inject navigation.navigate() on TouchableOpacity */
