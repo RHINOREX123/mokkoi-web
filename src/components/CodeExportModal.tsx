@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { trackEvent } from '../lib/analytics'
 import { convertTreeToTSX } from '../utils/exportTsx'
+import { useUserPlan } from '../hooks/useUserPlan'
 
 interface CodeExportModalProps {
   tree: ComponentNode
@@ -66,8 +67,13 @@ function highlightCode(code: string): React.ReactNode[] {
 export function CodeExportModal({ tree, screenName, onClose }: CodeExportModalProps) {
   const [copied, setCopied] = useState(false)
   const [tab, setTab] = useState<'tsx' | 'json'>('tsx')
+  const { plan } = useUserPlan()
+  const addWatermark = plan === 'free'
 
-  const tsxCode = useMemo(() => convertTreeToTSX(tree, screenName), [tree, screenName])
+  const tsxCode = useMemo(
+    () => convertTreeToTSX(tree, screenName, { addWatermark }),
+    [tree, screenName, addWatermark],
+  )
   const jsonCode = useMemo(() => JSON.stringify(tree, null, 2), [tree])
   const code = tab === 'tsx' ? tsxCode : jsonCode
   const highlighted = useMemo(() => highlightCode(code), [code])
