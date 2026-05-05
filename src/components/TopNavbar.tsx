@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Zap, Smartphone, Layers, Sparkles } from 'lucide-react'
+import { Download, Share2, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Smartphone, Layers } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
 import type { User } from '@supabase/supabase-js'
 import type { ComponentNode } from '../types/mokkoi'
 import type { UserPlan } from '../hooks/useUserPlan'
-import { FREE_APP_LIMIT } from '../hooks/useUserPlan'
+import { PlanChip } from './PlanChip'
 
 const hamburgerItemStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
@@ -391,67 +391,7 @@ export function TopNavbar({
         ><Share2 size={14} />Share</button>
 
         {/* Plan / free-trial chip */}
-        {plan !== 'free' ? (
-          <div
-            data-testid="plan-chip-pro"
-            title={`${plan === 'max' ? 'Max' : 'Pro'} plan — unlimited app generations`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
-              letterSpacing: 0.4, textTransform: 'uppercase',
-              background: 'linear-gradient(135deg, rgba(45,212,191,0.18), rgba(6,182,212,0.18))',
-              border: '1px solid rgba(45,212,191,0.4)',
-              color: '#5eead4',
-              flexShrink: 0,
-            }}
-          >
-            <Sparkles size={12} />
-            {plan === 'max' ? 'Max' : 'Pro'}
-          </div>
-        ) : freeAppCount >= FREE_APP_LIMIT ? (
-          <div
-            data-testid="plan-chip-used"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
-          >
-            <span style={{
-              padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.25)',
-              color: '#fca5a5',
-            }}>
-              Free trial used
-            </span>
-            <button
-              onClick={onOpenPaywall}
-              style={{
-                padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
-                border: 'none', color: '#fff', cursor: 'pointer',
-                transition: 'filter 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)' }}
-              onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
-            >
-              Upgrade
-            </button>
-          </div>
-        ) : (
-          <div
-            data-testid="plan-chip-free"
-            title={`${freeAppCount} of ${FREE_APP_LIMIT} free app generations used`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              color: '#94a3b8',
-              flexShrink: 0,
-            }}
-          >
-            <Zap size={12} />
-            {freeAppCount} / {FREE_APP_LIMIT} free apps
-          </div>
-        )}
+        <PlanChip plan={plan} freeAppCount={freeAppCount} onOpenPaywall={onOpenPaywall} />
 
         {/* User avatar */}
         <div ref={userMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
