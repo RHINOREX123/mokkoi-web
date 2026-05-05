@@ -154,6 +154,12 @@ export function PlanChip({ plan, freeAppCount, onOpenPaywall }: PlanChipProps) {
           >
             Upgrade to Pro
           </button>
+          <div style={{
+            marginTop: 10, fontSize: 11, color: '#64748b',
+            fontStyle: 'italic', lineHeight: 1.4,
+          }}>
+            Free trial includes &ldquo;Made with Mokkoi&rdquo; on mobile preview &amp; exports.
+          </div>
         </div>
       )}
     </div>

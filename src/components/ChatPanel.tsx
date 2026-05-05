@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { ScreenRenderer } from './ScreenRenderer'
 import { convertTreeToTSX } from '../utils/exportTsx'
+import { useUserPlan } from '../hooks/useUserPlan'
 
 export interface ChatMessage {
   id: string
@@ -85,6 +86,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatInputRef = useRef<HTMLInputElement>(null)
   const initialPromptHandled = useRef(false)
+  const { plan } = useUserPlan()
 
   // Cycle placeholder text
   useEffect(() => {
@@ -181,7 +183,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
 
   const handleSuggestionClick = async (s: string) => {
     if (s === 'Copy as TSX' && selectedScreenTree) {
-      const tsx = convertTreeToTSX(selectedScreenTree, selectedScreenName)
+      const tsx = convertTreeToTSX(selectedScreenTree, selectedScreenName, { addWatermark: plan === 'free' })
       await navigator.clipboard.writeText(tsx)
       // Dispatch a toast event
       window.dispatchEvent(new CustomEvent('mokkoi-toast', { detail: { message: 'React Native code copied!' } }))

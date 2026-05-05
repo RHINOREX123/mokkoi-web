@@ -14,6 +14,7 @@ import { detectTabGroup } from '../utils/detectTabBar'
 import { trackEvent } from '../lib/analytics'
 import type { ComponentNode } from '../types/mokkoi'
 import { wireScreen, type ScreenInfo } from '../utils/wirer'
+import { useUserPlan } from './useUserPlan'
 
 export interface ExportTarget {
   screenId: string
@@ -141,6 +142,9 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts) {
+  const { plan } = useUserPlan()
+  const addWatermark = plan === 'free'
+
   const downloadPNG = useCallback(async (target: ExportTarget) => {
     onToast('Capturing screenshot...')
     try {
@@ -155,7 +159,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
 
   const downloadTSX = useCallback((target: ExportTarget) => {
     try {
-      const code = convertTreeToTSX(target.tree, target.screenName)
+      const code = convertTreeToTSX(target.tree, target.screenName, { addWatermark })
       const blob = new Blob([code], { type: 'text/plain' })
       triggerDownload(blob, `${brandedName(target.screenName)}.tsx`)
       onToast('Code downloaded!')
@@ -163,7 +167,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     } catch (err) {
       onToast(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-  }, [onToast])
+  }, [onToast, addWatermark])
 
   const downloadZIP = useCallback(async (target: ExportTarget) => {
     onToast('Preparing package...')
@@ -176,7 +180,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
       zip.file('screen.png', pngBlob)
 
       // Code
-      zip.file(`${name}.tsx`, convertTreeToTSX(target.tree, target.screenName))
+      zip.file(`${name}.tsx`, convertTreeToTSX(target.tree, target.screenName, { addWatermark }))
 
       // README
       zip.file('README.md', generateReadme(target))
@@ -188,7 +192,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     } catch (err) {
       onToast(`Package failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-  }, [phoneFrameRefs, onToast])
+  }, [phoneFrameRefs, onToast, addWatermark])
 
   const downloadExpoProject = useCallback(async (target: ExportTarget, projectName: string) => {
     onToast('Building Expo project...')
@@ -205,7 +209,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
       }
 
       zip.file('App.tsx', generateAppTsx(opts))
-      zip.file(`${name}.tsx`, convertTreeToTSX(target.tree, target.screenName))
+      zip.file(`${name}.tsx`, convertTreeToTSX(target.tree, target.screenName, { addWatermark }))
       zip.file('app.json', generateAppJson(opts))
       zip.file('package.json', generatePackageJson(opts))
       zip.file('tsconfig.json', generateTsConfig())
@@ -220,7 +224,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     } catch (err) {
       onToast(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-  }, [onToast])
+  }, [onToast, addWatermark])
 
   /** Export entire project as multi-screen Expo app with React Navigation */
   const downloadExpoMultiScreen = useCallback(async (
@@ -274,7 +278,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
         const screen = allScreens[i]
         const name = screenIdToName.get(screen.screenId)!
         const { bindings } = wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
-        const tsx = convertTreeToTSX(screen.tree, name, { bindings: bindings.size > 0 ? bindings : undefined })
+        const tsx = convertTreeToTSX(screen.tree, name, { bindings: bindings.size > 0 ? bindings : undefined, addWatermark })
         zip.file(`screens/${name}.tsx`, tsx)
       }
 
@@ -299,7 +303,7 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
     } catch (err) {
       onToast(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
-  }, [onToast, downloadExpoProject])
+  }, [onToast, downloadExpoProject, addWatermark])
 
   return { downloadPNG, downloadTSX, downloadZIP, downloadExpoProject, downloadExpoMultiScreen }
 }

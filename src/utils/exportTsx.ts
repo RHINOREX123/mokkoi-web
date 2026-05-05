@@ -77,15 +77,27 @@ export interface TSXExportOpts {
 /**
  * Watermark function + styles appended to free-tier exports. Persists in the
  * exported code — user cannot remove without editing the file.
+ *
+ * Self-contained: uses only React Native primitives (View, Text,
+ * TouchableOpacity, Linking) — no extra packages, works in any Expo SDK.
+ * Tapping the pill opens https://mokkoi.com.
  */
 function watermarkSuffix(): string {
   return `
 function Watermark() {
   return (
-    <View style={watermarkStyles.badge} pointerEvents="none">
-      <View style={watermarkStyles.dot} />
-      <Text style={watermarkStyles.text}>Made with Mokkoi</Text>
-    </View>
+    <TouchableOpacity
+      onPress={() => Linking.openURL('https://mokkoi.com')}
+      activeOpacity={0.8}
+      style={watermarkStyles.badge}
+    >
+      <View style={watermarkStyles.iconBox}>
+        <Text style={watermarkStyles.iconLetter}>M</Text>
+      </View>
+      <Text style={watermarkStyles.text}>
+        Made with <Text style={watermarkStyles.brand}>Mokkoi</Text>
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -101,20 +113,33 @@ const watermarkStyles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     zIndex: 9999,
   },
-  dot: {
-    width: 14,
-    height: 14,
+  iconBox: {
+    width: 18,
+    height: 18,
     borderRadius: 4,
     backgroundColor: '#2dd4bf',
-    marginRight: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  iconLetter: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 14,
   },
   text: {
-    color: '#f1f5f9',
-    fontSize: 11,
-    fontWeight: '600',
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  brand: {
+    color: '#5eead4',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 `
@@ -131,11 +156,13 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
   const innerIndent = addWatermark ? '      ' : '    '
   const jsx = nodeJSXWithNav(tree, 0, 0, ctx, innerIndent, navTargets, usesNavigation)
 
-  const rnOrder = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar', 'StyleSheet']
+  const rnOrder = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar', 'Linking', 'StyleSheet']
   ctx.usedComponents.add('StyleSheet')
   if (addWatermark) {
     ctx.usedComponents.add('View')
     ctx.usedComponents.add('Text')
+    ctx.usedComponents.add('TouchableOpacity')
+    ctx.usedComponents.add('Linking')
   }
   const imports = rnOrder.filter(c => ctx.usedComponents.has(c))
 
