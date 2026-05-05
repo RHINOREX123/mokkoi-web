@@ -20,6 +20,67 @@
   --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
 }
 
+/* ============================================================
+   Dashboard V2 design tokens
+   ------------------------------------------------------------
+   Locally-scoped to dashboard surfaces. Existing --color-mokkoi-*
+   tokens are preserved so non-dashboard pages render unchanged.
+   Spec: docs/superpowers/specs/2026-05-06-dashboard-redesign.md
+   ============================================================ */
+:root {
+  /* Surfaces (warm graphite, not pure black — depth without grey) */
+  --dash-bg: #04060a;
+  --dash-surface: #0d1112;
+  --dash-surface-2: #131819;
+  --dash-border: rgba(255, 255, 255, 0.06);
+  --dash-border-strong: rgba(255, 255, 255, 0.10);
+
+  /* Text */
+  --dash-text: #f1f5f9;
+  --dash-text-2: #94a3b8;
+  --dash-text-3: #64748b;
+
+  /* Brand — teal-led, aqua only as gradient end / blurred glow, never alone */
+  --dash-teal: #2dd4bf;
+  --dash-teal-2: #06b6d4;
+  --dash-teal-glow: rgba(45, 212, 191, 0.18);
+
+  /* Accents — used sparingly */
+  --dash-accent-amber: #fbbf24;     /* premium / upgrade only */
+  --dash-accent-lavender: #a78bfa;  /* AI/intelligence states only */
+
+  /* Tracked-mono micro-label spec (HUD readouts) */
+  --dash-mono-label-size: 10.5px;
+  --dash-mono-label-spacing: 0.18em;
+}
+
+/* Dashboard V2 keyframes (scoped names so they don't clash) */
+@keyframes dash-livepulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+@keyframes dash-blink {
+  50% { opacity: 0; }
+}
+@keyframes dash-scanline {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes dash-shimmer {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes dash-holospin {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced-motion: disable all decorative animation on the dashboard */
+@media (prefers-reduced-motion: reduce) {
+  [data-dash-animated] {
+    animation: none !important;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
