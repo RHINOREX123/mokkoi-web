@@ -308,8 +308,13 @@ const watermarkStyles = StyleSheet.create({
  * Determines if the user is on a paid plan. Mirrors the active-status check in
  * api/_lib/userPlan.ts so backend gate and export gate stay consistent:
  * paid iff plan IN ('pro','max') AND status IN ('active','trialing').
+ *
+ * `supabase` typed as `any` because Vercel's per-file TS check on api/ files
+ * runs without the project's bundler tsconfig and can't infer the schema-typed
+ * row type from a generic SupabaseClient. Caller is internal (this file only).
  */
-async function isUserPaid(supabase: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function isUserPaid(supabase: any, userId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('subscriptions')
     .select('plan, status')

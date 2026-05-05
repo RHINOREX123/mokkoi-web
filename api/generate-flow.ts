@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './_lib/auth-helper.js'
-import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate } from './_lib/userPlan.js'
+import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
 import { normalizeComponentTree } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
@@ -277,15 +277,18 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
       if (!gate.allow) {
         // Expected business logic — emit a paywall SSE event and end the stream.
         // Switching headers to SSE here so the client gets the event instead of a JSON 402.
+        // Payload reconstructed from local vars (instead of gate.*) because Vercel's
+        // per-file TS check doesn't reliably narrow the AppGateDecision discriminated
+        // union — same data, type-safe construction.
         res.setHeader('Content-Type', 'text/event-stream')
         res.setHeader('Cache-Control', 'no-cache')
         res.setHeader('Connection', 'keep-alive')
         res.setHeader('X-Accel-Buffering', 'no')
         sendSSE(res, {
           type: 'paywall',
-          reason: gate.reason,
-          free_apps_used: gate.free_apps_used,
-          free_apps_limit: gate.free_apps_limit,
+          reason: 'free_app_limit_reached',
+          free_apps_used: freeAppsUsed,
+          free_apps_limit: FREE_APP_LIMIT,
         })
         return res.end()
       }
