@@ -62,6 +62,18 @@ function App() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Dashboard V2: mode cards route here with ?openModal=screenshot|import to
+  // pre-open the matching upload flow. Capture once on mount, then strip the
+  // param so refreshes don't keep re-opening the modal.
+  const initialOpenModalRef = useRef(searchParams.get('openModal'))
+  useEffect(() => {
+    if (initialOpenModalRef.current) {
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('openModal')
+      setSearchParams(newParams, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Core hooks ---
   const canvas = useCanvasState()
   const screens = useScreenManagement(projectId)
@@ -92,8 +104,12 @@ function App() {
   const [showQrModal, setShowQrModal] = useState(false)
   const [qrUrl, setQrUrl] = useState('')
   const [showDeleteScreenConfirm, setShowDeleteScreenConfirm] = useState(false)
-  const [showScreenshotModal, setShowScreenshotModal] = useState(false)
-  const [showImportHtmlModal, setShowImportHtmlModal] = useState(false)
+  const [showScreenshotModal, setShowScreenshotModal] = useState(
+    initialOpenModalRef.current === 'screenshot',
+  )
+  const [showImportHtmlModal, setShowImportHtmlModal] = useState(
+    initialOpenModalRef.current === 'import',
+  )
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
   const [showPaywallModal, setShowPaywallModal] = useState(false)
   const [showExportProjectModal, setShowExportProjectModal] = useState(false)

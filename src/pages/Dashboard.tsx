@@ -5,13 +5,14 @@ import type { User } from '@supabase/supabase-js'
 import { trackEvent, resetAnalytics } from '../lib/analytics'
 import {
   Search, MoreVertical, Trash2, Pencil, LogOut, Settings,
-  FolderOpen, Users, Smartphone, Download,
+  FolderOpen, Users, Download,
   Zap, Copy, Menu, X,
 } from 'lucide-react'
 import { useUserPlan } from '../hooks/useUserPlan'
 import { PlanChip } from '../components/PlanChip'
 import { PaywallModal } from '../components/PaywallModal'
 import { DashboardHero } from '../components/dashboard/DashboardHero'
+import { PhoneThumbnail } from '../components/dashboard/PhoneThumbnail'
 import { PromptCard, type SubmitMode } from '../components/dashboard/PromptCard'
 import { SignalsHUD, type SignalsState } from '../components/dashboard/SignalsHUD'
 import { ModeCards, type DashboardMode } from '../components/dashboard/ModeCards'
@@ -37,26 +38,8 @@ const SUGGESTION_CHIPS = [
   'A food delivery app',
 ]
 
-// Hash a string to pick a gradient pair
-const GRADIENT_PAIRS = [
-  ['#6366f1', '#818cf8'],
-  ['#8b5cf6', '#a78bfa'],
-  ['#ec4899', '#f472b6'],
-  ['#f97316', '#fb923c'],
-  ['#14b8a6', '#2dd4bf'],
-  ['#3b82f6', '#60a5fa'],
-  ['#e11d48', '#fb7185'],
-  ['#84cc16', '#a3e635'],
-]
-
-function hashString(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash)
-}
+// (V1's GRADIENT_PAIRS + hashString are gone — sidebar items now use
+//  PhoneThumbnail's calm-pulse fallback, no per-name gradient needed.)
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -251,6 +234,38 @@ export default function Dashboard() {
     submitWithMode(mode)
   }
 
+  /**
+   * Mode-card handler. Build focuses the prompt input; Screenshot and Import
+   * create an empty "Untitled" project, then navigate to /app/:id with an
+   * ?openModal=screenshot|import query param. App.tsx reads that param on
+   * mount and auto-opens the matching upload flow.
+   *
+   * The empty-project shortcut is the cleanest way to reuse the existing
+   * ScreenshotModal / ImportHtmlModal flows — they assume a project context
+   * (ai.handleSend, screen list, etc.) — without duplicating their logic on
+   * the dashboard. Untitled projects get auto-renamed by the existing flow
+   * once the user submits content.
+   */
+  const handleModeCard = async (mode: DashboardMode) => {
+    if (mode === 'build') {
+      textareaRef.current?.focus()
+      return
+    }
+    if (!supabase) { navigate('/auth'); return }
+    const { data: { user: u } } = await supabase.auth.getUser()
+    if (!u) { navigate('/auth'); return }
+    const { data } = await supabase
+      .from('projects')
+      .insert({ user_id: u.id, name: 'Untitled' })
+      .select().single()
+    if (data) {
+      trackEvent('dashboard_mode_card', { mode })
+      navigate(`/app/${data.id}?openModal=${mode}`)
+    } else {
+      setToastMessage('Could not start a new project — try again')
+    }
+  }
+
   const acceptPlanSuggest = () => {
     setPlanSuggest(false)
     setSubmitMode('plan')
@@ -350,8 +365,6 @@ export default function Dashboard() {
 
   // Render a project item for the sidebar
   const renderProjectItem = (project: Project) => {
-    const gradientIdx = hashString(project.name) % GRADIENT_PAIRS.length
-    const [g1, g2] = GRADIENT_PAIRS[gradientIdx]
     return (
       <div key={project.id} style={{ position: 'relative' }}>
         <button
@@ -364,14 +377,23 @@ export default function Dashboard() {
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
         >
-          {/* Thumbnail */}
-          <div style={{
-            width: 40, height: 40, borderRadius: 8, flexShrink: 0,
-            background: `linear-gradient(135deg, ${g1}, ${g2})`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: 0.85,
-          }}>
-            <Smartphone size={18} color="rgba(255,255,255,0.8)" />
+          {/* Phone-frame thumbnail (sm). Calm-pulse fallback is intentional —
+              fetching the first-screen tree for every sidebar item is not
+              free at 50+ projects, so v1 keeps the sidebar list fast and
+              reserves real ScreenRenderer previews for the dashboard cards.
+              Lazy real-preview-on-hover is a follow-up. */}
+          <div
+            style={{
+              width: 22, height: 40, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            aria-hidden
+          >
+            <PhoneThumbnail
+              projectName={project.name}
+              size="sm"
+              style={{ height: 40 }}
+            />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             {renamingId === project.id ? (
@@ -733,7 +755,6 @@ export default function Dashboard() {
             disabled={isSubmitting}
             onScreenshot={() => setToastMessage('Screenshot import coming soon')}
             onAttach={() => setToastMessage('Attach coming soon')}
-            onFigma={() => setToastMessage('Figma import coming soon')}
           />
 
           <SignalsHUD
@@ -743,17 +764,7 @@ export default function Dashboard() {
             screenCount={4}
           />
 
-          <ModeCards
-            onMode={(m: DashboardMode) => {
-              if (m === 'build') {
-                textareaRef.current?.focus()
-              } else if (m === 'screenshot') {
-                setToastMessage('Screenshot import coming soon')
-              } else if (m === 'import') {
-                setToastMessage('Figma / HTML import coming soon')
-              }
-            }}
-          />
+          <ModeCards onMode={handleModeCard} />
 
           {/* Suggestion chips — first-time users only, kept from V1 since
               they're a known good empty-state nudge. */}

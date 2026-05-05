@@ -1,5 +1,5 @@
 import { useRef, type CSSProperties, type KeyboardEvent } from 'react'
-import { ArrowUp, Camera, Plus, Diamond } from 'lucide-react'
+import { ArrowUp, Camera, Plus } from 'lucide-react'
 
 export type SubmitMode = 'build' | 'plan'
 
@@ -15,10 +15,11 @@ export interface PromptCardProps {
   /** Setter for the toggle. */
   onModeChange?: (mode: SubmitMode) => void
   /** Optional handlers for the bottom-left action buttons. Each falls back to
-   *  a no-op if not provided so the buttons never crash. */
+   *  a no-op if not provided so the buttons never crash.
+   *  Figma was deliberately removed — the Import ModeCard already covers it,
+   *  so the Diamond icon was redundant. */
   onScreenshot?: () => void
   onAttach?: () => void
-  onFigma?: () => void
 }
 
 /**
@@ -44,7 +45,6 @@ export function PromptCard({
   onModeChange,
   onScreenshot,
   onAttach,
-  onFigma,
 }: PromptCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -134,9 +134,6 @@ export function PromptCard({
         </IconBtn>
         <IconBtn label="Attach file" onClick={onAttach}>
           <Plus size={16} />
-        </IconBtn>
-        <IconBtn label="Import from Figma" onClick={onFigma}>
-          <Diamond size={16} />
         </IconBtn>
       </div>
 
