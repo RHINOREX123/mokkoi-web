@@ -5,7 +5,7 @@ import type { User } from '@supabase/supabase-js'
 import { trackEvent, resetAnalytics } from '../lib/analytics'
 import {
   Search, MoreVertical, Trash2, Pencil, LogOut, Settings,
-  FolderOpen, Users, Download,
+  FolderOpen, Users, Download, Star,
   Zap, Copy, Menu, X,
 } from 'lucide-react'
 import { useUserPlan } from '../hooks/useUserPlan'
@@ -18,6 +18,7 @@ import { SignalsHUD, type SignalsState } from '../components/dashboard/SignalsHU
 import { ModeCards, type DashboardMode } from '../components/dashboard/ModeCards'
 import { HudFooter } from '../components/dashboard/HudFooter'
 import { RecentProjectsStrip } from '../components/dashboard/RecentProjectsStrip'
+import { useFavorites } from '../components/dashboard/useFavorites'
 import { usePromptScore } from '../components/dashboard/usePromptScore'
 
 interface Project {
@@ -95,8 +96,10 @@ export default function Dashboard() {
   const [toastMessage, setToastMessage] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'projects' | 'imports'>('projects')
+  type SidebarTab = 'projects' | 'favourites' | 'imports' | 'shared'
+  const [activeTab, setActiveTab] = useState<SidebarTab>('projects')
   const [importProjects, setImportProjects] = useState<Project[]>([])
+  const { has: isFavorite } = useFavorites()
   // V2: prompt mode (Build / Plan), auto-suggest toast, locked-state HUD.
   const [submitMode, setSubmitMode] = useState<SubmitMode>('build')
   const [hudState, setHudState] = useState<SignalsState | undefined>(undefined)
@@ -348,7 +351,13 @@ export default function Dashboard() {
     navigate('/auth')
   }
 
-  const activeList = activeTab === 'imports' ? importProjects : projects
+  const activeList: Project[] = useMemo(() => {
+    if (activeTab === 'imports') return importProjects
+    if (activeTab === 'favourites') return projects.filter((p) => isFavorite(p.id))
+    if (activeTab === 'shared') return [] // Real sharing feature not yet built
+    return projects
+  }, [activeTab, projects, importProjects, isFavorite])
+
   const filtered = useMemo(() =>
     activeList.filter(p => p.name.toLowerCase().includes(search.toLowerCase())),
     [activeList, search]
@@ -476,13 +485,47 @@ export default function Dashboard() {
   const renderGroupedProjects = () => {
     if (loading) return <div style={{ padding: 20, color: '#64748b', fontSize: 13 }}>Loading...</div>
     if (filtered.length === 0) {
-      return <div style={{ padding: '20px 10px', color: '#64748b', fontSize: 13 }}>
-        {search
-          ? 'No projects match your search'
-          : activeTab === 'imports'
-            ? 'No imports yet. Use the Mokkoi MCP server in Claude Code to import designs.'
-            : 'No projects yet'}
-      </div>
+      // Per-tab empty-state copy. Shared tab gets a richer "no shared
+      // projects yet" message since the feature is intentionally a
+      // forward-looking placeholder until the real sharing flow ships.
+      let body: React.ReactNode
+      if (search) {
+        body = 'No projects match your search'
+      } else if (activeTab === 'imports') {
+        body = 'No imports yet. Use the Mokkoi MCP server in Claude Code to import designs.'
+      } else if (activeTab === 'favourites') {
+        body = (
+          <>
+            No favourites yet.
+            <div style={{ marginTop: 6, color: '#475569', fontSize: 12 }}>
+              Star a project from the dashboard or sidebar to pin it here.
+            </div>
+          </>
+        )
+      } else if (activeTab === 'shared') {
+        body = (
+          <>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 44, height: 44, borderRadius: 12,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              margin: '8px auto 12px',
+            }}>
+              <Users size={20} color="#64748b" />
+            </div>
+            <div style={{ textAlign: 'center', color: '#e2e8f0', fontWeight: 600, marginBottom: 4 }}>
+              No shared projects
+            </div>
+            <div style={{ textAlign: 'center', color: '#64748b', fontSize: 12, lineHeight: 1.5 }}>
+              Projects shared with you will appear here.
+            </div>
+          </>
+        )
+      } else {
+        body = 'No projects yet'
+      }
+      return <div style={{ padding: '20px 10px', color: '#64748b', fontSize: 13 }}>{body}</div>
     }
     return (
       <>
@@ -526,6 +569,38 @@ export default function Dashboard() {
       >
         <FolderOpen size={18} /> My Projects
       </button>
+      {/* Favourites tab — locally-favorited projects (localStorage). The
+          set is shared with the dashboard recents strip via useFavorites,
+          so starring a card from the dashboard immediately appears here. */}
+      <button onClick={() => setActiveTab('favourites')} style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px', borderRadius: 10,
+        background: activeTab === 'favourites' ? 'rgba(251,191,36,0.10)' : 'transparent',
+        border: activeTab === 'favourites' ? '1px solid rgba(251,191,36,0.25)' : '1px solid transparent',
+        color: activeTab === 'favourites' ? '#fbbf24' : '#64748b',
+        fontSize: 14, fontWeight: activeTab === 'favourites' ? 600 : 500,
+        cursor: 'pointer', width: '100%', textAlign: 'left',
+        marginTop: 4, transition: 'all 0.15s',
+      }}
+        onMouseEnter={e => { if (activeTab !== 'favourites') e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+        onMouseLeave={e => { if (activeTab !== 'favourites') e.currentTarget.style.background = 'transparent' }}
+      >
+        <Star
+          size={18}
+          fill={activeTab === 'favourites' ? 'currentColor' : 'transparent'}
+        /> Favourites
+        {(() => {
+          const count = projects.filter((p) => isFavorite(p.id)).length
+          return count > 0 ? (
+            <span style={{
+              marginLeft: 'auto', fontSize: 10, fontWeight: 600,
+              padding: '2px 8px', borderRadius: 10,
+              background: activeTab === 'favourites' ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)',
+              color: activeTab === 'favourites' ? '#fbbf24' : '#94a3b8',
+            }}>{count}</span>
+          ) : null
+        })()}
+      </button>
       <button onClick={() => setActiveTab('imports')} style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '10px 12px', borderRadius: 10,
@@ -549,23 +624,24 @@ export default function Dashboard() {
           }}>{importProjects.length}</span>
         )}
       </button>
-      <button onClick={() => setToastMessage('Coming soon')} style={{
+      {/* Shared with me — functional placeholder. The empty-state copy in
+          renderGroupedProjects explains what users will see here once the
+          real sharing flow ships. Tapping the tab still works (selects it,
+          shows the empty state) instead of toasting "coming soon". */}
+      <button onClick={() => setActiveTab('shared')} style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '10px 12px', borderRadius: 10,
-        background: 'transparent', border: '1px solid transparent',
-        color: '#64748b', fontSize: 14, fontWeight: 500,
+        background: activeTab === 'shared' ? 'rgba(99,102,241,0.10)' : 'transparent',
+        border: activeTab === 'shared' ? '1px solid rgba(99,102,241,0.25)' : '1px solid transparent',
+        color: activeTab === 'shared' ? '#818cf8' : '#64748b',
+        fontSize: 14, fontWeight: activeTab === 'shared' ? 600 : 500,
         cursor: 'pointer', width: '100%', textAlign: 'left',
-        marginTop: 4, transition: 'background 0.15s',
+        marginTop: 4, transition: 'all 0.15s',
       }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+        onMouseEnter={e => { if (activeTab !== 'shared') e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+        onMouseLeave={e => { if (activeTab !== 'shared') e.currentTarget.style.background = 'transparent' }}
       >
         <Users size={18} /> Shared with me
-        <span style={{
-          marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-          padding: '2px 8px', borderRadius: 10,
-          background: 'rgba(255,255,255,0.06)', color: '#64748b',
-        }}>Soon</span>
       </button>
 
       {/* Search */}
