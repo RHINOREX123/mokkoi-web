@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mokkoi Dashboard — Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090a;
+    --surface: #0d1112;
+    --surface-2: #131819;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.10);
+    --text: #f1f5f9;
+    --text-2: #94a3b8;
+    --text-3: #64748b;
+    --teal: #2dd4bf;
+    --teal-2: #06b6d4;
+    --teal-glow: rgba(45,212,191,0.18);
+    --accent: #fbbf24;
+  }
+  /* Palette: teal + aqua-blue (default) */
+  body[data-palette="aqua"] {
+    --teal: #2dd4bf;
+    --teal-2: #38bdf8;     /* aqua sky */
+    --teal-glow: rgba(56,189,248,0.20);
+  }
+  /* Palette: pure teal-green */
+  body[data-palette="green"] {
+    --teal: #34d399;       /* emerald-teal */
+    --teal-2: #14b8a6;
+    --teal-glow: rgba(52,211,153,0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: 'Outfit', 'DM Sans', sans-serif; letter-spacing: -0.02em; margin: 0; }
+  /* ========= top control bar ========= */
+  .controls {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; gap: 12px; align-items: center;
+    padding: 12px 20px;
+    background: rgba(7,9,10,0.85);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+  .controls .label { font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+  .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .seg button {
+    background: transparent; color: var(--text-2); border: 0;
+    padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .seg button.active {
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    color: #001a1f;
+  }
+  .controls .spacer { flex: 1; }
+  .controls .swatches { display: inline-flex; gap: 6px; align-items: center; }
+  .swatch { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+  .swatch.t { background: var(--teal); }
+  .swatch.t2 { background: var(--teal-2); }
+  .swatch.s { background: var(--surface); }
+  /* ========= concept frame ========= */
+  .frame {
+    margin: 24px auto;
+    max-width: 1280px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    position: relative;
+  }
+  .frame .caption {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+  }
+  .frame .caption .num {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #001a1f; font-weight: 800; font-size: 13px;
+  }
+  .frame .caption .title { font-weight: 700; font-size: 14px; }
+  .frame .caption .desc { color: var(--text-2); font-size: 12.5px; }
+  .frame .body { position: relative; }
+  /* shared chrome */
+  .navbar {
+    height: 56px; padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(7,9,10,0.92); backdrop-filter: blur(14px);
+  }
+  .logo {
+    display: inline-flex; align-items: center; gap: 8px;
+    text-decoration: none; color: var(--text);
+  }
+  .logo .mark {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    display:flex; align-items:center; justify-content:center;
+    color:#001a1f; font-weight: 800; font-size: 13px;
+  }
+  .logo .name { font-weight: 700; letter-spacing: -0.01em; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(45,212,191,0.08);
+    border: 1px solid rgba(45,212,191,0.22);
+    color: #5eead4; font-size: 12px; font-weight: 600;
+  }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 999px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #001a1f; font-weight: 800; font-size: 12px;
+  }
+  /* prompt input */
+  .prompt-card {
+    position: relative;
+    background: rgba(15,22,24,0.55);
+    border: 1px solid rgba(45,212,191,0.22);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px var(--teal-glow), inset 0 1px 0 rgba(255,255,255,0.04);
+    backdrop-filter: blur(8px);
+  }
+  .prompt-card textarea {
+    width: 100%; min-height: 96px;
+    background: transparent; border: 0; outline: 0;
+    color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.5;
+    padding: 18px 18px 56px;
+    resize: none;
+  }
+  .prompt-card .actions {
+    position: absolute; left: 12px; bottom: 12px;
+    display: flex; gap: 6px;
+  }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    color: var(--text-2); display: inline-flex; align-items:center; justify-content:center;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+  .send-btn {
+    position: absolute; right: 12px; bottom: 12px;
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    border: 0; cursor: pointer;
+    box-shadow: 0 6px 16px var(--teal-glow);
+    display: inline-flex; align-items:center; justify-content:center;
+    color: #001a1f;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .chip {
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    color: var(--text-2); font-size: 12.5px; font-weight: 500; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip:hover { color: var(--teal); border-color: rgba(45,212,191,0.4); background: rgba(45,212,191,0.06); }
+  /* mono utility (futuristic micro-label) */
+  .mono { font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace; }
+  .mono-label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px; font-weight: 500;
+    color: var(--text-3); letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .mono-label .sep { opacity: 0.35; padding: 0 6px; }
+  .mono-label .live::before {
+    content: '●'; color: var(--teal); margin-right: 6px;
+    animation: livepulse 1.6s ease-in-out infinite;
+  }
+  @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  /* HUD signals readout (replaces big bar) */
+  .signals {
+    display: flex; align-items: center; gap: 16px;
+    margin-top: 14px; padding: 10px 14px;
+    background: rgba(8,12,14,0.6);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px; color: var(--text-3);
+    letter-spacing: 0.12em; text-transform: uppercase;
+    backdrop-filter: blur(8px);
+    position: relative; overflow: hidden;
+  }
+  .signals::before {
+    content: ''; position: absolute; left:0; right:0; top:0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(45,212,191,0.5), transparent);
+    background-size: 50% 100%; background-repeat: no-repeat;
+    animation: scanline 3.2s linear infinite;
+  }
+  @keyframes scanline { 0%{background-position:-50% 0} 100%{background-position:150% 0} }
+  .signals .sig {
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .signals .sig .lbl { color: var(--text-3); }
+  .signals .sig .val { color: var(--text); font-weight: 600; }
+  .signals .sig .val.t { color: var(--teal); }
+  .signals .micro-bar {
+    display: inline-flex; gap: 1.5px; align-items: center;
+  }
+  .signals .micro-bar .seg {
+    width: 4px; height: 8px; border-radius: 1px;
+    background: rgba(255,255,255,0.10);
+  }
+  .signals .micro-bar .seg.on { background: var(--teal); box-shadow: 0 0 4px var(--teal); }
+  .signals .micro-bar .seg.on.dim { background: rgba(45,212,191,0.5); box-shadow: none; }
+  .signals .spacer { flex: 1; }
+  .signals .hint { font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; opacity: 0.7; }
+  /* state-driven swap inside the signals row */
+  .signals .state-view { display: none; align-items: center; gap: 16px; flex: 1; }
+  body[data-state="idle"]      .signals .state-view.idle      { display: flex; }
+  body[data-state="typing"]    .signals .state-view.typing    { display: flex; }
+  body[data-state="submitted"] .signals .state-view.submitted { display: flex; }
+  /* idle tip rotation */
+  .idle-tip {
+    color: var(--text-2); letter-spacing: 0.12em;
+    font-weight: 500;
+  }
+  .idle-tip .arrow { color: var(--teal); margin-right: 8px; }
+  /* submitted: green check + status */
+  .signals .state-view.submitted .check { color: var(--teal); }
+  .signals .state-view.submitted .status {
+    color: var(--text); font-weight: 600; letter-spacing: 0.1em;
+  }
+  .signals .state-view.submitted .building {
+    color: var(--text-2); font-weight: 500;
+  }
+  .signals .state-view.submitted .building::before {
+    content: '↳ '; color: var(--teal); margin-right: 4px;
+  }
+  /* prompt placeholder color tweak when idle */
+  body[data-state="idle"] .prompt-card textarea {
+    /* show empty input */
+  }
+  body[data-state="submitted"] .prompt-card { opacity: 0.65; }
+  body[data-state="submitted"] .send-btn { opacity: 0.5; pointer-events: none; }
+  /* HUD status footer */
+  .hud-footer {
+    margin-top: 28px;
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px; color: var(--text-3);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    opacity: 0.55;
+  }
+  .hud-footer .dot { color: var(--teal); }
+  /* animated holographic border */
+  .holo {
+    position: relative;
+  }
+  .holo::after {
+    content: '';
+    position: absolute; inset: -1px;
+    border-radius: 17px;
+    padding: 1px;
+    background: conic-gradient(from 0deg,
+      rgba(45,212,191,0.0) 0deg,
+      rgba(45,212,191,0.6) 45deg,
+      rgba(56,189,248,0.5) 90deg,
+      rgba(45,212,191,0.0) 180deg,
+      rgba(94,234,212,0.4) 270deg,
+      rgba(45,212,191,0.0) 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: 0.45; pointer-events: none;
+    animation: holospin 8s linear infinite;
+  }
+  @keyframes holospin { to { transform: rotate(360deg); } }
+  /* typing cursor accent */
+  .cursor-blink::after {
+    content: '▎'; color: var(--teal); margin-left: 2px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  /* project card with phone-frame thumb */
+  .proj-card {
+    border-radius: 16px; padding: 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0));
+    border: 1px solid var(--border); cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .proj-card:hover {
+    border-color: rgba(45,212,191,0.35);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.3), 0 0 0 1px rgba(45,212,191,0.10);
+  }
+  .proj-thumb {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(45,212,191,0.10), transparent 70%),
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.2)),
+      var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border);
+  }
+  /* phone frame inside thumb */
+  .phone {
+    height: 90%;
+    aspect-ratio: 9 / 19.5;
+    background: #0a0d0e;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.04);
+    overflow: hidden;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .phone .island {
+    position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    width: 28%; height: 6px; border-radius: 99px; background: #000;
+    z-index: 2;
+  }
+  .phone .statusbar {
+    height: 14px; padding: 0 6px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 5px; color: rgba(255,255,255,0.6);
+    font-family: 'DM Sans'; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .phone .screen {
+    flex: 1; padding: 4px 6px;
+    display: flex; flex-direction: column; gap: 4px;
+    overflow: hidden;
+  }
+  .phone .ph-title {
+    font-size: 7px; font-weight: 700; color: #fff;
+    letter-spacing: -0.01em; line-height: 1;
+  }
+  .phone .ph-sub {
+    font-size: 4.5px; color: rgba(255,255,255,0.55);
+    line-height: 1.2;
+  }
+  .phone .ph-tabbar {
+    margin-top: auto;
+    height: 14px; flex-shrink: 0;
+    background: rgba(255,255,255,0.04);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: space-around;
+  }
+  .phone .ph-tab { width: 4px; height: 4px; border-radius: 1px; background: rgba(255,255,255,0.25); }
+  .phone .ph-tab.on { background: var(--teal); }
+  .phone .ph-pill {
+    display: inline-block; padding: 1px 4px; border-radius: 99px;
+    font-size: 4px; font-weight: 600;
+  }
+  /* empty / generating state */
+  .phone.empty { background: #0a0d0e; }
+  .phone.empty::after {
+    content: '';
+    position: absolute; inset: 18px 12px 22px;
+    border: 1px dashed rgba(255,255,255,0.08); border-radius: 6px;
+    background: linear-gradient(90deg, transparent, rgba(45,212,191,0.06), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2.4s linear infinite;
+  }
+  @keyframes shimmer { 0% { background-position: -100% 0 } 100% { background-position: 200% 0 } }
+  /* live-preview hover badge */
+  .proj-card .live-dot {
+    position: absolute; top: 8px; right: 10px; z-index: 3;
+    width: 6px; height: 6px; border-radius: 99px;
+    background: var(--teal); box-shadow: 0 0 8px var(--teal);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .proj-card:hover .live-dot { opacity: 1; }
+  .proj-card h4 { font-size: 13.5px; font-weight: 600; margin: 0 0 2px; color: var(--text); }
+  .proj-card .meta { color: var(--text-3); font-size: 11.5px; }
+  .proj-card .meta-row { display: flex; align-items: center; gap: 6px; }
+  .proj-card .meta-row .badge-public {
+    font-size: 9.5px; padding: 1px 6px; border-radius: 99px;
+    background: rgba(45,212,191,0.10); color: var(--teal);
+    border: 1px solid rgba(45,212,191,0.22); font-weight: 600;
+  }
+  /* mode card row (rocket-style stolen well) */
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .mode {
+    border-radius: 14px; padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode:hover { border-color: rgba(45,212,191,0.35); }
+  .mode .badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; margin-bottom: 8px;
+  }
+  .mode.build .badge { background: rgba(45,212,191,0.12); color: var(--teal); border: 1px solid rgba(45,212,191,0.3); }
+  .mode.shot .badge { background: rgba(251,191,36,0.10); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+  .mode.import .badge { background: rgba(167,139,250,0.10); color: #a78bfa; border: 1px solid rgba(167,139,250,0.25); }
+  .mode .h { font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .mode .d { color: var(--text-3); font-size: 12px; line-height: 1.45; }
+  /* ============ concept 1: refined hero ============ */
+  .c1 .hero {
+    padding: 64px 24px 36px;
+    background:
+      radial-gradient(ellipse 1100px 460px at 50% 100%, var(--teal-glow) 0%, transparent 60%),
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0) 0 0 / 32px 32px,
+      var(--bg);
+    position: relative;
+  }
+  .c1 .hero::after {
+    content: ''; position: absolute; inset: 0; pointer-events:none;
+    background: radial-gradient(ellipse 80% 60% at 50% 50%, transparent 50%, rgba(0,0,0,0.4));
+  }
+  .c1 .hero-inner { max-width: 720px; margin: 0 auto; position: relative; z-index: 1; }
+  .c1 h1 {
+    font-size: 44px; font-weight: 700; text-align: center; margin: 0 0 10px;
+    line-height: 1.08;
+  }
+  .c1 .grad {
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .c1 .sub { text-align: center; color: var(--text-2); font-size: 15px; margin: 0 0 28px; }
+  .c1 .recents-strip {
+    margin: 28px auto 0; max-width: 1080px; padding: 0 24px 64px;
+  }
+  .c1 .recents-strip .head {
+    display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px;
+  }
+  .c1 .recents-strip h3 { font-size: 14px; color: var(--text-2); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .c1 .recents-strip a { font-size: 12.5px; color: var(--teal); text-decoration: none; }
+  .c1 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  /* ============ concept 2: bento workspace ============ */
+  .c2 .layout {
+    display: grid; grid-template-columns: 240px 1fr; min-height: 720px;
+  }
+  .c2 .side {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 16px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .c2 .side .new {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; margin-bottom: 8px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    color: #001a1f; font-weight: 700; font-size: 13px; cursor: pointer;
+    box-shadow: 0 6px 18px var(--teal-glow);
+  }
+  .c2 .side .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 8px;
+    color: var(--text-2); font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  .c2 .side .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+  .c2 .side .nav-item.active { background: rgba(45,212,191,0.10); color: var(--teal); border: 1px solid rgba(45,212,191,0.25); }
+  .c2 .side .group-label {
+    margin: 16px 0 6px; padding: 0 12px; color: var(--text-3);
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .c2 .side .recent {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px;
+    color: var(--text-2); font-size: 12.5px; cursor: pointer;
+  }
+  .c2 .side .recent:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+  .c2 .side .recent .dot {
+    width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+  }
+  .c2 .main {
+    padding: 32px 32px 60px;
+    background:
+      radial-gradient(ellipse 800px 320px at 60% -10%, var(--teal-glow) 0%, transparent 70%),
+      var(--bg);
+  }
+  .c2 .greet { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+  .c2 .greet .grad {
+    background: linear-gradient(135deg, var(--teal), var(--teal-2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .c2 .sub { color: var(--text-2); font-size: 14px; margin-bottom: 22px; }
+  .c2 .bento {
+    margin-top: 28px;
+    display: grid; gap: 12px;
+    grid-template-columns: 2fr 1fr;
+    grid-auto-rows: auto;
+  }
+  .c2 .tile {
+    border-radius: 14px; padding: 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0));
+    border: 1px solid var(--border);
+  }
+  .c2 .tile h4 { font-size: 13px; color: var(--text-2); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 12px; }
+  .c2 .tile.recents { grid-row: span 2; }
+  .c2 .tile.recents .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .c2 .usage-row {
+    display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-2);
+  }
+  .c2 .usage-bar { flex: 1; height: 6px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden; }
+  .c2 .usage-fill { height: 100%; width: 24%; background: linear-gradient(90deg, var(--teal), var(--teal-2)); }
+  .c2 .activity-item {
+    display: flex; align-items: center; gap: 10px; padding: 6px 0;
+    color: var(--text-2); font-size: 12.5px; border-bottom: 1px dashed var(--border);
+  }
+  .c2 .activity-item:last-child { border-bottom: 0; }
+  .c2 .activity-item .ico {
+    width: 22px; height: 22px; border-radius: 6px;
+    display: inline-flex; align-items:center; justify-content:center;
+    background: rgba(45,212,191,0.10); color: var(--teal); font-size: 12px;
+  }
+  /* hide rule */
+  .frame.hidden { display: none; }
+</style>
+</head>
+<body data-palette="aqua">
+
+<div class="controls">
+  <span class="label" style="font-weight:700;color:var(--teal)">MOKKOI · DASHBOARD V2</span>
+  <span class="label" style="margin-left:18px">Palette</span>
+  <div class="seg" id="paletteSeg">
+    <button data-p="aqua" class="active">Teal + Aqua</button>
+    <button data-p="green">Teal-Green only</button>
+  </div>
+  <span class="label" style="margin-left:18px">Prompt state</span>
+  <div class="seg" id="stateSeg">
+    <button data-s="idle">Idle</button>
+    <button data-s="typing" class="active">Typing</button>
+    <button data-s="submitted">Submitted</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="swatches">
+    <span class="swatch t" title="primary"></span>
+    <span class="swatch t2" title="secondary"></span>
+    <span class="swatch s" title="surface"></span>
+  </div>
+</div>
+
+<!-- ============ Final dashboard ============ -->
+<div class="frame c1" data-frame="c1">
+  <div class="caption">
+    <span class="num">M</span>
+    <div>
+      <div class="title">Mokkoi Dashboard — Final</div>
+      <div class="desc">Prompt-first hero with live AI clarity HUD, build modes, and phone-frame project previews. Toggle palette and prompt-state to walk through the full UX flow.</div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="navbar">
+      <button class="icon-btn" title="Menu">≡</button>
+      <a class="logo"><span class="mark">M</span><span class="name">Mokkoi</span></a>
+      <div style="flex:1"></div>
+      <span class="pill">● Pro · 12 / 50 apps</span>
+      <span class="avatar">S</span>
+    </div>
+    <div class="hero">
+      <div class="hero-inner">
+        <div class="mono-label" style="text-align:center;margin-bottom:14px">
+          <span class="live">BUILD SESSION</span>
+          <span class="sep">·</span>
+          <span>06.05.26 · 01:35 IST</span>
+          <span class="sep">·</span>
+          <span>SAHIL@MOKKOI</span>
+        </div>
+        <h1>Welcome back, <span class="grad cursor-blink">Sahil</span></h1>
+        <p class="sub">What will you build today?</p>
+        <div class="prompt-card holo">
+          <textarea placeholder="Let's build — describe your app, paste a screenshot, or import a Figma file…">A meal planning app with weekly calendar, recipe browser, and auto shopping list</textarea>
+          <div class="actions">
+            <button class="icon-btn" title="Screenshot">📷</button>
+            <button class="icon-btn" title="Attach">＋</button>
+            <button class="icon-btn" title="Figma">◇</button>
+          </div>
+          <button class="send-btn" title="Send">↑</button>
+        </div>
+        <!-- live HUD signals (state-aware, non-blocking) -->
+        <div class="signals">
+          <!-- IDLE: no prompt typed yet → coaching tips -->
+          <div class="state-view idle">
+            <div class="sig">
+              <span class="lbl"><span style="color:var(--teal)">●</span> MOKKOI READY</span>
+            </div>
+            <div class="spacer"></div>
+            <span class="idle-tip"><span class="arrow">↳</span> TIP: BE SPECIFIC ABOUT THE USER'S MAIN GOAL</span>
+            <span class="hint">EXAMPLES ↗</span>
+          </div>
+
+          <!-- TYPING: live signals updating as user types -->
+          <div class="state-view typing">
+            <div class="sig">
+              <span class="lbl"><span style="color:var(--teal)">●</span> CLARITY</span>
+              <div class="micro-bar">
+                <div class="seg on"></div><div class="seg on"></div>
+                <div class="seg on"></div><div class="seg on"></div>
+                <div class="seg on dim"></div><div class="seg on dim"></div>
+                <div class="seg"></div><div class="seg"></div>
+                <div class="seg"></div><div class="seg"></div>
+              </div>
+              <span class="val t">62</span>
+            </div>
+            <div class="sig">
+              <span class="lbl">SPECIFICITY</span>
+              <span class="val">71</span>
+            </div>
+            <div class="sig">
+              <span class="lbl">SCOPE</span>
+              <span class="val">CLEAR</span>
+            </div>
+            <div class="spacer"></div>
+            <span class="hint">↳ +15 IF YOU NAME THE USER</span>
+          </div>
+
+          <!-- SUBMITTED: brief analysis confirmation before generation -->
+          <div class="state-view submitted">
+            <div class="sig">
+              <span class="lbl"><span class="check">✓</span> CLARITY</span>
+              <span class="val t">62</span>
+            </div>
+            <div class="sig">
+              <span class="lbl"><span class="check">✓</span> SPECIFICITY</span>
+              <span class="val t">71</span>
+            </div>
+            <div class="sig">
+              <span class="lbl"><span class="check">✓</span> SCOPE</span>
+              <span class="val t">CLEAR</span>
+            </div>
+            <div class="spacer"></div>
+            <span class="building">BUILDING TASTEPLAN · 4 SCREENS…</span>
+          </div>
+        </div>
+        <div class="modes">
+          <div class="mode build">
+            <div class="badge">⚡ Build</div>
+            <div class="h">Generate full app</div>
+            <div class="d">Multi-screen Flutter app from your prompt.</div>
+          </div>
+          <div class="mode shot">
+            <div class="badge">📷 Screenshot</div>
+            <div class="h">Clone what you see</div>
+            <div class="d">Drop a screenshot, get a working clone.</div>
+          </div>
+          <div class="mode import">
+            <div class="badge">◇ Import</div>
+            <div class="h">From Figma or HTML</div>
+            <div class="d">Pixel-true import via MCP server.</div>
+          </div>
+        </div>
+        <div class="chips" style="margin-top:18px">
+          <span class="chip">A fitness tracking app</span>
+          <span class="chip">An e-commerce shopping app</span>
+          <span class="chip">A banking & finance app</span>
+          <span class="chip">A music streaming app</span>
+        </div>
+        <div class="hud-footer">
+          <span><span class="dot">◆</span> MOKKOI v2.4</span>
+          <span>SONNET 4.6</span>
+          <span>READY</span>
+          <span>12 / 50 BUILDS</span>
+          <span>54 PROJECTS</span>
+        </div>
+      </div>
+    </div>
+    <div class="recents-strip">
+      <div class="head">
+        <h3>Recent projects</h3>
+        <a href="#">View all 54 →</a>
+      </div>
+      <div class="grid">
+        <!-- TastePlan: meal planner, warm orange -->
+        <div class="proj-card">
+          <span class="live-dot" title="Live preview on hover"></span>
+          <div class="proj-thumb">
+            <div class="phone">
+              <div class="island"></div>
+              <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+              <div class="screen" style="background:linear-gradient(180deg,#1a0e08,#0a0d0e)">
+                <div class="ph-sub" style="color:#fb923c">MAY 5 — MAY 11</div>
+                <div class="ph-title">This week</div>
+                <div style="display:flex;gap:2px;margin-top:2px">
+                  <div style="flex:1;height:14px;border-radius:3px;background:#f97316"></div>
+                  <div style="flex:1;height:14px;border-radius:3px;background:rgba(249,115,22,0.4)"></div>
+                  <div style="flex:1;height:14px;border-radius:3px;background:rgba(249,115,22,0.25)"></div>
+                </div>
+                <div style="margin-top:3px;padding:3px;border-radius:4px;background:rgba(255,255,255,0.04)">
+                  <div class="ph-sub" style="font-weight:600;color:#fff;font-size:5px">🍝 Pasta primavera</div>
+                  <div class="ph-sub" style="font-size:4px">Tonight · 25 min</div>
+                </div>
+                <div style="padding:3px;border-radius:4px;background:rgba(255,255,255,0.04)">
+                  <div class="ph-sub" style="font-weight:600;color:#fff;font-size:5px">🥗 Greek salad</div>
+                  <div class="ph-sub" style="font-size:4px">Tomorrow · 10 min</div>
+                </div>
+              </div>
+              <div class="ph-tabbar"><div class="ph-tab on"></div><div class="ph-tab"></div><div class="ph-tab"></div><div class="ph-tab"></div></div>
+            </div>
+          </div>
+          <h4>TastePlan</h4>
+          <div class="meta-row"><span class="meta">4 screens · 2h ago</span></div>
+        </div>
+
+        <!-- SoundWave: music, dark + violet -->
+        <div class="proj-card">
+          <span class="live-dot"></span>
+          <div class="proj-thumb">
+            <div class="phone">
+              <div class="island"></div>
+              <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+              <div class="screen" style="background:linear-gradient(180deg,#1a0d24,#0a0d0e)">
+                <div class="ph-title" style="color:#a78bfa">Now Playing</div>
+                <div style="margin:3px auto;width:34px;height:34px;border-radius:6px;background:linear-gradient(135deg,#8b5cf6,#ec4899);box-shadow:0 4px 12px rgba(139,92,246,0.4)"></div>
+                <div class="ph-sub" style="text-align:center;color:#fff;font-weight:600;font-size:5.5px">Midnight Drive</div>
+                <div class="ph-sub" style="text-align:center;font-size:4px">FKJ · Vincent</div>
+                <div style="margin-top:3px;height:2px;border-radius:99px;background:rgba(255,255,255,0.10);position:relative">
+                  <div style="position:absolute;left:0;top:0;height:100%;width:42%;background:#a78bfa;border-radius:99px"></div>
+                </div>
+                <div style="display:flex;justify-content:space-around;margin-top:2px">
+                  <div style="width:5px;height:5px;border-radius:99px;background:rgba(255,255,255,0.4)"></div>
+                  <div style="width:8px;height:8px;border-radius:99px;background:#a78bfa"></div>
+                  <div style="width:5px;height:5px;border-radius:99px;background:rgba(255,255,255,0.4)"></div>
+                </div>
+              </div>
+              <div class="ph-tabbar"><div class="ph-tab"></div><div class="ph-tab on"></div><div class="ph-tab"></div><div class="ph-tab"></div></div>
+            </div>
+          </div>
+          <h4>SoundWave</h4>
+          <div class="meta-row"><span class="meta">7 screens · yesterday</span><span class="badge-public">Public</span></div>
+        </div>
+
+        <!-- FitTrack: fitness, teal -->
+        <div class="proj-card">
+          <span class="live-dot"></span>
+          <div class="proj-thumb">
+            <div class="phone">
+              <div class="island"></div>
+              <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+              <div class="screen" style="background:linear-gradient(180deg,#04201d,#0a0d0e)">
+                <div class="ph-sub" style="color:#5eead4;font-weight:600">TODAY</div>
+                <div class="ph-title">8,420 steps</div>
+                <div style="margin-top:2px;display:flex;align-items:end;gap:1.5px;height:18px">
+                  <div style="flex:1;height:30%;background:rgba(45,212,191,0.4);border-radius:1px"></div>
+                  <div style="flex:1;height:55%;background:rgba(45,212,191,0.5);border-radius:1px"></div>
+                  <div style="flex:1;height:40%;background:rgba(45,212,191,0.4);border-radius:1px"></div>
+                  <div style="flex:1;height:75%;background:#2dd4bf;border-radius:1px"></div>
+                  <div style="flex:1;height:90%;background:#2dd4bf;border-radius:1px"></div>
+                  <div style="flex:1;height:65%;background:rgba(45,212,191,0.5);border-radius:1px"></div>
+                  <div style="flex:1;height:50%;background:rgba(45,212,191,0.4);border-radius:1px"></div>
+                </div>
+                <div style="margin-top:3px;padding:3px;border-radius:4px;background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.2)">
+                  <div class="ph-sub" style="color:#fff;font-weight:600;font-size:5px">⚡ 32 min run</div>
+                  <div class="ph-sub" style="font-size:4px">5.2 km · 412 cal</div>
+                </div>
+              </div>
+              <div class="ph-tabbar"><div class="ph-tab on"></div><div class="ph-tab"></div><div class="ph-tab"></div><div class="ph-tab"></div></div>
+            </div>
+          </div>
+          <h4>FitTrack</h4>
+          <div class="meta-row"><span class="meta">5 screens · 3d ago</span></div>
+        </div>
+
+        <!-- ShopKart: e-commerce, pink -->
+        <div class="proj-card">
+          <span class="live-dot"></span>
+          <div class="proj-thumb">
+            <div class="phone">
+              <div class="island"></div>
+              <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+              <div class="screen" style="background:linear-gradient(180deg,#220915,#0a0d0e)">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div class="ph-title" style="font-size:6px">Shop</div>
+                  <div style="width:10px;height:5px;border-radius:99px;background:#ec4899;display:flex;align-items:center;justify-content:center"><span class="ph-sub" style="font-size:3.5px;color:#fff;font-weight:700">3</span></div>
+                </div>
+                <div style="height:8px;border-radius:99px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:2.5px;margin-top:2px">
+                  <div style="aspect-ratio:1;border-radius:3px;background:linear-gradient(135deg,#ec4899,#f472b6)"></div>
+                  <div style="aspect-ratio:1;border-radius:3px;background:linear-gradient(135deg,#fb923c,#facc15)"></div>
+                  <div style="aspect-ratio:1;border-radius:3px;background:linear-gradient(135deg,#a78bfa,#60a5fa)"></div>
+                  <div style="aspect-ratio:1;border-radius:3px;background:linear-gradient(135deg,#34d399,#22d3ee)"></div>
+                </div>
+              </div>
+              <div class="ph-tabbar"><div class="ph-tab"></div><div class="ph-tab"></div><div class="ph-tab on"></div><div class="ph-tab"></div></div>
+            </div>
+          </div>
+          <h4>ShopKart</h4>
+          <div class="meta-row"><span class="meta">12 screens · 1w ago</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Concept 2 (Bento Workspace) removed — locked on Refined Hero -->
+<div class="frame c2 hidden" data-frame="c2" style="display:none">
+  <div class="caption">
+    <span class="num">2</span>
+    <div>
+      <div class="title">Bento Workspace</div>
+      <div class="desc">Persistent slim sidebar + bento grid of prompt, recent projects, usage, and activity. More "tool", less "landing page". Scales naturally as you have more projects.</div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="layout">
+      <aside class="side">
+        <a class="logo" style="padding:6px 8px 14px"><span class="mark">M</span><span class="name">Mokkoi</span></a>
+        <div class="new">＋ New project</div>
+        <div class="nav-item active">🏠 Home</div>
+        <div class="nav-item">📁 Projects <span style="margin-left:auto;font-size:11px;color:var(--text-3)">54</span></div>
+        <div class="nav-item">⬇ Imports <span style="margin-left:auto;font-size:11px;color:var(--text-3)">3</span></div>
+        <div class="nav-item">🎨 Templates</div>
+        <div class="nav-item">⚡ Intelligence <span style="margin-left:auto;font-size:10px;background:rgba(251,191,36,0.12);color:#fbbf24;padding:2px 6px;border-radius:99px">beta</span></div>
+        <div class="group-label">Recent</div>
+        <div class="recent"><span class="dot" style="background:linear-gradient(135deg,#f97316,#fb923c)"></span>TastePlan</div>
+        <div class="recent"><span class="dot" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)"></span>SoundWave</div>
+        <div class="recent"><span class="dot" style="background:linear-gradient(135deg,#14b8a6,#2dd4bf)"></span>FitTrack</div>
+        <div class="recent"><span class="dot" style="background:linear-gradient(135deg,#ec4899,#f472b6)"></span>ShopKart</div>
+        <div style="flex:1"></div>
+        <div class="nav-item">⚙ Settings</div>
+        <div class="nav-item">? Help</div>
+      </aside>
+      <main class="main">
+        <h1 class="greet">Welcome back, <span class="grad">Sahil</span></h1>
+        <p class="sub">You've shipped 3 screens this week — keep going.</p>
+        <div class="prompt-card" style="max-width:none">
+          <textarea placeholder="Let's build — describe your app, paste a screenshot, or import a Figma file…"></textarea>
+          <div class="actions">
+            <button class="icon-btn" title="Screenshot">📷</button>
+            <button class="icon-btn" title="Attach">＋</button>
+            <button class="icon-btn" title="Figma">◇</button>
+          </div>
+          <button class="send-btn" title="Send">↑</button>
+        </div>
+        <div class="modes">
+          <div class="mode build"><div class="badge">⚡ Build</div><div class="h">Generate full app</div><div class="d">Multi-screen Flutter app from your prompt.</div></div>
+          <div class="mode shot"><div class="badge">📷 Screenshot</div><div class="h">Clone what you see</div><div class="d">Drop a screenshot, get a working clone.</div></div>
+          <div class="mode import"><div class="badge">◇ Import</div><div class="h">From Figma / HTML</div><div class="d">Pixel-true import via MCP.</div></div>
+        </div>
+        <div class="bento">
+          <div class="tile recents">
+            <h4>Recent projects</h4>
+            <div class="grid">
+              <!-- TastePlan -->
+              <div class="proj-card">
+                <span class="live-dot"></span>
+                <div class="proj-thumb">
+                  <div class="phone">
+                    <div class="island"></div>
+                    <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+                    <div class="screen" style="background:linear-gradient(180deg,#1a0e08,#0a0d0e)">
+                      <div class="ph-sub" style="color:#fb923c">MAY 5 — MAY 11</div>
+                      <div class="ph-title">This week</div>
+                      <div style="display:flex;gap:2px;margin-top:2px">
+                        <div style="flex:1;height:12px;border-radius:3px;background:#f97316"></div>
+                        <div style="flex:1;height:12px;border-radius:3px;background:rgba(249,115,22,0.4)"></div>
+                        <div style="flex:1;height:12px;border-radius:3px;background:rgba(249,115,22,0.25)"></div>
+                      </div>
+                      <div style="margin-top:3px;padding:3px;border-radius:4px;background:rgba(255,255,255,0.04)">
+                        <div class="ph-sub" style="font-weight:600;color:#fff;font-size:5px">🍝 Pasta primavera</div>
+                      </div>
+                    </div>
+                    <div class="ph-tabbar"><div class="ph-tab on"></div><div class="ph-tab"></div><div class="ph-tab"></div><div class="ph-tab"></div></div>
+                  </div>
+                </div>
+                <h4>TastePlan</h4>
+                <div class="meta-row"><span class="meta">4 screens · 2h ago</span></div>
+              </div>
+
+              <!-- SoundWave -->
+              <div class="proj-card">
+                <span class="live-dot"></span>
+                <div class="proj-thumb">
+                  <div class="phone">
+                    <div class="island"></div>
+                    <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+                    <div class="screen" style="background:linear-gradient(180deg,#1a0d24,#0a0d0e)">
+                      <div class="ph-title" style="color:#a78bfa;font-size:6px">Now Playing</div>
+                      <div style="margin:3px auto;width:30px;height:30px;border-radius:6px;background:linear-gradient(135deg,#8b5cf6,#ec4899)"></div>
+                      <div class="ph-sub" style="text-align:center;color:#fff;font-weight:600;font-size:5px">Midnight Drive</div>
+                      <div style="margin-top:2px;height:2px;border-radius:99px;background:rgba(255,255,255,0.10);position:relative">
+                        <div style="position:absolute;left:0;top:0;height:100%;width:42%;background:#a78bfa;border-radius:99px"></div>
+                      </div>
+                    </div>
+                    <div class="ph-tabbar"><div class="ph-tab"></div><div class="ph-tab on"></div><div class="ph-tab"></div><div class="ph-tab"></div></div>
+                  </div>
+                </div>
+                <h4>SoundWave</h4>
+                <div class="meta-row"><span class="meta">7 screens · yesterday</span></div>
+              </div>
+
+              <!-- FitTrack -->
+              <div class="proj-card">
+                <span class="live-dot"></span>
+                <div class="proj-thumb">
+                  <div class="phone">
+                    <div class="island"></div>
+                    <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+                    <div class="screen" style="background:linear-gradient(180deg,#04201d,#0a0d0e)">
+                      <div class="ph-sub" style="color:#5eead4;font-weight:600">TODAY</div>
+                      <div class="ph-title">8,420 steps</div>
+                      <div style="margin-top:2px;display:flex;align-items:end;gap:1.5px;height:14px">
+                        <div style="flex:1;height:30%;background:rgba(45,212,191,0.4);border-radius:1px"></div>
+                        <div style="flex:1;height:55%;background:rgba(45,212,191,0.5);border-radius:1px"></div>
+                        <div style="flex:1;height:75%;background:#2dd4bf;border-radius:1px"></div>
+                        <div style="flex:1;height:90%;background:#2dd4bf;border-radius:1px"></div>
+                        <div style="flex:1;height:50%;background:rgba(45,212,191,0.4);border-radius:1px"></div>
+                      </div>
+                    </div>
+                    <div class="ph-tabbar"><div class="ph-tab on"></div><div class="ph-tab"></div><div class="ph-tab"></div><div class="ph-tab"></div></div>
+                  </div>
+                </div>
+                <h4>FitTrack</h4>
+                <div class="meta-row"><span class="meta">5 screens · 3d ago</span></div>
+              </div>
+
+              <!-- Generating / empty state -->
+              <div class="proj-card">
+                <div class="proj-thumb">
+                  <div class="phone empty">
+                    <div class="island"></div>
+                    <div class="statusbar"><span>9:41</span><span>●●●</span></div>
+                  </div>
+                </div>
+                <h4>Untitled project</h4>
+                <div class="meta-row"><span class="meta" style="color:var(--teal)">Generating preview…</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="tile">
+            <h4>Plan usage</h4>
+            <div style="font-size:24px;font-weight:700;margin-bottom:4px"><span class="grad" style="background:linear-gradient(135deg,var(--teal),var(--teal-2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">12</span> <span style="color:var(--text-3);font-weight:500;font-size:14px">/ 50 apps</span></div>
+            <div class="usage-row" style="margin-top:8px">
+              <div class="usage-bar"><div class="usage-fill"></div></div>
+            </div>
+            <button style="margin-top:14px;width:100%;padding:8px 12px;border-radius:8px;background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;font-weight:600;font-size:12.5px;cursor:pointer">Upgrade to Pro →</button>
+          </div>
+          <div class="tile">
+            <h4>Activity</h4>
+            <div class="activity-item"><span class="ico">▲</span>3 screens shipped this week</div>
+            <div class="activity-item"><span class="ico">✓</span>TastePlan published 2h ago</div>
+            <div class="activity-item"><span class="ico">↻</span>SoundWave edited yesterday</div>
+            <div class="activity-item"><span class="ico">＋</span>2 imports from Figma</div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<script>
+  const paletteSeg = document.getElementById('paletteSeg');
+  paletteSeg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...paletteSeg.children].forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    document.body.dataset.palette = b.dataset.p;
+  });
+
+  const stateSeg = document.getElementById('stateSeg');
+  const promptTexts = {
+    idle: '',
+    typing: 'A meal planning app with weekly calendar, recipe browser, and auto shopping list',
+    submitted: 'A meal planning app for busy parents with weekly calendar, recipe browser, and auto shopping list',
+  };
+  document.body.dataset.state = 'typing';
+  stateSeg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...stateSeg.children].forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    const s = b.dataset.s;
+    document.body.dataset.state = s;
+    document.querySelectorAll('.prompt-card textarea').forEach(t => {
+      t.value = promptTexts[s] ?? '';
+      t.placeholder = s === 'idle'
+        ? "Let's build — describe your app, paste a screenshot, or import a Figma file…"
+        : '';
+    });
+  });
+</script>
+</body>
+</html>
