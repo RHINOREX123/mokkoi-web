@@ -204,12 +204,24 @@ export default function Dashboard() {
     const prevImports = importProjects
     setProjects(prev => prev.filter(p => p.id !== id))
     setImportProjects(prev => prev.filter(p => p.id !== id))
-    const { error } = await supabase.from('projects').delete().eq('id', id)
-    if (error) {
-      console.error('[mokkoi] failed to delete project', id, error)
+    // Use count: 'exact' so we can detect silent RLS blocks. supabase-js
+    // returns no error when RLS prevents the delete — only count=0 reveals it.
+    // Without this check the row "deletes" optimistically then comes back on
+    // the next loadProjects() refresh. Same defensive pattern applies to any
+    // delete-via-RLS path.
+    const { error, count } = await supabase
+      .from('projects')
+      .delete({ count: 'exact' })
+      .eq('id', id)
+    if (error || count === 0) {
+      console.error('[mokkoi] delete returned no rows affected', { id, error, count })
       setProjects(prevProjects)
       setImportProjects(prevImports)
-      setToastMessage(`Failed to delete: ${error.message}`)
+      setToastMessage(
+        error
+          ? `Failed to delete: ${error.message}`
+          : `Couldn't delete this project — you may not have permission. Please refresh and try again.`,
+      )
     }
   }
 

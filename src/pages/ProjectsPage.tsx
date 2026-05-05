@@ -148,12 +148,22 @@ export default function ProjectsPage() {
     const prevImports = importProjects
     setProjects(prev => prev.filter(p => p.id !== id))
     setImportProjects(prev => prev.filter(p => p.id !== id))
-    const { error } = await supabase.from('projects').delete().eq('id', id)
-    if (error) {
-      console.error('[mokkoi] failed to delete project', id, error)
+    // count: 'exact' catches silent RLS blocks where supabase returns no
+    // error but 0 rows were actually deleted. Without this, the optimistic
+    // UI removal sticks until loadProjects() re-fetches and the row reappears.
+    const { error, count } = await supabase
+      .from('projects')
+      .delete({ count: 'exact' })
+      .eq('id', id)
+    if (error || count === 0) {
+      console.error('[mokkoi] delete returned no rows affected', { id, error, count })
       setProjects(prevProjects)
       setImportProjects(prevImports)
-      setToastMessage(`Failed to delete: ${error.message}`)
+      setToastMessage(
+        error
+          ? `Failed to delete: ${error.message}`
+          : `Couldn't delete this project — you may not have permission. Please refresh and try again.`,
+      )
     }
   }
 
