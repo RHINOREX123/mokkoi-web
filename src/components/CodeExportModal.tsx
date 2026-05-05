@@ -105,12 +105,30 @@ export function CodeExportModal({ tree, screenName, onClose }: CodeExportModalPr
     trackEvent('screen_downloaded', { format: tab })
   }
 
-  const handleOpenSnack = () => {
-    // Expo Snack supports code via URL parameters
-    const snackCode = encodeURIComponent(tsxCode)
-    const url = `https://snack.expo.dev/?code=${snackCode}&name=${encodeURIComponent(screenName || 'MokkoiScreen')}&platform=ios`
-    window.open(url, '_blank')
-    trackEvent('screen_opened_snack')
+  const handleOpenSnack = async () => {
+    const name = screenName || 'MokkoiScreen'
+    const encoded = encodeURIComponent(tsxCode)
+    // Snack's URL-param flow fails (HTTP 431) once the encoded code crosses
+    // the URL-length cap most browsers/edges enforce (~8KB). Short screens
+    // still take the fast URL path; long screens fall back to copying the
+    // code to the clipboard and opening an empty Snack so the user can paste.
+    if (encoded.length < 6000) {
+      const url = `https://snack.expo.dev/?code=${encoded}&name=${encodeURIComponent(name)}&platform=ios`
+      window.open(url, '_blank')
+      trackEvent('screen_opened_snack', { method: 'url' })
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(tsxCode)
+      window.open(`https://snack.expo.dev/?name=${encodeURIComponent(name)}&platform=ios`, '_blank')
+      setCopied(true)
+      setTimeout(() => setCopied(false), 3000)
+      trackEvent('screen_opened_snack', { method: 'clipboard' })
+    } catch {
+      // Last-resort: just open Snack so the user can paste manually
+      window.open(`https://snack.expo.dev/?platform=ios`, '_blank')
+      trackEvent('screen_opened_snack', { method: 'fallback' })
+    }
   }
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
