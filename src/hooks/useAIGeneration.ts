@@ -78,27 +78,36 @@ function isStrongCreateIntent(prompt: string): boolean {
   return STRONG_CREATE_PATTERN.test(prompt) || STRONG_NEW_PATTERN.test(prompt)
 }
 
+// Returns a chat-ready string. Error returns are prefixed with "Error: " so
+// ChatPanel's startsWith('Error:') check colors them red and shows Try Again.
+// Cancellation is NOT an error and intentionally returns no prefix.
 function getUserFriendlyError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
 
   if (message.includes('rate limit') || message.includes('429') || message.includes('credits'))
-    return "You've run out of credits. Upgrade your plan or wait for monthly reset."
+    return "Error: You've run out of credits. Upgrade your plan or wait for monthly reset."
   if (message.includes('401') || message.includes('unauthorized') || message.includes('auth'))
-    return 'Your session has expired. Please sign in again.'
+    return 'Error: Your session has expired. Please sign in again.'
   if (message.includes('timeout') || message.includes('504') || message.includes('TIMEOUT'))
-    return 'Generation took too long. Please try a simpler prompt or try again.'
+    return 'Error: Generation took too long. Please try a simpler prompt or try again.'
   if (message.includes('500') || message.includes('502') || message.includes('503'))
-    return 'Our servers are experiencing issues. Please try again in a moment.'
+    return 'Error: Our servers are experiencing issues. Please try again in a moment.'
   if (message.includes('network') || message.includes('fetch') || message.includes('Failed to fetch'))
-    return 'Network error. Please check your connection and try again.'
+    return 'Error: Network error. Please check your connection and try again.'
   if (message.includes('overloaded') || message.includes('capacity'))
-    return 'AI is experiencing high demand. Please try again in a moment.'
+    return 'Error: AI is experiencing high demand. Please try again in a moment.'
   if (message.includes('payment') || message.includes('stripe') || message.includes('checkout'))
-    return 'Payment processing error. Please try again or contact support.'
+    return 'Error: Payment processing error. Please try again or contact support.'
   if (message.includes('Missing or invalid prompt'))
-    return 'Please provide a screen description and try again.'
+    return 'Error: Please provide a screen description and try again.'
   if (message.includes('AI_BRIEF_ONLY_NO_JSON') || message.includes('AI returned invalid JSON'))
-    return 'The AI got stuck mid-response. Please try regenerating.'
+    return 'Error: The AI got stuck mid-response. Please try regenerating.'
+  if (
+    message.includes('Failed to parse generated screens') ||
+    message.includes('Failed to parse app plan') ||
+    message.includes('Generation hit length limit')
+  )
+    return 'Error: The AI got tangled up generating your app. Try again — usually works on retry.'
   if (message.includes('abort') || message.includes('cancel'))
     return 'Generation cancelled.'
 
@@ -106,7 +115,7 @@ function getUserFriendlyError(error: unknown): string {
   if (message.length > 10 && message.length < 200)
     return `Error: ${message}`
 
-  return 'Something went wrong. Please try again.'
+  return 'Error: Something went wrong. Please try again.'
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -157,6 +166,12 @@ interface AIGenerationDeps {
   onPaywall?: () => void
   /** Fired after a successful app generation so the navbar count can refresh */
   onAppGenerated?: () => void
+  /** Current project name (used to detect auto-derived prompt-slice names) */
+  projectName?: string
+  /** Update the navbar title locally */
+  setProjectName?: React.Dispatch<React.SetStateAction<string>>
+  /** Persist the project name to Supabase */
+  saveProjectName?: (name: string) => Promise<void>
 }
 
 /** Build conversation history from recent messages for Claude context */
@@ -191,6 +206,9 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     deviceId,
     onPaywall,
     onAppGenerated,
+    projectName,
+    setProjectName,
+    saveProjectName,
   } = deps
 
   const [isGenerating, setIsGenerating] = useState(false)
@@ -411,6 +429,28 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
           addConnection(conn.fromScreenId, conn.toScreenId)
         }
 
+        // Auto-rename the project from the auto-derived prompt-slice (e.g.
+        // "Build a meal planning app with") to the planner's clean appName
+        // (e.g. "MealPlan"). Only fires when the current name still matches
+        // the prompt-slice — i.e. the user hasn't manually renamed.
+        // Dashboard.tsx and AuthPage.tsx both seed projects.name with
+        // `prompt.trim().slice(0, 30)`, so that's our auto-derived signature.
+        const autoDerivedName = prompt.trim().slice(0, 30)
+        if (
+          appName &&
+          appName !== projectName &&
+          projectName === autoDerivedName &&
+          setProjectName &&
+          saveProjectName
+        ) {
+          setProjectName(appName)
+          try {
+            await saveProjectName(appName)
+          } catch (err) {
+            console.error('[mokkoi] failed to auto-rename project', err)
+          }
+        }
+
         // Chat message
         const screenNames = appScreens.map(s => s.name)
         const assistantMsg: ChatMessage = {
@@ -429,7 +469,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         const errorMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `Error: ${getUserFriendlyError(err)}`,
+          content: getUserFriendlyError(err),
           timestamp: Date.now(),
         }
         setProjectMessages(prev => [...prev, errorMsg])
@@ -520,7 +560,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         const errorMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `Error: ${getUserFriendlyError(err)}`,
+          content: getUserFriendlyError(err),
           timestamp: Date.now(),
         }
         setProjectMessages(prev => [...prev, errorMsg])
@@ -673,7 +713,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         const errorMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `Error: ${getUserFriendlyError(err)}`,
+          content: getUserFriendlyError(err),
           timestamp: Date.now(),
         }
         setProjectMessages(prev => [...prev, errorMsg])
@@ -686,7 +726,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       setStreamingText('')
       setPartialTree(null)
     }
-  }, [activeGeneratedId, generatedScreens, saveMessage, projectId, projectMessages, setGeneratedScreens, setActiveGeneratedId, setProjectMessages, onPaywall, onAppGenerated])
+  }, [activeGeneratedId, generatedScreens, saveMessage, projectId, projectMessages, setGeneratedScreens, setActiveGeneratedId, setProjectMessages, onPaywall, onAppGenerated, projectName, setProjectName, saveProjectName])
 
   const handleRegenerate = useCallback(() => {
     if (!activeGenerated) return
