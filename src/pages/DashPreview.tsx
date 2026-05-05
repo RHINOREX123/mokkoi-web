@@ -1,5 +1,11 @@
-import { HeroBackground } from '../components/dashboard/HeroBackground'
+import { useState } from 'react'
+import { DashboardHero } from '../components/dashboard/DashboardHero'
+import { HudFooter } from '../components/dashboard/HudFooter'
+import { ModeCards, type DashboardMode } from '../components/dashboard/ModeCards'
 import { PhoneThumbnail } from '../components/dashboard/PhoneThumbnail'
+import { PromptCard, type SubmitMode } from '../components/dashboard/PromptCard'
+import { SignalsHUD, type SignalsState } from '../components/dashboard/SignalsHUD'
+import { usePromptScore } from '../components/dashboard/usePromptScore'
 
 /**
  * /dash-preview — internal-only verification page for the Dashboard V2 redesign.
@@ -9,6 +15,14 @@ import { PhoneThumbnail } from '../components/dashboard/PhoneThumbnail'
  * as a Storybook-equivalent) once the redesign ships.
  */
 export default function DashPreview() {
+  // ---- live demo state ----
+  const [prompt, setPrompt] = useState(
+    'A meal planning app with weekly calendar, recipe browser, and auto shopping list',
+  )
+  const [mode, setMode] = useState<SubmitMode>('build')
+  const [forcedHudState, setForcedHudState] = useState<SignalsState | 'auto'>('auto')
+  const score = usePromptScore(prompt)
+
   return (
     <div
       style={{
@@ -16,44 +30,69 @@ export default function DashPreview() {
         background: 'var(--dash-bg)',
         color: 'var(--dash-text)',
         fontFamily: "'DM Sans', system-ui, sans-serif",
-        padding: '40px 24px 80px',
-        position: 'relative',
-        overflow: 'hidden',
+        padding: '0 0 80px',
       }}
     >
-      <HeroBackground />
+      {/* Top control bar (verification page only) */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+          padding: '12px 20px',
+          background: 'rgba(7,9,10,0.85)',
+          backdropFilter: 'blur(14px)',
+          borderBottom: '1px solid var(--dash-border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: 'var(--dash-text-3)',
+        }}
+      >
+        <span style={{ color: 'var(--dash-teal)', fontWeight: 700 }}>
+          MOKKOI · DASHBOARD V2 · PHASE 2 PREVIEW
+        </span>
+        <span style={{ flex: 1 }} />
+        <span>HUD STATE</span>
+        <Seg
+          options={['auto', 'idle', 'submitted']}
+          value={forcedHudState}
+          onChange={(v) => setForcedHudState(v as SignalsState | 'auto')}
+        />
+      </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', position: 'relative', zIndex: 1 }}>
-        <header style={{ marginBottom: 40 }}>
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 'var(--dash-mono-label-size)',
-              letterSpacing: 'var(--dash-mono-label-spacing)',
-              textTransform: 'uppercase',
-              color: 'var(--dash-text-3)',
-              marginBottom: 12,
-            }}
-          >
-            ● DASHBOARD V2 · PHASE 1 PREVIEW
-          </div>
-          <h1
-            style={{
-              fontFamily: "'Bricolage Grotesque', system-ui, sans-serif",
-              fontSize: 36,
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
-              margin: 0,
-            }}
-          >
-            Phone thumbnails &amp; hero atmosphere
-          </h1>
-          <p style={{ color: 'var(--dash-text-2)', marginTop: 8, fontSize: 14 }}>
-            Internal verification of the foundational components from Phase 1 of the
-            redesign plan.
-          </p>
-        </header>
+      {/* Live hero with prompt input + signals + modes wired together. */}
+      <DashboardHero firstName="Sahil" hasProjects userHandle="sahil@mokkoi.com">
+        <PromptCard
+          value={prompt}
+          onChange={setPrompt}
+          onSubmit={(m) => alert(`Submit: ${m}\n\n${prompt || '(empty prompt)'}`)}
+          mode={mode}
+          onModeChange={setMode}
+          disabled={forcedHudState === 'submitted'}
+        />
+        <SignalsHUD
+          score={score}
+          state={forcedHudState === 'auto' ? undefined : forcedHudState}
+          projectName="TastePlan"
+          screenCount={4}
+        />
+        <ModeCards onMode={(m: DashboardMode) => alert(`Mode: ${m}`)} />
+        <HudFooter
+          version="2.4"
+          model="SONNET 4.6"
+          appCount={12}
+          appLimit={50}
+          projectCount={54}
+        />
+      </DashboardHero>
 
+      {/* PhoneThumbnail gallery (Phase 1 verification — kept for reference) */}
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
         <Section label="PhoneThumbnail · ready (gradient + initial fallback)">
           <Row>
             <Card>
@@ -75,38 +114,71 @@ export default function DashPreview() {
           </Row>
         </Section>
 
-        <Section label="PhoneThumbnail · generating (shimmer)">
+        <Section label="PhoneThumbnail · generating / empty">
           <Row>
             <Card>
               <PhoneThumbnail projectName="Untitled project" state="generating" />
               <Caption muted>Generating preview…</Caption>
             </Card>
             <Card>
-              <PhoneThumbnail projectName="New project" state="generating" />
-              <Caption muted>Generating preview…</Caption>
-            </Card>
-          </Row>
-        </Section>
-
-        <Section label="PhoneThumbnail · empty (no screens)">
-          <Row>
-            <Card>
               <PhoneThumbnail projectName="Empty project" state="empty" />
               <Caption muted>No screens yet</Caption>
             </Card>
           </Row>
         </Section>
-
-        <Section label="PhoneThumbnail · sm (sidebar size)">
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <PhoneThumbnail projectName="TastePlan" size="sm" />
-            <PhoneThumbnail projectName="SoundWave" size="sm" />
-            <PhoneThumbnail projectName="FitTrack" size="sm" />
-            <PhoneThumbnail projectName="Empty" size="sm" state="empty" />
-            <PhoneThumbnail projectName="Generating" size="sm" state="generating" />
-          </div>
-        </Section>
       </div>
+    </div>
+  )
+}
+
+// ---- internal helpers ----------------------------------------------------
+
+function Seg({
+  options,
+  value,
+  onChange,
+}: {
+  options: ReadonlyArray<string>
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        background: 'var(--dash-surface)',
+        border: '1px solid var(--dash-border)',
+        borderRadius: 10,
+        padding: 3,
+      }}
+    >
+      {options.map((o) => {
+        const active = o === value
+        return (
+          <button
+            key={o}
+            type="button"
+            onClick={() => onChange(o)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 7,
+              border: 'none',
+              background: active
+                ? 'linear-gradient(135deg, var(--dash-teal), var(--dash-teal-2))'
+                : 'transparent',
+              color: active ? '#001a1f' : 'var(--dash-text-2)',
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {o}
+          </button>
+        )
+      })}
     </div>
   )
 }
