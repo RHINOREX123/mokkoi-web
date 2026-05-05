@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './_lib/auth-helper.js'
+import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate } from './_lib/userPlan.js'
 import { normalizeComponentTree } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
@@ -269,9 +270,33 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
 
 async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
   if (!user.isMCP) {
-    const creditCheck = await checkCredits(user.id, 'app', user.email)
-    if (!creditCheck.hasCredits) {
-      return res.status(402).json({ error: creditCheck.error, creditsRemaining: creditCheck.creditsRemaining, upgradeUrl: creditCheck.upgradeUrl })
+    const tier = await getUserTier(user.id, user.email)
+    if (tier === 'free') {
+      const freeAppsUsed = await getFreeAppCount(user.id)
+      const gate = decideAppGate(tier, freeAppsUsed)
+      if (!gate.allow) {
+        // Expected business logic — emit a paywall SSE event and end the stream.
+        // Switching headers to SSE here so the client gets the event instead of a JSON 402.
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Connection', 'keep-alive')
+        res.setHeader('X-Accel-Buffering', 'no')
+        sendSSE(res, {
+          type: 'paywall',
+          reason: gate.reason,
+          free_apps_used: gate.free_apps_used,
+          free_apps_limit: gate.free_apps_limit,
+        })
+        return res.end()
+      }
+      // Free user under limit: bypass the legacy credits hard-check. Credits are
+      // a deprecated counter post-YC pivot; the 2-app lifetime cap above is the
+      // real gate, and a free user with a 0 balance must still get 2 apps.
+    } else {
+      const creditCheck = await checkCredits(user.id, 'app', user.email)
+      if (!creditCheck.hasCredits) {
+        return res.status(402).json({ error: creditCheck.error, creditsRemaining: creditCheck.creditsRemaining, upgradeUrl: creditCheck.upgradeUrl })
+      }
     }
   }
 
