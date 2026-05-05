@@ -56,21 +56,43 @@ function repairJSON(text) {
   return JSON.parse(repaired)
 }
 
+function repairStrayDigitQuotes(text) {
+  let out = text.replace(/(:\s*-?\d+(?:\.\d+)?)"(\s*[,}\]])/g, '$1$2')
+  out = out.replace(/([,[]\s*-?\d+(?:\.\d+)?)"(\s*[,\]}])/g, '$1$2')
+  return out
+}
+
 function parseScreenArray(text) {
   const jsonText = stripCodeFences(text)
   try { return JSON.parse(jsonText) } catch {}
   try { return repairJSON(jsonText) } catch {}
+  const dequoted = repairStrayDigitQuotes(jsonText)
+  if (dequoted !== jsonText) {
+    try { return JSON.parse(dequoted) } catch {}
+    try { return repairJSON(dequoted) } catch {}
+  }
   const arrayStart = jsonText.indexOf('[')
   const arrayEnd = jsonText.lastIndexOf(']')
   if (arrayStart >= 0 && arrayEnd > arrayStart) {
     const extracted = jsonText.slice(arrayStart, arrayEnd + 1)
     try { return JSON.parse(extracted) } catch {}
     try { return repairJSON(extracted) } catch {}
+    const extractedDequoted = repairStrayDigitQuotes(extracted)
+    if (extractedDequoted !== extracted) {
+      try { return JSON.parse(extractedDequoted) } catch {}
+      try { return repairJSON(extractedDequoted) } catch {}
+    }
   }
   const codeBlockMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
   if (codeBlockMatch) {
-    try { return JSON.parse(codeBlockMatch[1].trim()) } catch {}
-    try { return repairJSON(codeBlockMatch[1].trim()) } catch {}
+    const block = codeBlockMatch[1].trim()
+    try { return JSON.parse(block) } catch {}
+    try { return repairJSON(block) } catch {}
+    const blockDequoted = repairStrayDigitQuotes(block)
+    if (blockDequoted !== block) {
+      try { return JSON.parse(blockDequoted) } catch {}
+      try { return repairJSON(blockDequoted) } catch {}
+    }
   }
   return null
 }
@@ -121,6 +143,47 @@ console.log('\n— Recovery: leading prose only (existing behavior) —')
   const corrupted = `Sure! Here you go: ${CLEAN}`
   const out = parseScreenArray(corrupted)
   assert('leading prose stripped', Array.isArray(out) && out.length === 2, out)
+}
+
+console.log('\n— Recovery: stray-quote-after-number (Sonnet 4.6 YC bug) —')
+{
+  // Exact pattern from Vercel logs: `"marginBottom": 12"`. Sonnet 4.6 reliably
+  // produces this for complex meal-planner / fitness app prompts. The fix is
+  // the new repairStrayDigitQuotes() step.
+  const corrupted = '[{"id":"a","name":"A","tree":{"type":"View","style":{"padding":16,"marginBottom":12"}}}]'
+  const out = parseScreenArray(corrupted)
+  assert('stray quote after digit value (object close)',
+    Array.isArray(out) && out.length === 1 && out[0].tree.style.marginBottom === 12, out)
+}
+{
+  // Same bug, before a comma: `"padding": 16",`
+  const corrupted = '[{"id":"a","name":"A","tree":{"type":"View","style":{"padding":16","margin":8}}}]'
+  const out = parseScreenArray(corrupted)
+  assert('stray quote after digit value (before comma)',
+    Array.isArray(out) && out.length === 1 && out[0].tree.style.padding === 16, out)
+}
+{
+  // Multiple stray quotes (the actual YC log pattern)
+  const corrupted = '[{"id":"a","name":"A","tree":{"type":"View","style":{"padding":12,"marginBottom":10"},"children":[{"type":"Text","style":{"fontSize":14"}}]}}]'
+  const out = parseScreenArray(corrupted)
+  assert('multiple stray quotes repaired',
+    Array.isArray(out) && out.length === 1 && out[0].tree.style.marginBottom === 10, out)
+}
+{
+  // Negative + decimal numbers
+  const corrupted = '[{"id":"a","name":"A","tree":{"type":"View","style":{"top":-10","opacity":0.5"}}}]'
+  const out = parseScreenArray(corrupted)
+  assert('stray quote after negative + decimal',
+    Array.isArray(out) && out.length === 1 && out[0].tree.style.top === -10 && out[0].tree.style.opacity === 0.5, out)
+}
+{
+  // SAFETY: legitimate string values with quoted numbers must NOT be molested.
+  // `"version": "1.0"` should parse cleanly because direct JSON.parse wins
+  // on Try-1 — the dequote path is never reached for valid input.
+  const valid = '[{"id":"a","name":"A","tree":{"type":"View","props":{"version":"1.0","label":"v2.5"}}}]'
+  const out = parseScreenArray(valid)
+  assert('legitimate string-quoted numbers untouched',
+    Array.isArray(out) && out.length === 1 && out[0].tree.props.version === '1.0' && out[0].tree.props.label === 'v2.5', out)
 }
 
 console.log('\n— Recovery: markdown fences with surrounding prose —')
@@ -187,8 +250,25 @@ assert(
   /max_tokens:\s*64000/.test(src),
 )
 assert(
-  'stop_reason inspected for max_tokens',
-  /stop_reason\s*===?\s*['"]max_tokens['"]/.test(src),
+  'retry fires on any parse failure (not just max_tokens)',
+  // After the YC log diagnosis, retry now activates whenever parse fails,
+  // because Sonnet 4.6 can emit malformed JSON with stop_reason='end_turn'.
+  // The contract: there must be an `if (!screens)` retry block AND an
+  // `if (!plan)` retry block, but neither should be guarded by a stop_reason check.
+  /if\s*\(\s*!screens\s*\)\s*\{[\s\S]{0,400}callAnthropic/.test(src) &&
+    /if\s*\(\s*!plan\s*\)\s*\{[\s\S]{0,400}callAnthropic/.test(src),
+)
+assert(
+  'stop_reason still logged for diagnostics',
+  /stop_reason/.test(src),
+)
+assert(
+  'system prompt warns about stray quotes after numbers',
+  /Numeric values MUST NOT be quoted/.test(src),
+)
+assert(
+  'parser includes stray-quote repair pass',
+  /repairStrayDigitQuotes/.test(src),
 )
 assert(
   'free-tier app gen on Sonnet (claude-sonnet-4-6)',

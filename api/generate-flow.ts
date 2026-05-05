@@ -139,13 +139,37 @@ function stripCodeFences(text: string): string {
   return text.trim().replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim()
 }
 
+/**
+ * Repair a specific Sonnet 4.6 malformation: stray closing quotes after
+ * unquoted numeric values, e.g. `"padding": 16"` → `"padding": 16`.
+ * Anchored to `:\s*<number>"<,|}>` so it ONLY touches values in JSON-property
+ * position; legitimately quoted strings like `"version": "1.0"` are untouched
+ * because the repair requires the digits to be unquoted (no opening `"`).
+ * Also handles array elements where applicable.
+ */
+function repairStrayDigitQuotes(text: string): string {
+  // Property values: : 12" or : -1.5"  followed by , or }
+  let out = text.replace(/(:\s*-?\d+(?:\.\d+)?)"(\s*[,}\]])/g, '$1$2')
+  // Array elements: [ 12", 13", ...] — same pattern after , or [
+  out = out.replace(/([,[]\s*-?\d+(?:\.\d+)?)"(\s*[,\]}])/g, '$1$2')
+  return out
+}
+
 export function parseScreenArray(text: string): any {
   const jsonText = stripCodeFences(text)
   // Try 1: direct parse
   try { return JSON.parse(jsonText) } catch {}
   // Try 2: repair truncated JSON
   try { return repairJSON(jsonText) } catch {}
-  // Try 3: slice from first [ to last ]. Handles both leading prose
+  // Try 3: repair Sonnet's stray-quote-after-numbers bug
+  // (e.g. `"padding": 16"` → `"padding": 16`). Activated only when standard
+  // parses fail, so well-formed inputs are never touched.
+  const dequoted = repairStrayDigitQuotes(jsonText)
+  if (dequoted !== jsonText) {
+    try { return JSON.parse(dequoted) } catch {}
+    try { return repairJSON(dequoted) } catch {}
+  }
+  // Try 4: slice from first [ to last ]. Handles both leading prose
   // ("Here's your screens: [...]") and trailing prose ("[...] Hope this helps!").
   // Verbose models do both; the prior implementation only handled the leading case.
   const arrayStart = jsonText.indexOf('[')
@@ -154,12 +178,24 @@ export function parseScreenArray(text: string): any {
     const extracted = jsonText.slice(arrayStart, arrayEnd + 1)
     try { return JSON.parse(extracted) } catch {}
     try { return repairJSON(extracted) } catch {}
+    // Also try the stray-quote repair on the extracted slice
+    const extractedDequoted = repairStrayDigitQuotes(extracted)
+    if (extractedDequoted !== extracted) {
+      try { return JSON.parse(extractedDequoted) } catch {}
+      try { return repairJSON(extractedDequoted) } catch {}
+    }
   }
-  // Try 4: find JSON in a code block the stripCodeFences missed
+  // Try 5: find JSON in a code block the stripCodeFences missed
   const codeBlockMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
   if (codeBlockMatch) {
-    try { return JSON.parse(codeBlockMatch[1].trim()) } catch {}
-    try { return repairJSON(codeBlockMatch[1].trim()) } catch {}
+    const block = codeBlockMatch[1].trim()
+    try { return JSON.parse(block) } catch {}
+    try { return repairJSON(block) } catch {}
+    const blockDequoted = repairStrayDigitQuotes(block)
+    if (blockDequoted !== block) {
+      try { return JSON.parse(blockDequoted) } catch {}
+      try { return repairJSON(blockDequoted) } catch {}
+    }
   }
   console.error('[parseScreenArray] All JSON parse attempts failed. Full raw body:\n', jsonText)
   return null
@@ -169,18 +205,28 @@ function parseAppPlan(text: string): AppPlan | null {
   const jsonText = stripCodeFences(text)
   try { return JSON.parse(jsonText) } catch {}
   try { return repairJSON(jsonText) } catch {}
+  const dequoted = repairStrayDigitQuotes(jsonText)
+  if (dequoted !== jsonText) {
+    try { return JSON.parse(dequoted) } catch {}
+    try { return repairJSON(dequoted) } catch {}
+  }
   const objStart = jsonText.indexOf('{')
   const objEnd = jsonText.lastIndexOf('}')
   if (objStart >= 0 && objEnd > objStart) {
     const extracted = jsonText.slice(objStart, objEnd + 1)
     try { return JSON.parse(extracted) } catch {}
     try { return repairJSON(extracted) } catch {}
+    const extractedDequoted = repairStrayDigitQuotes(extracted)
+    if (extractedDequoted !== extracted) {
+      try { return JSON.parse(extractedDequoted) } catch {}
+      try { return repairJSON(extractedDequoted) } catch {}
+    }
   }
   return null
 }
 
-const STRICT_ARRAY_SUFFIX = '\n\nOutput MUST be a single JSON array, nothing before or after. No markdown fences. No explanation. The first character is `[`. The last character is `]`.'
-const STRICT_OBJECT_SUFFIX = '\n\nOutput MUST be a single JSON object, nothing before or after. No markdown fences. No explanation. The first character is `{`. The last character is `}`.'
+const STRICT_ARRAY_SUFFIX = '\n\nOutput MUST be a single JSON array, nothing before or after. No markdown fences. No explanation. The first character is `[`. The last character is `]`. Numeric values MUST NOT be quoted: write `"padding": 16` (correct) NOT `"padding": 16"` (wrong — stray quote breaks parsing). All number literals are unquoted.'
+const STRICT_OBJECT_SUFFIX = '\n\nOutput MUST be a single JSON object, nothing before or after. No markdown fences. No explanation. The first character is `{`. The last character is `}`. Numeric values MUST NOT be quoted: write `"count": 5` (correct) NOT `"count": 5"` (wrong — stray quote breaks parsing). All number literals are unquoted.'
 
 async function callAnthropic(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   return fetch('https://api.anthropic.com/v1/messages', {
@@ -374,8 +420,11 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     let planText: string = planData.content?.[0]?.text ?? ''
     let plan: AppPlan | null = parseAppPlan(planText)
 
-    if (!plan && planData.stop_reason === 'max_tokens') {
-      console.error('[generate-flow] Phase 1 planner hit max_tokens; retrying with bumped tokens + strict suffix. Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
+    // Retry on ANY parse failure (not just max_tokens). Sonnet/Haiku can emit
+    // malformed JSON for other reasons too; the stricter STRICT_OBJECT_SUFFIX
+    // resolves most of them on the second pass.
+    if (!plan) {
+      console.error('[generate-flow] Phase 1 planner parse failed; retrying with bumped tokens + strict suffix. Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
       const retryResp = await callAnthropic(apiKey, {
         ...plannerBody,
         max_tokens: 64000,
@@ -391,7 +440,7 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     }
 
     if (!plan) {
-      console.error('[generate-flow] Phase 1 planner parse failed. Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
+      console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
       sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
       return res.end()
     }
@@ -456,8 +505,13 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     let genText: string = genData.content?.[0]?.text ?? ''
     let screens = parseScreenArray(genText)
 
-    if (!screens && genData.stop_reason === 'max_tokens') {
-      console.error('[generate-flow] Phase 2 screen-gen hit max_tokens; retrying with 64000 + strict suffix. Stop reason:', genData.stop_reason, 'Full raw body:\n', genText)
+    // Retry on ANY parse failure, not just max_tokens. Sonnet 4.6 occasionally
+    // emits malformed JSON (stray `"` after numeric values, e.g. `"padding": 16"`)
+    // even when stop_reason='end_turn'. The stricter STRICT_ARRAY_SUFFIX usually
+    // resolves it; max_tokens is bumped on the retry too in case the original
+    // failed for length reasons we missed.
+    if (!screens) {
+      console.error('[generate-flow] Phase 2 screen-gen parse failed; retrying with 64000 + strict suffix. Stop reason:', genData.stop_reason, 'Full raw body:\n', genText)
       const retryResp = await callAnthropic(apiKey, {
         ...genBody,
         max_tokens: 64000,
@@ -473,7 +527,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     }
 
     if (!screens) {
-      console.error('[generate-flow] Phase 2 screen-gen parse failed. Stop reason:', genData.stop_reason, 'Full raw body:\n', genText)
+      console.error('[generate-flow] Phase 2 screen-gen parse failed (post-retry). Stop reason:', genData.stop_reason, 'Full raw body:\n', genText)
       sendSSE(res, { type: 'error', message: 'Failed to parse generated screens.' })
       return res.end()
     }
