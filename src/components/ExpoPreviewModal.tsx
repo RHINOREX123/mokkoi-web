@@ -4,6 +4,7 @@ import { buildSnackPayload } from '../utils/snackUrl'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from './FlowConnectors'
 import { trackEvent } from '../lib/analytics'
+import { useUserPlan } from '../hooks/useUserPlan'
 
 interface ExpoPreviewModalProps {
   screens: GeneratedScreen[]
@@ -38,16 +39,20 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const iframeIdRef = useRef(`mokkoi-${Date.now()}`)
   const payloadSentRef = useRef(false)
+  const { plan } = useUserPlan()
+  const addWatermark = plan === 'free'
 
-  // Build the snack payload once
+  // Build the snack payload once. Free-tier users get the "Made with Mokkoi"
+  // watermark embedded in every screen so QR-scanned Expo Go previews match
+  // the export-time watermark UX (work that leaves Mokkoi's web canvas).
   const payload = useCallback(() => {
     try {
-      return buildSnackPayload({ projectName, screens, connections })
+      return buildSnackPayload({ projectName, screens, connections, addWatermark })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to build preview')
       return null
     }
-  }, [projectName, screens, connections])
+  }, [projectName, screens, connections, addWatermark])
 
   // Listen for the iframe's "ready" message and send code
   useEffect(() => {
