@@ -1,11 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DashboardHero } from '../components/dashboard/DashboardHero'
 import { HudFooter } from '../components/dashboard/HudFooter'
 import { ModeCards, type DashboardMode } from '../components/dashboard/ModeCards'
 import { PhoneThumbnail } from '../components/dashboard/PhoneThumbnail'
 import { PromptCard, type SubmitMode } from '../components/dashboard/PromptCard'
+import {
+  RecentProjectsStrip,
+  type RecentProject,
+} from '../components/dashboard/RecentProjectsStrip'
 import { SignalsHUD, type SignalsState } from '../components/dashboard/SignalsHUD'
 import { usePromptScore } from '../components/dashboard/usePromptScore'
+import { supabase } from '../lib/supabase'
 
 /**
  * /dash-preview — internal-only verification page for the Dashboard V2 redesign.
@@ -14,6 +19,14 @@ import { usePromptScore } from '../components/dashboard/usePromptScore'
  * without touching the real Dashboard route. Will be removed (or repurposed
  * as a Storybook-equivalent) once the redesign ships.
  */
+const MOCK_PROJECTS: RecentProject[] = [
+  { id: 'mock-1', name: 'TastePlan', updated_at: new Date(Date.now() - 2 * 3600_000).toISOString(), screen_count: 4 },
+  { id: 'mock-2', name: 'SoundWave', updated_at: new Date(Date.now() - 26 * 3600_000).toISOString(), screen_count: 7 },
+  { id: 'mock-3', name: 'FitTrack',  updated_at: new Date(Date.now() - 3 * 86400_000).toISOString(), screen_count: 5 },
+  { id: 'mock-4', name: 'ShopKart',  updated_at: new Date(Date.now() - 9 * 86400_000).toISOString(), screen_count: 12 },
+  { id: 'mock-5', name: 'BudgetIQ',  updated_at: new Date(Date.now() - 18 * 86400_000).toISOString(), screen_count: 0 },
+]
+
 export default function DashPreview() {
   // ---- live demo state ----
   const [prompt, setPrompt] = useState(
@@ -22,6 +35,59 @@ export default function DashPreview() {
   const [mode, setMode] = useState<SubmitMode>('build')
   const [forcedHudState, setForcedHudState] = useState<SignalsState | 'auto'>('auto')
   const score = usePromptScore(prompt)
+
+  // ---- real-data: pull recent projects from Supabase if signed in ----
+  const [projects, setProjects] = useState<RecentProject[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!supabase) {
+      // Dev env without Supabase env vars → show mock projects so the strip
+      // is still visible in /dash-preview. Real /Dashboard route in production
+      // always has supabase configured.
+      setProjects(MOCK_PROJECTS)
+      setProjectsLoading(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, name, updated_at')
+        .or('source.is.null,source.eq.web')
+        .order('updated_at', { ascending: false })
+        .limit(8)
+      if (cancelled) return
+      if (data && data.length > 0) {
+        // Best-effort screen counts (one query per project — fine for ≤8).
+        const withCounts: RecentProject[] = await Promise.all(
+          data.map(async (p) => {
+            const { count } = await supabase!
+              .from('screens')
+              .select('*', { count: 'exact', head: true })
+              .eq('project_id', p.id)
+            return { ...p, screen_count: count ?? 0 }
+          }),
+        )
+        if (!cancelled) {
+          setProjects(withCounts)
+          setProjectsLoading(false)
+        }
+      } else {
+        // Not signed in / no projects yet → show mock data so the strip is
+        // visible on the verification page. In the real Dashboard route this
+        // path will never run (signed-in users will always have real data
+        // or the proper "no projects" empty state).
+        if (!cancelled) {
+          setProjects(MOCK_PROJECTS)
+          setProjectsLoading(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <div
@@ -87,9 +153,17 @@ export default function DashPreview() {
           model="SONNET 4.6"
           appCount={12}
           appLimit={50}
-          projectCount={54}
+          projectCount={projects.length}
         />
       </DashboardHero>
+
+      {/* Real recent-projects strip — pulls from Supabase if signed in. */}
+      <RecentProjectsStrip
+        projects={projects}
+        loading={projectsLoading}
+        onOpenAll={() => alert('Open all (sidebar drawer in real dashboard)')}
+        onOpenProject={(id) => alert(`Open project: ${id}`)}
+      />
 
       {/* PhoneThumbnail gallery (Phase 1 verification — kept for reference) */}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
