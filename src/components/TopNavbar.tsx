@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Smartphone, Layers } from 'lucide-react'
+import { Download, Share2, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Smartphone, Layers, Zap } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
