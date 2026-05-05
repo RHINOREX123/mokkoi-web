@@ -20,6 +20,8 @@ import { ImportHtmlModal } from './components/ImportHtmlModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { TopNavbar } from './components/TopNavbar'
 import { NoCreditsModal } from './components/PricingPage'
+import { PaywallModal } from './components/PaywallModal'
+import { useUserPlan } from './hooks/useUserPlan'
 import { ExportProjectModal } from './components/ExportProjectModal'
 import { ExpoPreviewModal } from './components/ExpoPreviewModal'
 import { InlineSnackPreview } from './components/InlineSnackPreview'
@@ -93,7 +95,9 @@ function App() {
   const [showScreenshotModal, setShowScreenshotModal] = useState(false)
   const [showImportHtmlModal, setShowImportHtmlModal] = useState(false)
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false)
+  const [showPaywallModal, setShowPaywallModal] = useState(false)
   const [showExportProjectModal, setShowExportProjectModal] = useState(false)
+  const userPlan = useUserPlan()
   const [showExpoPreview, setShowExpoPreview] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -145,6 +149,8 @@ function App() {
     getNextScreenPosition: screens.getNextScreenPosition,
     addConnection: screens.addConnection,
     deviceId: screens.activeDeviceId,
+    onPaywall: () => setShowPaywallModal(true),
+    onAppGenerated: userPlan.refresh,
   })
 
   // Direct Edit
@@ -470,6 +476,9 @@ function App() {
         entryPointScreens={entryPointScreens}
         activeScreenId={screens.activeGeneratedId}
         onSelectScreen={screens.setActiveGeneratedId}
+        plan={userPlan.plan}
+        freeAppCount={userPlan.freeAppCount}
+        onOpenPaywall={() => setShowPaywallModal(true)}
       />
 
       {/* Toast */}
@@ -856,6 +865,8 @@ function App() {
           </div>
         </div>
       )}
+
+      <PaywallModal open={showPaywallModal} onClose={() => setShowPaywallModal(false)} />
 
       {showNoCreditsModal && (
         <NoCreditsModal
