@@ -153,6 +153,10 @@ interface AIGenerationDeps {
   getNextScreenPosition: () => { x: number; y: number }
   addConnection: (from: string, to: string) => void
   deviceId: DeviceId
+  /** Open the paywall modal — called when the backend emits an SSE 'paywall' event */
+  onPaywall?: () => void
+  /** Fired after a successful app generation so the navbar count can refresh */
+  onAppGenerated?: () => void
 }
 
 /** Build conversation history from recent messages for Claude context */
@@ -185,6 +189,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     getNextScreenPosition,
     addConnection,
     deviceId,
+    onPaywall,
+    onAppGenerated,
   } = deps
 
   const [isGenerating, setIsGenerating] = useState(false)
@@ -292,6 +298,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         let homeScreenId = ''
         let appName = ''
         let modelUsed = ''
+        let paywallHit = false
 
         while (true) {
           const { done, value } = await reader.read()
@@ -322,6 +329,13 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
                 homeScreenId = event.homeScreenId || ''
                 appName = event.appName || ''
                 modelUsed = event.modelUsed || ''
+              } else if (event.type === 'paywall') {
+                // Free-tier limit hit. Not an error — surface the upgrade modal
+                // instead of an error toast, drop the placeholder, and stop
+                // reading the stream cleanly.
+                paywallHit = true
+                trackEvent('paywall_triggered')
+                onPaywall?.()
               } else if (event.type === 'error') {
                 throw new Error(event.message)
               }
@@ -334,6 +348,20 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
               }
             }
           }
+
+          if (paywallHit) break
+        }
+
+        if (paywallHit) {
+          setGeneratedScreens(prev => prev.filter(s => s.id !== placeholderId))
+          if (projectId && supabase) {
+            try {
+              await supabase.from('screens').delete().eq('id', placeholderId)
+            } catch (err) {
+              console.error('[mokkoi] failed to delete placeholder screen', placeholderId, err)
+            }
+          }
+          return
         }
 
         if (allScreens.length === 0) {
@@ -396,6 +424,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         setProjectMessages(prev => [...prev, assistantMsg])
         saveMessage(assistantMsg)
         trackEvent('app_generated', { screen_count: allScreens.length, generation_time_ms: Date.now() - startTime })
+        onAppGenerated?.()
       } catch (err) {
         const errorMsg: ChatMessage = {
           id: crypto.randomUUID(),
@@ -657,7 +686,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       setStreamingText('')
       setPartialTree(null)
     }
-  }, [activeGeneratedId, generatedScreens, saveMessage, projectId, projectMessages, setGeneratedScreens, setActiveGeneratedId, setProjectMessages])
+  }, [activeGeneratedId, generatedScreens, saveMessage, projectId, projectMessages, setGeneratedScreens, setActiveGeneratedId, setProjectMessages, onPaywall, onAppGenerated])
 
   const handleRegenerate = useCallback(() => {
     if (!activeGenerated) return

@@ -27,3 +27,5 @@ dist-ssr
 *.sw?
 
 .vercel
+.claude/worktrees/
+.claude/scheduled_tasks.lock
