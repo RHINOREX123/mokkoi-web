@@ -81,10 +81,29 @@ assert(
   /isInternal[\s\S]*?user\.isMCP[\s\S]*?'anonymous'[\s\S]*?'mcp'/.test(exportSrc),
 )
 
-// 11. Watermark function uses pointerEvents="none" so it doesn't block taps
+// 11. Watermark is a TouchableOpacity that opens mokkoi.com on press
 assert(
-  'Watermark uses pointerEvents="none" to not block underlying taps',
-  /pointerEvents="none"/.test(exportSrc),
+  'Watermark is tappable — opens https://mokkoi.com',
+  /<TouchableOpacity[\s\S]*?Linking\.openURL\('https:\/\/mokkoi\.com'\)/.test(exportSrc),
+)
+
+// 12. Split typography: "Made with" + bolder/teal "Mokkoi"
+assert(
+  'Watermark uses split typography (Made with + Mokkoi as nested Text)',
+  /Made with <Text style=\{watermarkStyles\.brand\}>Mokkoi<\/Text>/.test(exportSrc),
+)
+
+// 13. M-icon box renders the letter "M"
+assert(
+  'Watermark renders M letter inside a teal iconBox',
+  /<View style=\{watermarkStyles\.iconBox\}>\s*<Text style=\{watermarkStyles\.iconLetter\}>M<\/Text>/.test(exportSrc),
+)
+
+// 14. Watermark imports include TouchableOpacity and Linking when addWatermark
+assert(
+  'addWatermark path adds TouchableOpacity + Linking to imports',
+  /ctx\.usedComponents\.add\('TouchableOpacity'\)/.test(exportSrc) &&
+    /ctx\.usedComponents\.add\('Linking'\)/.test(exportSrc),
 )
 
 const passed = checks.filter(c => c.ok).length
