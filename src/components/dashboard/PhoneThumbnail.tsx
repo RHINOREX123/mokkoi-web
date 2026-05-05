@@ -1,28 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
 
-/** Eight gradient pairs — deterministic per project name so the same project
- *  always gets the same fallback color. Drawn from the existing dashboard
- *  palette so cards still feel cohesive against the warm-graphite background. */
-const GRADIENT_PAIRS: ReadonlyArray<readonly [string, string]> = [
-  ['#6366f1', '#818cf8'],
-  ['#8b5cf6', '#a78bfa'],
-  ['#ec4899', '#f472b6'],
-  ['#f97316', '#fb923c'],
-  ['#14b8a6', '#2dd4bf'],
-  ['#3b82f6', '#60a5fa'],
-  ['#e11d48', '#fb7185'],
-  ['#84cc16', '#a3e635'],
-]
-
-function hashString(str: string): number {
-  let h = 0
-  for (let i = 0; i < str.length; i++) {
-    h = ((h << 5) - h) + str.charCodeAt(i)
-    h |= 0
-  }
-  return Math.abs(h)
-}
-
 export type PhoneThumbnailState = 'ready' | 'generating' | 'empty'
 export type PhoneThumbnailSize = 'sm' | 'md'
 
@@ -52,16 +29,17 @@ const SIZE_MAP: Record<PhoneThumbnailSize, { height: number; radius: number }> =
  * PhoneThumbnail — phone-frame preview for a project card.
  *
  * Three states:
- *  - ready: shows screenContent (real preview) or a deterministic gradient + initial
- *  - generating: dashed-outline shimmer (newly created project, screens being built)
- *  - empty: blank phone with dashed inner outline (no screens placeholder)
+ *  - ready: shows screenContent (real preview from ScreenRenderer/PhoneFrame).
+ *           When no screenContent is supplied, falls back to a calm dark
+ *           phone with a subtle teal pulse — reads "preview pending" rather
+ *           than placeholder. Same look across projects keeps the dashboard
+ *           visually quiet so the user's eye stays on the prompt input.
+ *  - generating: dashed-outline shimmer (newly created project, screens being
+ *                actively built — distinct from the calm pulse fallback).
+ *  - empty: blank phone with dashed inner outline (no screens placeholder).
  *
  * Rendered at fixed iPhone-16 9:19.5 aspect ratio. Wraps gracefully in any
  * parent container; supply outer width/height via the parent or style prop.
- *
- * Real screen-thumbnail generation (rendering the project's component-tree
- * to an image) is a separate task. Until then, the gradient+initial fallback
- * keeps cards visually distinct without falling back to broken/empty states.
  */
 export function PhoneThumbnail({
   projectName,
@@ -71,9 +49,6 @@ export function PhoneThumbnail({
   style,
 }: PhoneThumbnailProps) {
   const { height, radius } = SIZE_MAP[size]
-  const gradientIdx = hashString(projectName) % GRADIENT_PAIRS.length
-  const [g1, g2] = GRADIENT_PAIRS[gradientIdx]
-  const initial = (projectName?.[0] ?? '?').toUpperCase()
 
   const phoneStyle: CSSProperties = {
     height,
@@ -161,25 +136,37 @@ export function PhoneThumbnail({
   } else if (screenContent) {
     inner = screenContent
   } else {
-    // Fallback: deterministic gradient + uppercase initial.
+    // Fallback for "ready" projects with no screen preview yet — a calm dark
+    // phone interior with a single soft teal pulse. Reads as intentional
+    // "preview pending" rather than a colorful placeholder. Identical across
+    // projects on purpose — keeps the dashboard visually quiet so the eye
+    // stays on the prompt input.
     inner = (
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          background: `linear-gradient(135deg, ${g1}, ${g2})`,
+          background:
+            'radial-gradient(ellipse 60% 50% at 50% 60%, rgba(45,212,191,0.08) 0%, transparent 70%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'rgba(255,255,255,0.85)',
-          fontFamily: "'Bricolage Grotesque', system-ui, sans-serif",
-          fontWeight: 700,
-          fontSize: size === 'sm' ? 12 : Math.round(height * 0.24),
-          letterSpacing: '-0.04em',
-          textShadow: '0 1px 12px rgba(0,0,0,0.25)',
         }}
       >
-        {initial}
+        <span
+          aria-hidden
+          data-dash-animated
+          style={{
+            width: size === 'sm' ? 4 : 8,
+            height: size === 'sm' ? 4 : 8,
+            borderRadius: '50%',
+            background: 'var(--dash-teal)',
+            boxShadow:
+              '0 0 12px rgba(45,212,191,0.6), 0 0 24px rgba(45,212,191,0.3)',
+            opacity: 0.55,
+            animation: 'dash-livepulse 2.4s ease-in-out infinite',
+          }}
+        />
       </div>
     )
   }
