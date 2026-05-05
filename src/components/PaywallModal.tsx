@@ -54,8 +54,7 @@ export function PaywallModal({ open, onClose }: PaywallModalProps) {
           fontSize: 14.5, color: '#94a3b8', margin: '0 0 18px',
           lineHeight: 1.55, textAlign: 'center',
         }}>
-          Mokkoi free trial is 2 apps. Upgrade to Pro for unlimited app
-          generations, premium models, and exports without watermark.
+          Mokkoi free trial is 2 apps. Upgrade to Pro to keep building.
         </p>
 
         <div style={{

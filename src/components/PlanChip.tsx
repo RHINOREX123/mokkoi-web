@@ -141,11 +141,6 @@ export function PlanChip({ plan, freeAppCount, onOpenPaywall }: PlanChipProps) {
               background: 'linear-gradient(90deg, #2dd4bf, #06b6d4)',
             }} />
           </div>
-          <div style={{
-            fontSize: 12, color: '#94a3b8', marginBottom: 14, lineHeight: 1.5,
-          }}>
-            Upgrade to Pro for unlimited apps, premium models, and exports without watermark.
-          </div>
           <button
             onClick={() => { setOpen(false); onOpenPaywall() }}
             style={{
