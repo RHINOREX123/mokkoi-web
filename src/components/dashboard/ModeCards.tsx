@@ -46,7 +46,7 @@ export function ModeCards({ onMode }: ModeCardsProps) {
           </Badge>
         }
         title="Generate full app"
-        desc="Multi-screen Flutter app from your prompt."
+        desc="Multi-screen React Native app from your prompt."
       />
       <Card
         ariaLabel="Clone a screenshot"

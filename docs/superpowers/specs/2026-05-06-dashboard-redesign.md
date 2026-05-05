@@ -102,7 +102,7 @@ type PromptScore = {
 
 | Card | Badge | Title | Description | Action |
 |---|---|---|---|---|
-| **Build** | `⚡ Build` (teal) | Generate full app | Multi-screen Flutter app from your prompt. | Submit prompt → `/app/:id` |
+| **Build** | `⚡ Build` (teal) | Generate full app | Multi-screen React Native app from your prompt. | Submit prompt → `/app/:id` |
 | **Screenshot** | `📷 Screenshot` (amber) | Clone what you see | Drop a screenshot, get a working clone. | Open file picker; on upload → `/app/:id?source=screenshot` |
 | **Import** | `◇ Import` (lavender) | From Figma / HTML | Pixel-true import via MCP server. | Open import modal (existing flow) |
 

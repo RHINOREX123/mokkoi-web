@@ -5,12 +5,19 @@ import type { User } from '@supabase/supabase-js'
 import { trackEvent, resetAnalytics } from '../lib/analytics'
 import {
   Search, MoreVertical, Trash2, Pencil, LogOut, Settings,
-  FolderOpen, Users, Smartphone, ArrowUp, Download,
+  FolderOpen, Users, Smartphone, Download,
   Zap, Copy, Menu, X,
 } from 'lucide-react'
 import { useUserPlan } from '../hooks/useUserPlan'
 import { PlanChip } from '../components/PlanChip'
 import { PaywallModal } from '../components/PaywallModal'
+import { DashboardHero } from '../components/dashboard/DashboardHero'
+import { PromptCard, type SubmitMode } from '../components/dashboard/PromptCard'
+import { SignalsHUD, type SignalsState } from '../components/dashboard/SignalsHUD'
+import { ModeCards, type DashboardMode } from '../components/dashboard/ModeCards'
+import { HudFooter } from '../components/dashboard/HudFooter'
+import { RecentProjectsStrip } from '../components/dashboard/RecentProjectsStrip'
+import { usePromptScore } from '../components/dashboard/usePromptScore'
 
 interface Project {
   id: string
@@ -107,6 +114,11 @@ export default function Dashboard() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'projects' | 'imports'>('projects')
   const [importProjects, setImportProjects] = useState<Project[]>([])
+  // V2: prompt mode (Build / Plan), auto-suggest toast, locked-state HUD.
+  const [submitMode, setSubmitMode] = useState<SubmitMode>('build')
+  const [hudState, setHudState] = useState<SignalsState | undefined>(undefined)
+  const [planSuggest, setPlanSuggest] = useState(false)
+  const promptScore = usePromptScore(prompt)
 
 
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -116,7 +128,13 @@ export default function Dashboard() {
   // Load user + projects. Plan + free-app count handled by useUserPlan() hook above.
   useEffect(() => {
     const sb = supabase
-    if (!sb) return
+    if (!sb) {
+      // Without supabase the dashboard has nothing to load — flip the loading
+      // gate off so the hero still renders (otherwise opacity stays at 0
+      // forever and the page looks blank).
+      setLoading(false)
+      return
+    }
     sb.auth.getUser().then(({ data: { user: u } }) => { setUser(u) })
     loadProjects()
   }, [])
@@ -177,22 +195,74 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  const handleSubmitPrompt = async () => {
+  const PLAN_SUGGEST_DISMISS_KEY = 'mokkoi.dismissed-plan-suggest'
+
+  /**
+   * Submit the prompt. Drives the SUBMITTED state of SignalsHUD for ~700ms
+   * before navigating, so the user gets the "analysis complete" beat — the
+   * brief check-mark moment that ties the dashboard's coaching into the
+   * generation page.
+   *
+   * Plan auto-suggest: if the user clicks Send in Build mode but their
+   * prompt's clarity score is < 50, we offer to switch to Plan mode (a
+   * discuss-first chat). Dismissed once → don't ask again this session.
+   */
+  const submitWithMode = async (mode: SubmitMode) => {
     if (!prompt.trim() || isSubmitting) return
     setIsSubmitting(true)
+    setHudState('submitted')
+
     if (!supabase) { navigate('/auth'); return }
     const { data: { user: u } } = await supabase.auth.getUser()
     if (!u) { navigate('/auth'); return }
+
     const { data } = await supabase
       .from('projects')
       .insert({ user_id: u.id, name: prompt.trim().slice(0, 30) })
       .select().single()
+
     if (data) {
       trackEvent('dashboard_prompt_submitted')
-      trackEvent('project_created', { source: 'dashboard' })
-      navigate(`/app/${data.id}?prompt=${encodeURIComponent(prompt.trim())}`)
+      trackEvent('project_created', { source: 'dashboard', mode })
+      // Brief hold so the SUBMITTED HUD state is visible before nav.
+      setTimeout(() => {
+        const params = new URLSearchParams({ prompt: prompt.trim() })
+        if (mode === 'plan') params.set('mode', 'plan')
+        navigate(`/app/${data.id}?${params.toString()}`)
+      }, 700)
+    } else {
+      setIsSubmitting(false)
+      setHudState(undefined)
     }
-    setIsSubmitting(false)
+  }
+
+  const handleSubmitPrompt = (mode: SubmitMode = submitMode) => {
+    if (!prompt.trim() || isSubmitting) return
+    // Auto-suggest Plan mode for low-clarity prompts in Build mode.
+    if (
+      mode === 'build' &&
+      promptScore != null &&
+      promptScore.clarity < 50 &&
+      sessionStorage.getItem(PLAN_SUGGEST_DISMISS_KEY) !== '1'
+    ) {
+      setPlanSuggest(true)
+      return
+    }
+    submitWithMode(mode)
+  }
+
+  const acceptPlanSuggest = () => {
+    setPlanSuggest(false)
+    setSubmitMode('plan')
+    submitWithMode('plan')
+  }
+
+  const dismissPlanSuggest = (rememberThisSession = true) => {
+    setPlanSuggest(false)
+    if (rememberThisSession) {
+      try { sessionStorage.setItem(PLAN_SUGGEST_DISMISS_KEY, '1') } catch { /* ignore */ }
+    }
+    submitWithMode('build')
   }
 
   const deleteProject = async (id: string) => {
@@ -636,165 +706,193 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Main content area — full width, prompt-first */}
-      <div style={{
-        flex: 1, overflowY: 'auto', position: 'relative',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '40px 24px',
-        background: `
-          radial-gradient(ellipse 1300px 520px at 50% 110%, rgba(20,184,166,0.28) 0%, transparent 60%),
-          radial-gradient(ellipse 700px 360px at 30% 95%, rgba(6,182,212,0.18) 0%, transparent 65%),
-          radial-gradient(ellipse 700px 360px at 72% 95%, rgba(45,212,191,0.14) 0%, transparent 65%),
-          #000000
-        `,
-        }}>
-          {/* Subtle grid texture overlay for depth */}
-          <div aria-hidden style={{
-            position: 'absolute', inset: 0, pointerEvents: 'none',
-            backgroundImage:
-              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0)',
-            backgroundSize: '32px 32px',
-            maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 40%, transparent 100%)',
-            WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 40%, transparent 100%)',
-          }} />
-          <div style={{ width: '100%', maxWidth: 720, opacity: loading ? 0 : 1, transition: 'opacity 0.15s', position: 'relative', zIndex: 1 }}>
-            {/* Welcome */}
-            <h1 style={{
-              fontSize: hasProjects ? 40 : 52, fontWeight: 700, color: '#f1f5f9',
-              margin: '0 0 12px', letterSpacing: '-0.02em', textAlign: 'center',
-              fontFamily: "'Outfit', 'DM Sans', sans-serif", lineHeight: 1.1,
-            }}>
-              {hasProjects ? (
-                <>Welcome back, <span style={{
-                  background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                }}>{firstName}</span></>
-              ) : (
-                <>What will you <span style={{
-                  background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  fontStyle: 'italic',
-                }}>build</span> today?</>
-              )}
-            </h1>
-            {!hasProjects && (
-              <p style={{ fontSize: 16, color: '#94a3b8', margin: '0 0 32px', lineHeight: 1.5, textAlign: 'center' }}>
-                Create stunning mobile apps by chatting with AI.
-              </p>
-            )}
+      {/* Main content area — V2: hero + signals HUD + mode cards + recents.
+          DashboardHero owns the atmospheric background; we wrap it in a
+          scrollable container so recents below scroll naturally with it. */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          position: 'relative',
+          background: 'var(--dash-bg)',
+          opacity: loading ? 0 : 1,
+          transition: 'opacity 0.15s',
+        }}
+      >
+        <DashboardHero
+          firstName={firstName}
+          hasProjects={hasProjects}
+          userHandle={user?.email ?? undefined}
+        >
+          <PromptCard
+            value={prompt}
+            onChange={setPrompt}
+            onSubmit={handleSubmitPrompt}
+            mode={submitMode}
+            onModeChange={setSubmitMode}
+            disabled={isSubmitting}
+            onScreenshot={() => setToastMessage('Screenshot import coming soon')}
+            onAttach={() => setToastMessage('Attach coming soon')}
+            onFigma={() => setToastMessage('Figma import coming soon')}
+          />
 
-            {/* Chat input area */}
-            <div style={{
-              position: 'relative',
-              background: 'rgba(15,23,42,0.6)',
-              border: '1px solid rgba(45,212,191,0.25)',
-              borderRadius: 16,
-              transition: 'border-color 0.2s, box-shadow 0.2s',
-              boxShadow: '0 8px 32px rgba(20,184,166,0.12), 0 0 0 1px rgba(45,212,191,0.05) inset',
-              backdropFilter: 'blur(8px)',
-            }}>
-              <textarea
-                ref={textareaRef}
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitPrompt() }
-                }}
-                placeholder="Let's build"
-                rows={3}
-                style={{
-                  width: '100%', padding: '16px 16px 40px', borderRadius: 16,
-                  background: 'transparent', border: 'none',
-                  color: '#f1f5f9', fontSize: 15, outline: 'none',
-                  resize: 'none', fontFamily: "'DM Sans', sans-serif",
-                  lineHeight: 1.5, boxSizing: 'border-box',
-                }}
-                onFocus={e => {
-                  const p = e.currentTarget.parentElement as HTMLElement
-                  p.style.borderColor = 'rgba(45,212,191,0.6)'
-                  p.style.boxShadow = '0 8px 32px rgba(20,184,166,0.25), 0 0 0 3px rgba(45,212,191,0.12)'
-                }}
-                onBlur={e => {
-                  const p = e.currentTarget.parentElement as HTMLElement
-                  p.style.borderColor = 'rgba(45,212,191,0.25)'
-                  p.style.boxShadow = '0 8px 32px rgba(20,184,166,0.12), 0 0 0 1px rgba(45,212,191,0.05) inset'
-                }}
-              />
-              <button
-                onClick={handleSubmitPrompt}
-                disabled={!prompt.trim() || isSubmitting}
-                style={{
-                  position: 'absolute', bottom: 10, right: 10,
-                  width: 32, height: 32, borderRadius: 8,
-                  background: prompt.trim() ? 'linear-gradient(135deg, #2dd4bf, #06b6d4)' : 'rgba(255,255,255,0.06)',
-                  border: 'none', cursor: prompt.trim() ? 'pointer' : 'default',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.2s',
-                  boxShadow: prompt.trim() ? '0 4px 12px rgba(20,184,166,0.4)' : 'none',
-                }}
-              >
-                <ArrowUp size={16} color={prompt.trim() ? '#fff' : '#64748b'} />
-              </button>
-            </div>
+          <SignalsHUD
+            score={promptScore}
+            state={hudState}
+            projectName={prompt.trim().slice(0, 30) || 'project'}
+            screenCount={4}
+          />
 
-            {/* Suggestion chips — below input, first-time users only */}
-            {!hasProjects && (
-              <div style={{
-                display: 'flex', flexWrap: 'wrap', gap: 8,
-                marginTop: 20, justifyContent: 'center',
-              }}>
-                {SUGGESTION_CHIPS.map(chip => (
-                  <button key={chip} onClick={() => { setPrompt(chip); textareaRef.current?.focus() }} style={{
+          <ModeCards
+            onMode={(m: DashboardMode) => {
+              if (m === 'build') {
+                textareaRef.current?.focus()
+              } else if (m === 'screenshot') {
+                setToastMessage('Screenshot import coming soon')
+              } else if (m === 'import') {
+                setToastMessage('Figma / HTML import coming soon')
+              }
+            }}
+          />
+
+          {/* Suggestion chips — first-time users only, kept from V1 since
+              they're a known good empty-state nudge. */}
+          {!hasProjects && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginTop: 20,
+                justifyContent: 'center',
+              }}
+            >
+              {SUGGESTION_CHIPS.map(chip => (
+                <button
+                  key={chip}
+                  onClick={() => { setPrompt(chip); textareaRef.current?.focus() }}
+                  style={{
                     padding: '6px 14px', borderRadius: 20,
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                    color: '#94a3b8', fontSize: 13, fontWeight: 500,
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'var(--dash-text-2)',
+                    fontSize: 13, fontWeight: 500,
                     cursor: 'pointer', transition: 'all 0.2s',
                     fontFamily: "'DM Sans', sans-serif",
                   }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.color = '#818cf8' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
-                  >{chip}</button>
-                ))}
-              </div>
-            )}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(45,212,191,0.10)'
+                    e.currentTarget.style.borderColor = 'rgba(45,212,191,0.3)'
+                    e.currentTarget.style.color = 'var(--dash-teal)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                    e.currentTarget.style.color = 'var(--dash-text-2)'
+                  }}
+                >{chip}</button>
+              ))}
+            </div>
+          )}
 
-            {/* Or start from — compact text link */}
-            {!hasProjects && (
-              <div style={{ marginTop: 20, textAlign: 'center' }}>
-                <span style={{ fontSize: 12, color: '#475569' }}>or start from </span>
-                <button
-                  onClick={() => setToastMessage('Screenshot import coming soon')}
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '0 4px' }}
-                >Screenshot</button>
-                <span style={{ fontSize: 12, color: '#475569' }}> · </span>
-                <button
-                  onClick={() => setToastMessage('HTML import coming soon')}
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '0 4px' }}
-                >Import HTML</button>
-              </div>
-            )}
+          <HudFooter
+            version="2.4"
+            model="SONNET 4.6"
+            appCount={userPlanState.freeAppCount ?? 0}
+            appLimit={userPlanState.plan === 'pro' ? Infinity : 50}
+            projectCount={projects.length}
+          />
+        </DashboardHero>
 
-            {/* Compact "your projects" hint — links to sidebar — for returning users */}
-            {hasProjects && (
-              <div style={{ marginTop: 24, textAlign: 'center' }}>
-                <button onClick={() => setMobileSidebarOpen(true)} style={{
-                  background: 'rgba(45,212,191,0.08)',
-                  border: '1px solid rgba(45,212,191,0.20)',
-                  color: '#5eead4', fontSize: 12, fontWeight: 500,
-                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
-                  fontFamily: "'DM Sans', sans-serif",
-                  transition: 'all 0.2s',
+        {/* Recent projects strip — only renders when user has projects. */}
+        {!loading && (
+          <RecentProjectsStrip
+            projects={projects.map(p => ({
+              id: p.id,
+              name: p.name,
+              updated_at: p.updated_at,
+              screen_count: p.screen_count,
+            }))}
+            loading={loading}
+            onOpenAll={() => setMobileSidebarOpen(true)}
+            onOpenProject={(id) => navigate(`/app/${id}`)}
+          />
+        )}
+      </div>
+
+      {/* Plan auto-suggest inline modal — fires when user clicks Send in
+          Build mode but the prompt clarity is low (< 50). */}
+      {planSuggest && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Plan mode suggestion"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 250,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => dismissPlanSuggest(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--dash-surface)',
+              border: '1px solid var(--dash-border)',
+              borderRadius: 16,
+              padding: 20,
+              maxWidth: 420, width: '90%',
+              boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10.5, letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'var(--dash-accent-amber)',
+                marginBottom: 8,
+              }}
+            >
+              ↳ PROMPT CLARITY {promptScore?.clarity ?? 0}
+            </div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: 'var(--dash-text)' }}>
+              Your prompt is broad — want to plan it together first?
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--dash-text-2)', lineHeight: 1.5 }}>
+              In Plan mode, Mokkoi asks a few clarifying questions before
+              generating — usually leads to a better first build. You can also
+              just build now and refine after.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => dismissPlanSuggest(true)}
+                style={{
+                  padding: '8px 14px', borderRadius: 8,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid var(--dash-border)',
+                  color: 'var(--dash-text-2)',
+                  fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                  fontFamily: 'inherit',
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(45,212,191,0.14)'; e.currentTarget.style.borderColor = 'rgba(45,212,191,0.35)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(45,212,191,0.08)'; e.currentTarget.style.borderColor = 'rgba(45,212,191,0.20)' }}
-                >View your {projects.length} project{projects.length === 1 ? '' : 's'} →</button>
-              </div>
-            )}
-
-
+              >Build anyway</button>
+              <button
+                onClick={acceptPlanSuggest}
+                style={{
+                  padding: '8px 14px', borderRadius: 8,
+                  background: 'linear-gradient(135deg, var(--dash-teal), var(--dash-teal-2))',
+                  border: 'none',
+                  color: '#001a1f',
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >Plan together →</button>
+            </div>
           </div>
         </div>
+      )}
 
       {/* Delete confirmation modal */}
       {deleteConfirmId && (() => {
