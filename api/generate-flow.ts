@@ -139,16 +139,19 @@ function stripCodeFences(text: string): string {
   return text.trim().replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim()
 }
 
-function parseScreenArray(text: string): any {
+export function parseScreenArray(text: string): any {
   const jsonText = stripCodeFences(text)
   // Try 1: direct parse
   try { return JSON.parse(jsonText) } catch {}
   // Try 2: repair truncated JSON
   try { return repairJSON(jsonText) } catch {}
-  // Try 3: find the first [ and extract the array (AI may have added explanation text)
+  // Try 3: slice from first [ to last ]. Handles both leading prose
+  // ("Here's your screens: [...]") and trailing prose ("[...] Hope this helps!").
+  // Verbose models do both; the prior implementation only handled the leading case.
   const arrayStart = jsonText.indexOf('[')
-  if (arrayStart > 0) {
-    const extracted = jsonText.slice(arrayStart)
+  const arrayEnd = jsonText.lastIndexOf(']')
+  if (arrayStart >= 0 && arrayEnd > arrayStart) {
+    const extracted = jsonText.slice(arrayStart, arrayEnd + 1)
     try { return JSON.parse(extracted) } catch {}
     try { return repairJSON(extracted) } catch {}
   }
@@ -158,8 +161,33 @@ function parseScreenArray(text: string): any {
     try { return JSON.parse(codeBlockMatch[1].trim()) } catch {}
     try { return repairJSON(codeBlockMatch[1].trim()) } catch {}
   }
-  console.error('All JSON parse attempts failed. Raw start:', jsonText.slice(0, 500))
+  console.error('[parseScreenArray] All JSON parse attempts failed. Full raw body:\n', jsonText)
   return null
+}
+
+function parseAppPlan(text: string): AppPlan | null {
+  const jsonText = stripCodeFences(text)
+  try { return JSON.parse(jsonText) } catch {}
+  try { return repairJSON(jsonText) } catch {}
+  const objStart = jsonText.indexOf('{')
+  const objEnd = jsonText.lastIndexOf('}')
+  if (objStart >= 0 && objEnd > objStart) {
+    const extracted = jsonText.slice(objStart, objEnd + 1)
+    try { return JSON.parse(extracted) } catch {}
+    try { return repairJSON(extracted) } catch {}
+  }
+  return null
+}
+
+const STRICT_ARRAY_SUFFIX = '\n\nOutput MUST be a single JSON array, nothing before or after. No markdown fences. No explanation. The first character is `[`. The last character is `]`.'
+const STRICT_OBJECT_SUFFIX = '\n\nOutput MUST be a single JSON object, nothing before or after. No markdown fences. No explanation. The first character is `{`. The last character is `}`.'
+
+async function callAnthropic(apiKey: string, body: Record<string, unknown>): Promise<Response> {
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify(body),
+  })
 }
 
 interface AppPlan {
@@ -327,35 +355,45 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     }
     const plannerSystem = buildPlannerSystem(templateMatch?.templateId)
 
-    const planResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        system: [{ type: 'text', text: plannerSystem, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
+    const PLANNER_MODEL = 'claude-haiku-4-5-20251001'
+    const plannerBody = {
+      model: PLANNER_MODEL,
+      max_tokens: 2000,
+      system: [{ type: 'text', text: plannerSystem, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: prompt }],
+    }
 
+    let planResponse = await callAnthropic(apiKey, plannerBody)
     if (!planResponse.ok) {
       console.error('Plan API error:', planResponse.status, await planResponse.text())
       sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
       return res.end()
     }
 
-    const planData: any = await planResponse.json()
-    const planText = stripCodeFences(planData.content?.[0]?.text ?? '')
+    let planData: any = await planResponse.json()
+    let planText: string = planData.content?.[0]?.text ?? ''
+    let plan: AppPlan | null = parseAppPlan(planText)
 
-    let plan: AppPlan
-    try {
-      plan = JSON.parse(planText)
-    } catch {
-      try { plan = repairJSON(planText) } catch {
-        console.error('Plan JSON parse failed:', planText.slice(0, 300))
-        sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
-        return res.end()
+    if (!plan && planData.stop_reason === 'max_tokens') {
+      console.error('[generate-flow] Phase 1 planner hit max_tokens; retrying with bumped tokens + strict suffix. Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
+      const retryResp = await callAnthropic(apiKey, {
+        ...plannerBody,
+        max_tokens: 64000,
+        system: [{ type: 'text', text: plannerSystem + STRICT_OBJECT_SUFFIX, cache_control: { type: 'ephemeral' } }],
+      })
+      if (retryResp.ok) {
+        planData = await retryResp.json()
+        planText = planData.content?.[0]?.text ?? ''
+        plan = parseAppPlan(planText)
+      } else {
+        console.error('[generate-flow] Phase 1 planner retry HTTP error:', retryResp.status, await retryResp.text())
       }
+    }
+
+    if (!plan) {
+      console.error('[generate-flow] Phase 1 planner parse failed. Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
+      sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
+      return res.end()
     }
 
     if (!plan.screens || !Array.isArray(plan.screens) || plan.screens.length < 2) {
@@ -371,7 +409,9 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     const screenCount = plan.screens.length
     sendSSE(res, { type: 'status', phase: 'generating', message: `Generating ${screenCount} screens...`, current: 0, total: screenCount })
 
-    const genModel = userPlan === 'free' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-20250514'
+    // free-tier app gen on Sonnet for parse reliability; activation > free-tier COGS.
+    // Phase 1 planner stays on Haiku (small JSON, rarely fails, big cost savings).
+    const genModel = userPlan === 'free' ? 'claude-sonnet-4-6' : 'claude-sonnet-4-20250514'
 
     const screenList = plan.screens.map((s, i) =>
       `${i + 1}. "${s.name}" (id: "${s.id}", type: ${s.screenType}${s.isHome ? ', HOME SCREEN' : ''}): ${s.description}`
@@ -397,17 +437,14 @@ IMPORTANT: Keep each screen's tree COMPACT. Use macro components (BottomNav, Sea
 
 Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No explanation, no markdown.`
 
-    const genResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: genModel,
-        max_tokens: 32000,
-        system: [{ type: 'text', text: APP_GENERATION_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: buildMessages(conversationHistory, genPrompt),
-      }),
-    })
+    const genBody = {
+      model: genModel,
+      max_tokens: 48000,
+      system: [{ type: 'text', text: APP_GENERATION_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      messages: buildMessages(conversationHistory, genPrompt),
+    }
 
+    let genResponse = await callAnthropic(apiKey, genBody)
     if (!genResponse.ok) {
       console.error('Generation API error:', genResponse.status, await genResponse.text())
       logUsage({ userId: user.id, projectId, modelUsed: genModel, generationType: 'app', promptPreview: prompt, success: false })
@@ -415,10 +452,28 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       return res.end()
     }
 
-    const genData: any = await genResponse.json()
-    let screens = parseScreenArray(genData.content?.[0]?.text ?? '')
+    let genData: any = await genResponse.json()
+    let genText: string = genData.content?.[0]?.text ?? ''
+    let screens = parseScreenArray(genText)
+
+    if (!screens && genData.stop_reason === 'max_tokens') {
+      console.error('[generate-flow] Phase 2 screen-gen hit max_tokens; retrying with 64000 + strict suffix. Stop reason:', genData.stop_reason, 'Full raw body:\n', genText)
+      const retryResp = await callAnthropic(apiKey, {
+        ...genBody,
+        max_tokens: 64000,
+        system: [{ type: 'text', text: APP_GENERATION_SYSTEM_PROMPT + STRICT_ARRAY_SUFFIX, cache_control: { type: 'ephemeral' } }],
+      })
+      if (retryResp.ok) {
+        genData = await retryResp.json()
+        genText = genData.content?.[0]?.text ?? ''
+        screens = parseScreenArray(genText)
+      } else {
+        console.error('[generate-flow] Phase 2 retry HTTP error:', retryResp.status, await retryResp.text())
+      }
+    }
 
     if (!screens) {
+      console.error('[generate-flow] Phase 2 screen-gen parse failed. Stop reason:', genData.stop_reason, 'Full raw body:\n', genText)
       sendSSE(res, { type: 'error', message: 'Failed to parse generated screens.' })
       return res.end()
     }
