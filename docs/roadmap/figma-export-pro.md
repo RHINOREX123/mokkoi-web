@@ -1,9 +1,19 @@
 # Figma export — Pro tier feature
 
-**Status:** `idea`
+**Status:** `idea` — placeholder UI shipped (`Coming Soon · Pro` tab in
+the Code Export modal), real engineering not started.
 **Estimated effort:** 2–4 weeks (export pipeline + Figma API integration + Pro gating)
 **Priority:** Low (Pro tier feature; ship after we have paying users)
 **Owner:** unassigned
+
+## What's already shipped (placeholder only)
+
+- New `Figma` tab in `src/components/CodeExportModal.tsx`, badged `Soon`
+- Selecting it shows a Coming Soon card with a "Notify me when it's ready" button
+- Clicking notify fires the `figma_export_interest` analytics event with
+  `{ plan, source: 'export_modal' }` so we can see how many users — and
+  which tier — actually ask for the feature before we build it
+- No real export logic; the tab cannot produce a Figma file yet
 
 ## Goal
 

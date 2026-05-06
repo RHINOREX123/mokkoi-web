@@ -66,7 +66,8 @@ function highlightCode(code: string): React.ReactNode[] {
 
 export function CodeExportModal({ tree, screenName, onClose }: CodeExportModalProps) {
   const [copied, setCopied] = useState(false)
-  const [tab, setTab] = useState<'tsx' | 'json'>('tsx')
+  const [tab, setTab] = useState<'tsx' | 'json' | 'figma'>('tsx')
+  const [figmaInterestLogged, setFigmaInterestLogged] = useState(false)
   const { plan } = useUserPlan()
   const addWatermark = plan === 'free'
 
@@ -75,7 +76,10 @@ export function CodeExportModal({ tree, screenName, onClose }: CodeExportModalPr
     [tree, screenName, addWatermark],
   )
   const jsonCode = useMemo(() => JSON.stringify(tree, null, 2), [tree])
-  const code = tab === 'tsx' ? tsxCode : jsonCode
+  // Figma tab is a "coming soon" placeholder — see docs/roadmap/figma-export-pro.md
+  // for the full spec. Pre-shipping this UI lets us validate demand
+  // (figma_export_interest analytics event) before committing engineering.
+  const code = tab === 'tsx' ? tsxCode : tab === 'json' ? jsonCode : ''
   const highlighted = useMemo(() => highlightCode(code), [code])
 
   useEffect(() => {
@@ -179,6 +183,29 @@ export function CodeExportModal({ tree, screenName, onClose }: CodeExportModalPr
             <div style={{ display: 'flex', gap: 4 }}>
               <button onClick={() => setTab('tsx')} style={tabStyle(tab === 'tsx')}>TSX</button>
               <button onClick={() => setTab('json')} style={tabStyle(tab === 'json')}>JSON</button>
+              <button
+                onClick={() => setTab('figma')}
+                style={{
+                  ...tabStyle(tab === 'figma'),
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                title="Export to Figma — coming soon"
+              >
+                Figma
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  padding: '1px 6px',
+                  borderRadius: 99,
+                  background: 'rgba(251,191,36,0.12)',
+                  color: '#FBBF24',
+                  border: '1px solid rgba(251,191,36,0.25)',
+                }}>Soon</span>
+              </button>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -241,24 +268,165 @@ export function CodeExportModal({ tree, screenName, onClose }: CodeExportModalPr
           </div>
         </div>
 
-        {/* Code content */}
+        {/* Content area */}
         <div style={{
           flex: 1, minHeight: 0, overflowY: 'auto',
           padding: '16px 20px',
           scrollbarWidth: 'thin',
         }}>
-          <pre style={{
-            margin: 0,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
-            fontSize: 12.5,
-            lineHeight: 1.6,
-            color: '#CBD5E1',
-            whiteSpace: 'pre',
-            tabSize: 2,
-          }}>
-            {highlighted}
-          </pre>
+          {tab === 'figma' ? (
+            <FigmaComingSoon
+              interestLogged={figmaInterestLogged}
+              onNotifyMe={() => {
+                if (!figmaInterestLogged) {
+                  trackEvent('figma_export_interest', {
+                    plan,
+                    source: 'export_modal',
+                  })
+                  setFigmaInterestLogged(true)
+                }
+              }}
+            />
+          ) : (
+            <pre style={{
+              margin: 0,
+              fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              color: '#CBD5E1',
+              whiteSpace: 'pre',
+              tabSize: 2,
+            }}>
+              {highlighted}
+            </pre>
+          )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Figma export — "Coming Soon" placeholder
+// ---------------------------------------------------------------------------
+// Pre-ships the visible promise without the engineering. Two purposes:
+//   1. Validates demand via the figma_export_interest analytics event
+//   2. Reserves the menu slot so users (especially designers) know the
+//      feature is coming
+// Real implementation lives in docs/roadmap/figma-export-pro.md
+function FigmaComingSoon({
+  interestLogged,
+  onNotifyMe,
+}: {
+  interestLogged: boolean
+  onNotifyMe: () => void
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '32px 16px',
+        textAlign: 'center',
+        gap: 16,
+        minHeight: '100%',
+      }}
+    >
+      {/* Figma-ish glyph (three colored circles) */}
+      <div
+        aria-hidden
+        style={{
+          display: 'flex',
+          gap: 4,
+          marginBottom: 4,
+        }}
+      >
+        <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#F24E1E' }} />
+        <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#A259FF' }} />
+        <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#1ABCFE' }} />
+      </div>
+
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+      }}>
+        <span style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          padding: '3px 10px',
+          borderRadius: 99,
+          background: 'rgba(251,191,36,0.10)',
+          color: '#FBBF24',
+          border: '1px solid rgba(251,191,36,0.25)',
+        }}>Coming soon · Pro</span>
+      </div>
+
+      <h3 style={{
+        margin: 0,
+        fontSize: 18,
+        fontWeight: 700,
+        color: '#F1F5F9',
+        fontFamily: "'Bricolage Grotesque', system-ui, sans-serif",
+        letterSpacing: '-0.01em',
+        maxWidth: 380,
+      }}>
+        Export to Figma
+      </h3>
+
+      <p style={{
+        margin: 0,
+        fontSize: 13.5,
+        color: '#94A3B8',
+        lineHeight: 1.55,
+        maxWidth: 420,
+      }}>
+        Hand off your Mokkoi screens as editable Figma frames. Designers
+        keep refining in their tool of choice; round-trip back to Mokkoi
+        when ready. We're polishing the export quality before flipping
+        the switch.
+      </p>
+
+      <button
+        type="button"
+        onClick={onNotifyMe}
+        disabled={interestLogged}
+        style={{
+          marginTop: 4,
+          padding: '10px 18px',
+          borderRadius: 10,
+          border: '1px solid rgba(251,191,36,0.30)',
+          background: interestLogged ? 'rgba(251,191,36,0.10)' : 'rgba(251,191,36,0.18)',
+          color: '#FBBF24',
+          fontSize: 13,
+          fontWeight: 600,
+          fontFamily: "'DM Sans', system-ui, sans-serif",
+          cursor: interestLogged ? 'default' : 'pointer',
+          transition: 'all 0.15s',
+        }}
+        onMouseEnter={e => {
+          if (!interestLogged) e.currentTarget.style.background = 'rgba(251,191,36,0.28)'
+        }}
+        onMouseLeave={e => {
+          if (!interestLogged) e.currentTarget.style.background = 'rgba(251,191,36,0.18)'
+        }}
+      >
+        {interestLogged ? '✓ We’ll let you know' : 'Notify me when it’s ready'}
+      </button>
+
+      <div style={{
+        marginTop: 12,
+        fontSize: 11,
+        color: '#64748B',
+        fontFamily: "'JetBrains Mono', monospace",
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+      }}>
+        Roadmap · figma-export-pro
       </div>
     </div>
   )
