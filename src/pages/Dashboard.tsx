@@ -866,6 +866,7 @@ export default function Dashboard() {
             state={hudState}
             projectName={prompt.trim().slice(0, 30) || 'project'}
             screenCount={4}
+            mode={submitMode}
           />
 
           <ModeCards onMode={handleModeCard} />

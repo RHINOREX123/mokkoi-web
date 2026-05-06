@@ -8,6 +8,12 @@ const IDLE_TIPS: ReadonlyArray<string> = [
   'TIP: MENTION THE PRIMARY USER ACTION',
 ]
 
+const IDLE_TIPS_PLAN: ReadonlyArray<string> = [
+  'PLAN MODE — SHARE YOUR IDEA, I’LL ASK QUESTIONS',
+  'PLAN MODE — UNCERTAINTY IS WELCOME HERE',
+  'PLAN MODE — WE SHAPE THE BRIEF TOGETHER',
+]
+
 export type SignalsState = 'idle' | 'submitted'
 
 export interface SignalsHUDProps {
@@ -23,6 +29,9 @@ export interface SignalsHUDProps {
   projectName?: string
   /** Screen count to interpolate into the SUBMITTED state's BUILDING line. */
   screenCount?: number
+  /** Submit mode driving idle-tip rotation. Plan mode shows a different
+   *  tip pool (uncertainty-friendly, "we'll plan together"). */
+  mode?: 'build' | 'plan'
 }
 
 /**
@@ -47,17 +56,24 @@ export function SignalsHUD({
   state,
   projectName = 'TASTEPLAN',
   screenCount = 4,
+  mode = 'build',
 }: SignalsHUDProps) {
   const resolvedState: SignalsState | 'typing' =
     state === 'submitted' ? 'submitted' : score == null || state === 'idle' ? 'idle' : 'typing'
 
-  // Rotate idle tips every 6s for ambient teaching.
+  const tips = mode === 'plan' ? IDLE_TIPS_PLAN : IDLE_TIPS
+
+  // Rotate idle tips every 6s for ambient teaching. Reset index when the
+  // mode changes so we don't index past the shorter Plan-mode array.
   const [tipIdx, setTipIdx] = useState(0)
   useEffect(() => {
+    setTipIdx(0)
+  }, [mode])
+  useEffect(() => {
     if (resolvedState !== 'idle') return
-    const id = setInterval(() => setTipIdx((i) => (i + 1) % IDLE_TIPS.length), 6000)
+    const id = setInterval(() => setTipIdx((i) => (i + 1) % tips.length), 6000)
     return () => clearInterval(id)
-  }, [resolvedState])
+  }, [resolvedState, tips])
 
   return (
     <div
@@ -111,7 +127,7 @@ export function SignalsHUD({
           <Spacer />
           <span style={{ color: 'var(--dash-text-2)', fontWeight: 500 }}>
             <span style={{ color: 'var(--dash-teal)', marginRight: 8 }}>↳</span>
-            {IDLE_TIPS[tipIdx]}
+            {tips[tipIdx]}
           </span>
           <span style={{ opacity: 0.7 }}>EXAMPLES ↗</span>
         </>

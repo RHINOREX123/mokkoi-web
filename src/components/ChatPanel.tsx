@@ -51,6 +51,12 @@ interface ChatPanelProps {
   appPhase?: 'idle' | 'planning' | 'generating'
   /** App generation progress (current/total screens) */
   appProgress?: { current: number; total: number } | null
+  /** True when the user submitted from the dashboard's Plan toggle.
+   *  Renders an informational banner above the messages list. Today this is
+   *  purely cosmetic — generation still runs the same pipeline. The actual
+   *  conversational behavior is the future task at
+   *  docs/roadmap/conversational-intent.md. */
+  planMode?: boolean
 }
 
 const PLACEHOLDERS = [
@@ -78,7 +84,13 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode }: ChatPanelProps) {
+  // Plan-mode banner — dismissible, local state only. App.tsx strips the
+  // ?mode=plan param on mount, so a refresh does NOT re-show the banner;
+  // dismiss is effectively per-page-load. That's intentional: the banner is
+  // a one-time announcement of the user's mode choice, not a persistent
+  // status indicator.
+  const [planBannerDismissed, setPlanBannerDismissed] = useState(false)
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -244,6 +256,66 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
         flexDirection: 'column',
         gap: 16,
       }}>
+        {/* Plan-mode banner — purely informational. The generation pipeline
+            doesn't yet behave differently in Plan mode (that's the future
+            conversational-intent task); this banner exists so the surface
+            matches the user's expectation that they're in Plan mode. */}
+        {planMode && !planBannerDismissed && (
+          <div
+            role="status"
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '10px 12px',
+              borderRadius: 10,
+              background: 'rgba(167,139,250,0.08)',
+              border: '1px solid rgba(167,139,250,0.28)',
+              color: '#e2e8f0',
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#a78bfa',
+                boxShadow: '0 0 8px rgba(167,139,250,0.7)',
+                flexShrink: 0,
+                marginTop: 5,
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: '#c4b5fd', marginBottom: 2 }}>
+                Plan mode
+              </div>
+              <div style={{ color: '#94a3b8' }}>
+                Mokkoi will ask clarifying questions before generating.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPlanBannerDismissed(true)}
+              aria-label="Dismiss plan mode banner"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                padding: 2,
+                fontSize: 14,
+                lineHeight: 1,
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Empty state — quiet hint, no generic template buttons. The user
             most often lands here with a prompt already in the URL from the
             dashboard, which immediately starts generation. The empty state

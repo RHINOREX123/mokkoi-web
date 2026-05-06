@@ -144,6 +144,22 @@ function App() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Dashboard V2 also routes here with ?mode=plan when the user submitted in
+  // Plan mode. The flag is purely informational today — it surfaces a banner
+  // in the chat panel announcing "Mokkoi will ask clarifying questions before
+  // generating". The real conversational backend lives in the future task at
+  // docs/roadmap/conversational-intent.md; current generation is unchanged.
+  // Capture once on mount, then strip from the URL so refreshes don't keep
+  // re-showing the banner if the user has dismissed it.
+  const initialPlanModeRef = useRef(searchParams.get('mode') === 'plan')
+  useEffect(() => {
+    if (searchParams.get('mode')) {
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('mode')
+      setSearchParams(newParams, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Core hooks ---
   const canvas = useCanvasState()
   const screens = useScreenManagement(projectId)
@@ -651,6 +667,7 @@ function App() {
               messages={screens.projectMessages} onSend={ai.handleSend}
               onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
               isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImages={initialAttachedImages}
+              planMode={initialPlanModeRef.current}
               onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens} screensLoaded={screens.screensLoaded}
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}

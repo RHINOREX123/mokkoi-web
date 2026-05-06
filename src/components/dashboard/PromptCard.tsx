@@ -146,7 +146,9 @@ export function PromptCard({
         transition: 'opacity 0.2s',
       }}
     >
-      {/* Holographic animated border (mask-composited so only the ring shows). */}
+      {/* Holographic animated border (mask-composited so only the ring shows).
+          In Plan mode the conic-gradient leans lavender alongside the existing
+          teal/aqua, signalling "different mode armed" without breaking brand. */}
       <div
         data-dash-animated
         aria-hidden
@@ -156,7 +158,9 @@ export function PromptCard({
           borderRadius: 17,
           padding: 1,
           background:
-            'conic-gradient(from 0deg, rgba(45,212,191,0) 0deg, rgba(45,212,191,0.6) 45deg, rgba(6,182,212,0.5) 90deg, rgba(45,212,191,0) 180deg, rgba(94,234,212,0.4) 270deg, rgba(45,212,191,0) 360deg)',
+            mode === 'plan'
+              ? 'conic-gradient(from 0deg, rgba(167,139,250,0) 0deg, rgba(167,139,250,0.6) 45deg, rgba(139,92,246,0.5) 90deg, rgba(45,212,191,0.35) 180deg, rgba(167,139,250,0.45) 270deg, rgba(167,139,250,0) 360deg)'
+              : 'conic-gradient(from 0deg, rgba(45,212,191,0) 0deg, rgba(45,212,191,0.6) 45deg, rgba(6,182,212,0.5) 90deg, rgba(45,212,191,0) 180deg, rgba(94,234,212,0.4) 270deg, rgba(45,212,191,0) 360deg)',
           WebkitMask:
             'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
           mask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
@@ -225,8 +229,12 @@ export function PromptCard({
         rows={3}
         placeholder={
           hasImages
-            ? "Describe what to build with these images…"
-            : "Let's build — describe your app, paste a screenshot, or import a Figma file…"
+            ? mode === 'plan'
+              ? "Tell me about your idea + these images — we'll plan it together…"
+              : "Describe what to build with these images…"
+            : mode === 'plan'
+              ? "Tell me about your idea — we'll plan it together. I'll ask clarifying questions before building…"
+              : "Let's build — describe your app, paste a screenshot, or import a Figma file…"
         }
         aria-label="App prompt"
         style={{
@@ -293,13 +301,19 @@ export function PromptCard({
             border: 'none',
             cursor: canSubmit ? 'pointer' : 'default',
             background: canSubmit
-              ? 'linear-gradient(135deg, var(--dash-teal), var(--dash-teal-2))'
+              ? mode === 'plan'
+                ? 'linear-gradient(135deg, var(--dash-accent-lavender), #8b5cf6)'
+                : 'linear-gradient(135deg, var(--dash-teal), var(--dash-teal-2))'
               : 'rgba(255,255,255,0.06)',
-            color: canSubmit ? '#001a1f' : 'var(--dash-text-3)',
+            color: canSubmit ? (mode === 'plan' ? '#fff' : '#001a1f') : 'var(--dash-text-3)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: canSubmit ? '0 4px 12px var(--dash-teal-glow)' : 'none',
+            boxShadow: canSubmit
+              ? mode === 'plan'
+                ? '0 4px 12px rgba(167,139,250,0.4)'
+                : '0 4px 12px var(--dash-teal-glow)'
+              : 'none',
             transition: 'all 0.15s',
           }}
         >
@@ -444,6 +458,7 @@ function PlanBuildToggle({
     >
       {options.map((opt) => {
         const active = mode === opt
+        const planActive = active && opt === 'plan'
         return (
           <button
             key={opt}
@@ -460,9 +475,11 @@ function PlanBuildToggle({
               fontFamily: "'DM Sans', system-ui, sans-serif",
               textTransform: 'capitalize',
               cursor: 'pointer',
-              color: active ? '#001a1f' : 'var(--dash-text-2)',
+              color: active ? (planActive ? '#fff' : '#001a1f') : 'var(--dash-text-2)',
               background: active
-                ? 'linear-gradient(135deg, var(--dash-teal), var(--dash-teal-2))'
+                ? planActive
+                  ? 'linear-gradient(135deg, var(--dash-accent-lavender), #8b5cf6)'
+                  : 'linear-gradient(135deg, var(--dash-teal), var(--dash-teal-2))'
                 : 'transparent',
               transition: 'all 0.15s',
             }}
