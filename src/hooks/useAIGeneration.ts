@@ -279,7 +279,11 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       : null
 
     // App generation — "Build me a fitness app" type prompts
-    const appRequest = isAppPrompt(prompt) && !hasImages && !editingScreen
+    // Reference images are now supported on the multi-screen path — they
+    // inform visual style of the planner + screen generation. Domain still
+    // comes from the user's text prompt (see REFERENCE_INSPIRATION_BLOCK in
+    // api/generate-flow.ts).
+    const appRequest = isAppPrompt(prompt) && !editingScreen
     if (appRequest) {
       const placeholderId = crypto.randomUUID()
       const placeholderName = prompt.length > 25 ? prompt.slice(0, 25) + '...' : prompt
@@ -304,7 +308,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         const res = await fetch('/api/generate-flow', {
           method: 'POST',
           headers: { ...authHeaders, 'Accept': 'text/event-stream' },
-          body: JSON.stringify({ mode: 'app', prompt, projectId, conversationHistory, deviceId }),
+          body: JSON.stringify({ mode: 'app', prompt, projectId, conversationHistory, deviceId, images: imagesArr }),
         })
 
         if (!res.ok) {

@@ -8,6 +8,35 @@ import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTE
 import { matchTemplate } from './_lib/template-matcher.js'
 import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
 
+const REFERENCE_INSPIRATION_BLOCK = `REFERENCE IMAGES — VISUAL INSPIRATION ONLY
+
+The user attached reference image(s). The reference images decide HOW the screens LOOK. The user's text prompt decides WHAT the app IS.
+
+THE DOMAIN COMES FROM THE USER'S TEXT PROMPT — NEVER FROM THE IMAGES.
+
+Concrete example:
+  - User says: "create a fitness app"
+  - User attaches: 4 screenshots of a food/recipe app
+  - You build: FITNESS screens (workouts, calories, steps, BPM, progress rings) styled with the food app's visual language — its palette, card radii, typography weight, spacing rhythm.
+  - You do NOT build recipe/food screens. No "Thai Green Curry", no ingredient lists, no food-domain content from the images.
+
+Pull from the references (visual style ONLY):
+  - Color palette and accent colors
+  - Typography vibe (weights, sizes, hierarchy)
+  - Spacing and layout rhythm
+  - Card shapes, corner radii, shadow style
+  - Iconography style and density
+  - Overall mood: dark/light, minimal/dense, playful/serious
+
+Do NOT pull from the references:
+  - The subject matter or app domain
+  - Specific text labels, brand names, dish names, product names
+  - Numerical data (prices, ratings, counts, times)
+  - Section titles tied to the reference's domain
+  - User names, profile photos, or any literal data values
+
+Every generated screen MUST be in the user's domain. The bottom tab bar must reflect the user's domain (Home + primary features of the user's app), NOT the references' tabs.`
+
 const FLOW_SYSTEM_PROMPT = `You are a world-class mobile UI designer and React Native expert. The user wants a MULTI-SCREEN FLOW. Generate 3-5 connected screens as a JSON array. Each screen should have: { "id": string, "name": string (e.g. "Welcome", "Sign Up", "Profile Setup"), "tree": ComponentNode }.
 
 Your designs follow these principles:
@@ -88,16 +117,21 @@ ${QUALITY_CHECKLIST}
 
 Return ONLY a JSON array of screen objects. No markdown, no explanation.`
 
-/** Build a Claude-compatible messages array from conversation history + current prompt. */
+type RefImage = { data: string; mimeType?: string }
+
+/** Build a Claude-compatible messages array from conversation history + current prompt.
+ * If `images` is provided and non-empty, the final user turn is a multimodal block
+ * (images + text) instead of a plain string. */
 function buildMessages(
   conversationHistory: Array<{ role: string; content: string }> | undefined,
-  currentContent: string
-): Array<{ role: 'user' | 'assistant'; content: string }> {
-  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  currentContent: string,
+  images?: RefImage[],
+): Array<{ role: 'user' | 'assistant'; content: any }> {
+  const messages: Array<{ role: 'user' | 'assistant'; content: any }> = []
   if (Array.isArray(conversationHistory)) {
     for (const m of conversationHistory.slice(-5)) {
       const role = m.role === 'assistant' ? 'assistant' : 'user'
-      if (messages.length > 0 && messages[messages.length - 1].role === role) {
+      if (messages.length > 0 && messages[messages.length - 1].role === role && typeof messages[messages.length - 1].content === 'string') {
         messages[messages.length - 1].content += '\n' + m.content
       } else {
         messages.push({ role, content: m.content })
@@ -110,7 +144,24 @@ function buildMessages(
   if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
     messages.push({ role: 'assistant', content: 'Understood, continuing.' })
   }
-  return [...messages, { role: 'user', content: currentContent }]
+  const finalContent = images && images.length > 0
+    ? [
+        ...images.map(img => ({
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: img.mimeType || 'image/png', data: img.data },
+        })),
+        { type: 'text' as const, text: currentContent },
+      ]
+    : currentContent
+  return [...messages, { role: 'user', content: finalContent }]
+}
+
+function normalizeImages(raw: unknown): RefImage[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((i: any) => i && typeof i.data === 'string' && i.data.length > 0)
+    .slice(0, 4)
+    .map((i: any) => ({ data: i.data, mimeType: typeof i.mimeType === 'string' ? i.mimeType : 'image/png' }))
 }
 
 /** Attempt to repair truncated JSON */
@@ -269,11 +320,18 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
 
-  const { prompt, projectId, conversationHistory } = req.body ?? {}
+  const { prompt, projectId, conversationHistory, images: rawImages } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: 'Missing or invalid prompt' })
+  const images = normalizeImages(rawImages)
 
   const userPlan = await getUserPlan(user.id, user.email)
   const model = userPlan === 'free' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-20250514'
+
+  // When references are attached, prepend the inspiration block so the model
+  // lifts visual style only — domain still comes from the user's text prompt.
+  const flowSystem = images.length > 0
+    ? `${REFERENCE_INSPIRATION_BLOCK}\n\n${FLOW_SYSTEM_PROMPT}`
+    : FLOW_SYSTEM_PROMPT
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -282,8 +340,8 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
       body: JSON.stringify({
         model,
         max_tokens: 16000,
-        system: [{ type: 'text', text: FLOW_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: buildMessages(conversationHistory, prompt),
+        system: [{ type: 'text', text: flowSystem, cache_control: { type: 'ephemeral' } }],
+        messages: buildMessages(conversationHistory, prompt, images),
       }),
     })
 
@@ -380,8 +438,15 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
 
-  const { prompt, projectId, conversationHistory } = req.body ?? {}
+  const { prompt, projectId, conversationHistory, images: rawImages } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: 'Missing or invalid prompt' })
+  // Token-budget guard: image inputs are expensive. The current pipeline makes
+  // exactly two LLM calls (planner + bulk screen-gen), so we attach images to
+  // both — total cost stays <2x of the no-image path. If this ever splits into
+  // per-screen generation, scope images to planner + the FIRST (home) screen
+  // only and let subsequent screens inherit visual style via the planner's
+  // designDirection brief.
+  const images = normalizeImages(rawImages)
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream')
@@ -399,14 +464,17 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     if (templateMatch) {
       console.log(`[planner] template match: ${templateMatch.templateId} (score=${templateMatch.score.toFixed(2)})`)
     }
-    const plannerSystem = buildPlannerSystem(templateMatch?.templateId)
+    const basePlannerSystem = buildPlannerSystem(templateMatch?.templateId)
+    const plannerSystem = images.length > 0
+      ? `${REFERENCE_INSPIRATION_BLOCK}\n\n${basePlannerSystem}`
+      : basePlannerSystem
 
     const PLANNER_MODEL = 'claude-haiku-4-5-20251001'
     const plannerBody = {
       model: PLANNER_MODEL,
       max_tokens: 2000,
       system: [{ type: 'text', text: plannerSystem, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: prompt }],
+      messages: buildMessages(undefined, prompt, images),
     }
 
     let planResponse = await callAnthropic(apiKey, plannerBody)
@@ -486,11 +554,15 @@ IMPORTANT: Keep each screen's tree COMPACT. Use macro components (BottomNav, Sea
 
 Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No explanation, no markdown.`
 
+    const genSystem = images.length > 0
+      ? `${REFERENCE_INSPIRATION_BLOCK}\n\n${APP_GENERATION_SYSTEM_PROMPT}`
+      : APP_GENERATION_SYSTEM_PROMPT
+
     const genBody = {
       model: genModel,
       max_tokens: 48000,
-      system: [{ type: 'text', text: APP_GENERATION_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      messages: buildMessages(conversationHistory, genPrompt),
+      system: [{ type: 'text', text: genSystem, cache_control: { type: 'ephemeral' } }],
+      messages: buildMessages(conversationHistory, genPrompt, images),
     }
 
     let genResponse = await callAnthropic(apiKey, genBody)
@@ -515,7 +587,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       const retryResp = await callAnthropic(apiKey, {
         ...genBody,
         max_tokens: 64000,
-        system: [{ type: 'text', text: APP_GENERATION_SYSTEM_PROMPT + STRICT_ARRAY_SUFFIX, cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: genSystem + STRICT_ARRAY_SUFFIX, cache_control: { type: 'ephemeral' } }],
       })
       if (retryResp.ok) {
         genData = await retryResp.json()
