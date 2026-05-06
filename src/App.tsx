@@ -88,6 +88,53 @@ function App() {
   const zoomRef = useRef(canvas.zoomLevel)
   zoomRef.current = canvas.zoomLevel
 
+  // Track whether the modal opened from a dashboard mode card was actually
+  // used (user clicked Generate/Import). If they close it without committing,
+  // we treat the empty "Untitled" project the dashboard pre-created as an
+  // orphan and clean it up — see maybeCleanupOrphanProject below.
+  const didCommitFromDashModalRef = useRef(false)
+
+  /**
+   * If the user just closed a Screenshot/Import modal that was auto-opened
+   * from the dashboard mode card (?openModal=screenshot|import), AND they
+   * didn't actually commit anything (didCommitFromDashModalRef stayed false),
+   * AND this project is still the empty "Untitled" placeholder we created
+   * upfront — delete it and bounce back to /. Otherwise we'd leave orphan
+   * "Untitled · 0 screens" cards on the dashboard cluttering the recents.
+   *
+   * Cheap, defensive checks:
+   *   - was the modal launched from the dashboard? (initialOpenModalRef)
+   *   - did the user commit? (didCommitFromDashModalRef)
+   *   - is the project still pristine? (Untitled name AND zero screens)
+   * Only when all three say "yes / orphan / pristine" do we delete.
+   */
+  const maybeCleanupOrphanProject = async (which: 'screenshot' | 'import') => {
+    if (initialOpenModalRef.current !== which) return
+    if (didCommitFromDashModalRef.current) return
+    if (!projectId || !supabase) {
+      navigate('/', { replace: true })
+      return
+    }
+    if (screens.projectName !== 'Untitled') {
+      navigate('/', { replace: true })
+      return
+    }
+    if (screens.generatedScreens.length > 0) {
+      navigate('/', { replace: true })
+      return
+    }
+    // RLS-safe delete with count: 'exact' so we know the row was touched —
+    // if not, log for debugging but still navigate home.
+    const { error, count } = await supabase
+      .from('projects')
+      .delete({ count: 'exact' })
+      .eq('id', projectId)
+    if (error || count === 0) {
+      console.warn('[mokkoi] orphan-project cleanup skipped', { projectId, error, count })
+    }
+    navigate('/', { replace: true })
+  }
+
   // UI state
   const [showCodeExport, setShowCodeExport] = useState(false)
   const [referenceImages, setReferenceImages] = useState<CanvasRefImage[]>([])
@@ -814,12 +861,27 @@ function App() {
       <VariationsPanel isOpen={showVariationsPanel} onClose={() => setShowVariationsPanel(false)} onGenerate={ai.handleGenerateVariations} isGenerating={ai.isGeneratingVariations} />
       {showQrModal && <QrCodeModal url={qrUrl} onClose={() => setShowQrModal(false)} />}
       {showExpoPreview && <ExpoPreviewModal screens={screens.generatedScreens.filter(s => s.tree)} connections={screens.connections} projectName={screens.projectName} onClose={() => setShowExpoPreview(false)} />}
-      {showScreenshotModal && <ScreenshotModal onClose={() => setShowScreenshotModal(false)} onGenerate={(imageData, imageMimeType, prompt) => { setShowScreenshotModal(false); ai.handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true) }} isGenerating={ai.isGenerating} />}
+      {showScreenshotModal && <ScreenshotModal
+        onClose={() => {
+          setShowScreenshotModal(false)
+          maybeCleanupOrphanProject('screenshot')
+        }}
+        onGenerate={(imageData, imageMimeType, prompt) => {
+          didCommitFromDashModalRef.current = true
+          setShowScreenshotModal(false)
+          ai.handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true)
+        }}
+        isGenerating={ai.isGenerating}
+      />}
 
       {showImportHtmlModal && <ImportHtmlModal
-        onClose={() => setShowImportHtmlModal(false)}
+        onClose={() => {
+          setShowImportHtmlModal(false)
+          maybeCleanupOrphanProject('import')
+        }}
         projectId={projectId}
         onImported={async (screen, modelUsed) => {
+          didCommitFromDashModalRef.current = true
           setShowImportHtmlModal(false)
           const pos = screens.getNextScreenPosition()
           const newScreen = {
