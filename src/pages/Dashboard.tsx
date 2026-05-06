@@ -104,10 +104,10 @@ export default function Dashboard() {
   const [submitMode, setSubmitMode] = useState<SubmitMode>('build')
   const [hudState, setHudState] = useState<SignalsState | undefined>(undefined)
   const [planSuggest, setPlanSuggest] = useState(false)
-  // Reference image attached via the Camera button on the prompt card.
-  // Lives at the dashboard level so submitWithMode can hand it off to
-  // App.tsx via sessionStorage on navigate.
-  const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null)
+  // Reference images attached via the Camera button on the prompt card.
+  // Up to 4. Lives at the dashboard level so submitWithMode can hand them
+  // off to App.tsx via sessionStorage on navigate.
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([])
   const promptScore = usePromptScore(prompt)
 
 
@@ -216,23 +216,23 @@ export default function Dashboard() {
       trackEvent('project_created', {
         source: 'dashboard',
         mode,
-        hasImage: !!attachedImage,
+        imageCount: attachedImages.length,
       })
 
-      // If the user attached a reference image, hand it off via
+      // If the user attached reference images, hand them off via
       // sessionStorage keyed by project id. App.tsx reads + clears the key
-      // on mount and pipes the image into ai.handleSend so generation gets
-      // both the prompt and the visual reference. URL params are too small
+      // on mount and pipes the array into ai.handleSend so generation gets
+      // both the prompt and the visual references. URL params are too small
       // for base64 image data, hence sessionStorage.
-      if (attachedImage) {
+      if (attachedImages.length > 0) {
         try {
           sessionStorage.setItem(
-            `mokkoi.pendingImage.${data.id}`,
-            JSON.stringify(attachedImage),
+            `mokkoi.pendingImages.${data.id}`,
+            JSON.stringify(attachedImages),
           )
         } catch {
           // sessionStorage can fail in private mode / quota. Submission
-          // still proceeds with the prompt; the image is just dropped.
+          // still proceeds with the prompt; images get dropped silently.
         }
       }
 
@@ -264,16 +264,19 @@ export default function Dashboard() {
   }
 
   /**
-   * Mode-card handler. Build focuses the prompt input; Screenshot and Import
-   * create an empty "Untitled" project, then navigate to /app/:id with an
-   * ?openModal=screenshot|import query param. App.tsx reads that param on
-   * mount and auto-opens the matching upload flow.
+   * Mode-card handler. Build focuses the prompt input; Import creates an
+   * empty "Untitled" project then navigates to /app/:id?openModal=import,
+   * where App.tsx auto-opens ImportHtmlModal.
    *
-   * The empty-project shortcut is the cleanest way to reuse the existing
-   * ScreenshotModal / ImportHtmlModal flows — they assume a project context
-   * (ai.handleSend, screen list, etc.) — without duplicating their logic on
-   * the dashboard. Untitled projects get auto-renamed by the existing flow
-   * once the user submits content.
+   * The empty-project shortcut reuses the existing ImportHtmlModal flow
+   * (which assumes a project context: ai.handleSend, screen list, etc.)
+   * without duplicating its logic on the dashboard. Untitled projects get
+   * cleaned up by maybeCleanupOrphanProject in App.tsx if the user cancels
+   * the modal without committing — see Phase B.
+   *
+   * Screenshot was previously a third mode card; it's been consolidated
+   * into the Camera button on the prompt card (multi-image up to 4),
+   * so 'screenshot' is no longer a valid DashboardMode.
    */
   const handleModeCard = async (mode: DashboardMode) => {
     if (mode === 'build') {
@@ -854,8 +857,8 @@ export default function Dashboard() {
             mode={submitMode}
             onModeChange={setSubmitMode}
             disabled={isSubmitting}
-            attachedImage={attachedImage}
-            onAttachImage={setAttachedImage}
+            attachedImages={attachedImages}
+            onAttachImagesChange={setAttachedImages}
           />
 
           <SignalsHUD

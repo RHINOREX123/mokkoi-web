@@ -53,46 +53,75 @@ function App() {
   const initialPromptRef = useRef(searchParams.get('prompt') || undefined)
   const initialPrompt = initialPromptRef.current
 
-  // Capture an optional image attachment that the dashboard handed off via
-  // sessionStorage (the Camera button on the prompt card). URL params are
-  // too small for base64 image data, so we use sessionStorage keyed by
-  // project id. Read once + clear so refreshes don't re-trigger.
+  // Capture optional image attachments that the dashboard handed off via
+  // sessionStorage (the Camera button on the prompt card, up to 4 images).
+  // URL params are too small for base64 image data, so we use sessionStorage
+  // keyed by project id. Read once + clear so refreshes don't re-trigger.
   //
-  // The dashboard stores a full data URL ("data:image/png;base64,..."); the
+  // The dashboard stores full data URLs ("data:image/png;base64,..."); the
   // ai.handleSend pipeline expects bare base64 + mime type separately, so
   // we strip the prefix on read. Shape returned matches ChatPanel's
-  // attachedImage state shape so initialImage drops in cleanly.
-  const initialAttachedImageRef = useRef<{
-    data: string          // bare base64
-    mediaType: string
-    fileName: string
-  } | null>(null)
-  if (initialAttachedImageRef.current === null && projectId) {
+  // attachedImage state for consistency.
+  //
+  // Reads two keys for backward-compat across deploys:
+  //   mokkoi.pendingImages.{id}  → array (preferred, current dashboard)
+  //   mokkoi.pendingImage.{id}   → single (legacy; clears it too)
+  type ParsedImage = { data: string; mediaType: string; fileName: string }
+  const initialAttachedImagesRef = useRef<ParsedImage[] | null>(null)
+  if (initialAttachedImagesRef.current === null && projectId) {
+    const collected: ParsedImage[] = []
+    const stripPrefix = (dataUrl: string): string => {
+      const i = dataUrl.indexOf(',')
+      return i >= 0 ? dataUrl.slice(i + 1) : dataUrl
+    }
     try {
-      const raw = sessionStorage.getItem(`mokkoi.pendingImage.${projectId}`)
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
+      // Preferred plural key — array of { dataUrl, mimeType, fileName }
+      const rawPlural = sessionStorage.getItem(`mokkoi.pendingImages.${projectId}`)
+      if (rawPlural) {
+        const arr = JSON.parse(rawPlural) as Array<{
           dataUrl?: string
           mimeType?: string
           fileName?: string
-        }
-        if (parsed.dataUrl && parsed.mimeType) {
-          // Strip "data:image/png;base64," prefix → bare base64
-          const commaIdx = parsed.dataUrl.indexOf(',')
-          const base64 = commaIdx >= 0 ? parsed.dataUrl.slice(commaIdx + 1) : parsed.dataUrl
-          initialAttachedImageRef.current = {
-            data: base64,
-            mediaType: parsed.mimeType,
-            fileName: parsed.fileName ?? 'attachment',
+        }>
+        if (Array.isArray(arr)) {
+          for (const item of arr.slice(0, 4)) {
+            if (item.dataUrl && item.mimeType) {
+              collected.push({
+                data: stripPrefix(item.dataUrl),
+                mediaType: item.mimeType,
+                fileName: item.fileName ?? 'attachment',
+              })
+            }
           }
         }
-        sessionStorage.removeItem(`mokkoi.pendingImage.${projectId}`)
+        sessionStorage.removeItem(`mokkoi.pendingImages.${projectId}`)
+      }
+
+      // Legacy singular key — keep reading for users mid-flight on old code
+      if (collected.length === 0) {
+        const rawSingle = sessionStorage.getItem(`mokkoi.pendingImage.${projectId}`)
+        if (rawSingle) {
+          const parsed = JSON.parse(rawSingle) as {
+            dataUrl?: string
+            mimeType?: string
+            fileName?: string
+          }
+          if (parsed.dataUrl && parsed.mimeType) {
+            collected.push({
+              data: stripPrefix(parsed.dataUrl),
+              mediaType: parsed.mimeType,
+              fileName: parsed.fileName ?? 'attachment',
+            })
+          }
+          sessionStorage.removeItem(`mokkoi.pendingImage.${projectId}`)
+        }
       }
     } catch {
       // ignore — sessionStorage can throw in private mode
     }
+    initialAttachedImagesRef.current = collected.length > 0 ? collected : []
   }
-  const initialAttachedImage = initialAttachedImageRef.current
+  const initialAttachedImages = initialAttachedImagesRef.current ?? []
 
   // Clean ?prompt= from URL after capturing it (prevents re-generation on refresh)
   useEffect(() => {
@@ -621,7 +650,7 @@ function App() {
             <ChatPanel
               messages={screens.projectMessages} onSend={ai.handleSend}
               onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
-              isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImage={initialAttachedImage ?? undefined}
+              isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImages={initialAttachedImages}
               onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens} screensLoaded={screens.screensLoaded}
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}

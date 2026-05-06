@@ -1,27 +1,27 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { Zap, Camera, Diamond } from 'lucide-react'
+import { Zap, Diamond } from 'lucide-react'
 
-export type DashboardMode = 'build' | 'screenshot' | 'import'
+export type DashboardMode = 'build' | 'import'
 
 export interface ModeCardsProps {
   /** Called when the user picks a mode card. The dashboard wires this to:
-   *   - 'build':      focus the prompt textarea (no submit; user types)
-   *   - 'screenshot': open file picker / screenshot import flow
-   *   - 'import':     open Figma / HTML import modal */
+   *   - 'build':  focus the prompt textarea (no submit; user types)
+   *   - 'import': open the HTML import flow */
   onMode: (mode: DashboardMode) => void
 }
 
 /**
- * ModeCards — three cards under the prompt input that replace the tiny
- * "or start from Screenshot · Import HTML" text links from V1.
+ * ModeCards — two cards under the prompt input.
  *
  *  ⚡ Build       — generate full app from your prompt
- *  📷 Screenshot  — drop a screenshot, get a working clone
- *  ◇  Import      — bring in a Figma / HTML design via MCP
+ *  ◇  Import HTML — bring in your code via MCP / paste
+ *
+ * The "From a screenshot" card was consolidated into the Camera button on
+ * the PromptCard itself, which now supports up to 4 reference images. One
+ * image-attach paradigm instead of two.
  *
  * Each card is keyboard-accessible (button), reports its mode by aria-label,
- * and uses a tinted badge color (teal / amber / lavender) to read distinctly
- * at a glance.
+ * and uses a tinted badge color to read distinctly at a glance.
  *
  * Spec: docs/superpowers/specs/2026-05-06-dashboard-redesign.md (§6)
  */
@@ -32,7 +32,7 @@ export function ModeCards({ onMode }: ModeCardsProps) {
       aria-label="Build modes"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(2, 1fr)',
         gap: 10,
         marginTop: 14,
       }}
@@ -47,17 +47,6 @@ export function ModeCards({ onMode }: ModeCardsProps) {
         }
         title="Generate full app"
         desc="Multi-screen React Native app from your prompt."
-      />
-      <Card
-        ariaLabel="From a screenshot"
-        onClick={() => onMode('screenshot')}
-        badge={
-          <Badge tone="amber">
-            <Camera size={12} /> From a screenshot
-          </Badge>
-        }
-        title="Match a design you love"
-        desc="Drop an app screenshot — Mokkoi extends the design across screens."
       />
       <Card
         ariaLabel="Import HTML"

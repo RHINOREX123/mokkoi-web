@@ -3,6 +3,12 @@ import { ArrowUp, Camera, X } from 'lucide-react'
 
 export type SubmitMode = 'build' | 'plan'
 
+/** Hard cap on how many reference images a single prompt can attach.
+ *  4 is the product call — pairs with the Anthropic multimodal limit we
+ *  set on the API side and stays cheap to render as inline chips. */
+export const MAX_ATTACHED_IMAGES = 4
+const MAX_FILE_BYTES = 5 * 1024 * 1024
+
 export interface AttachedImage {
   /** Data URL ("data:image/png;base64,...") for inline preview + send. */
   dataUrl: string
@@ -21,11 +27,14 @@ export interface PromptCardProps {
   mode?: SubmitMode
   /** Setter for the toggle. */
   onModeChange?: (mode: SubmitMode) => void
-  /** Currently attached reference image (selected via the Camera icon).
-   *  Optional — when null/undefined the image chip is not rendered. */
-  attachedImage?: AttachedImage | null
-  /** Setter for the attached image. Pass `null` to clear. */
-  onAttachImage?: (img: AttachedImage | null) => void
+  /** Reference images attached via the Camera icon. Up to MAX_ATTACHED_IMAGES.
+   *  Owned by the parent (Dashboard) so the same array can be handed off to
+   *  the project page via sessionStorage on submit. */
+  attachedImages?: AttachedImage[]
+  /** Setter for the attached images list. Receives the next array — the
+   *  parent decides whether to enforce the cap (we also enforce it in the
+   *  file picker for safety). Pass [] to clear. */
+  onAttachImagesChange?: (next: AttachedImage[]) => void
 }
 
 /**
@@ -34,13 +43,14 @@ export interface PromptCardProps {
  * - Glassmorphic surface over the hero atmosphere
  * - Animated holographic conic-gradient border (slow rotation)
  * - Multi-line textarea, Enter submits / Shift+Enter newlines
- * - Bottom-left: Camera icon → opens native file picker, attaches image
- *   inline as a thumbnail chip above the textarea (X to remove)
+ * - Bottom-left: Camera icon → opens native file picker, attaches up to 4
+ *   reference images inline as a thumbnail strip above the textarea
+ *   (X to remove individual)
  * - Bottom-right: Plan / Build segmented toggle + Send button
  *
- * The Camera intentionally bypasses the ScreenshotModal — it's for "attach a
- * reference image to my prompt", not "build an app from this screenshot".
- * The Screenshot mode card on the dashboard handles the latter.
+ * The Camera is the only image-attach path on the dashboard. The
+ * "From a screenshot" mode card was removed in favor of consolidating into
+ * one paradigm: "your prompt + reference images".
  *
  * Spec: docs/superpowers/specs/2026-05-06-dashboard-redesign.md (§4, §8)
  */
@@ -51,8 +61,8 @@ export function PromptCard({
   disabled = false,
   mode = 'build',
   onModeChange,
-  attachedImage,
-  onAttachImage,
+  attachedImages = [],
+  onAttachImagesChange,
 }: PromptCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -65,38 +75,56 @@ export function PromptCard({
   }
 
   // The Camera icon opens the native file picker directly. No modal in the
-  // way — that's the differentiator from the Screenshot mode card.
+  // way — that's the differentiator from the in-chat ScreenshotModal.
   const handleCameraClick = () => {
     fileInputRef.current?.click()
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
     // Reset the input so picking the same file twice still fires onChange.
     e.target.value = ''
-    if (!file) return
-    if (!file.type.startsWith('image/')) return
-    if (file.size > 5 * 1024 * 1024) {
-      // Soft fail — caller should surface a toast. We don't have toast access
-      // from inside this component, so just bail silently. The accept attr
-      // already filters non-images at the OS level.
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') return
-      onAttachImage?.({
-        dataUrl: reader.result,
-        mimeType: file.type,
-        fileName: file.name,
-      })
-    }
-    reader.readAsDataURL(file)
+    if (!files || files.length === 0) return
+
+    // How many slots remain. If full, we silently drop the picks; the UI
+    // will already have the chip count visible so the user understands.
+    const remaining = MAX_ATTACHED_IMAGES - attachedImages.length
+    if (remaining <= 0) return
+
+    // Validate + read each candidate file, capping at the remaining slots.
+    const accepted = Array.from(files)
+      .filter((f) => f.type.startsWith('image/') && f.size <= MAX_FILE_BYTES)
+      .slice(0, remaining)
+
+    const reads = accepted.map(
+      (f) =>
+        new Promise<AttachedImage | null>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            if (typeof reader.result !== 'string') return resolve(null)
+            resolve({ dataUrl: reader.result, mimeType: f.type, fileName: f.name })
+          }
+          reader.onerror = () => resolve(null)
+          reader.readAsDataURL(f)
+        }),
+    )
+    const results = (await Promise.all(reads)).filter(
+      (x): x is AttachedImage => x !== null,
+    )
+    if (results.length === 0) return
+    onAttachImagesChange?.([...attachedImages, ...results])
   }
 
-  // Allow Send when there's text OR an attached image. Image-only submissions
-  // are valid for "build me an app like this" intents.
-  const canSubmit = !disabled && (value.trim().length > 0 || !!attachedImage)
+  const removeImageAt = (idx: number) => {
+    const next = attachedImages.filter((_, i) => i !== idx)
+    onAttachImagesChange?.(next)
+  }
+
+  // Allow Send when there's text OR at least one attached image. Image-only
+  // submissions are valid for "build me an app like this" intents.
+  const hasImages = attachedImages.length > 0
+  const canSubmit = !disabled && (value.trim().length > 0 || hasImages)
+  const cameraFull = attachedImages.length >= MAX_ATTACHED_IMAGES
 
   return (
     <div
@@ -135,31 +163,51 @@ export function PromptCard({
         }}
       />
 
-      {/* Hidden file input — clicked programmatically by the Camera icon. */}
+      {/* Hidden file input — clicked programmatically by the Camera icon.
+          `multiple` lets the user pick several at once; we still cap on
+          intake so the cap is enforced regardless of how the OS picker
+          behaves. */}
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         accept="image/png,image/jpeg,image/webp,image/gif"
         onChange={handleFileChange}
         style={{ display: 'none' }}
       />
 
-      {/* Attached image chip (inline above the textarea). Only rendered when
-          an image is attached. X removes it. */}
-      {attachedImage && (
+      {/* Attached image chips (inline above the textarea). Up to 4. */}
+      {hasImages && (
         <div
           style={{
             display: 'flex',
             gap: 8,
+            flexWrap: 'wrap',
             padding: '14px 14px 0',
             position: 'relative',
             zIndex: 1,
           }}
         >
-          <ImageChip
-            image={attachedImage}
-            onRemove={() => onAttachImage?.(null)}
-          />
+          {attachedImages.map((img, i) => (
+            <ImageChip
+              key={`${img.fileName}-${i}`}
+              image={img}
+              onRemove={() => removeImageAt(i)}
+            />
+          ))}
+          <span
+            style={{
+              alignSelf: 'center',
+              marginLeft: 4,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10.5,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--dash-text-3)',
+            }}
+          >
+            {attachedImages.length}/{MAX_ATTACHED_IMAGES}
+          </span>
         </div>
       )}
 
@@ -171,14 +219,14 @@ export function PromptCard({
         disabled={disabled}
         rows={3}
         placeholder={
-          attachedImage
-            ? "Describe what to build with this image…"
+          hasImages
+            ? "Describe what to build with these images…"
             : "Let's build — describe your app, paste a screenshot, or import a Figma file…"
         }
         aria-label="App prompt"
         style={{
           width: '100%',
-          padding: attachedImage ? '12px 18px 56px' : '18px 18px 56px',
+          padding: hasImages ? '12px 18px 56px' : '18px 18px 56px',
           borderRadius: 16,
           background: 'transparent',
           border: 'none',
@@ -203,9 +251,14 @@ export function PromptCard({
         }}
       >
         <IconBtn
-          label="Attach a reference image"
+          label={
+            cameraFull
+              ? `Maximum ${MAX_ATTACHED_IMAGES} images attached`
+              : 'Attach reference images'
+          }
           onClick={handleCameraClick}
-          active={!!attachedImage}
+          active={hasImages}
+          disabled={cameraFull}
         >
           <Camera size={16} />
         </IconBtn>
@@ -288,7 +341,7 @@ function ImageChip({
       <button
         type="button"
         onClick={onRemove}
-        aria-label="Remove attached image"
+        aria-label={`Remove ${image.fileName}`}
         style={{
           position: 'absolute',
           top: 4,
@@ -316,11 +369,13 @@ function IconBtn({
   label,
   onClick,
   active = false,
+  disabled = false,
   children,
 }: {
   label: string
   onClick?: () => void
   active?: boolean
+  disabled?: boolean
   children: React.ReactNode
 }) {
   const baseStyle: CSSProperties = {
@@ -333,22 +388,25 @@ function IconBtn({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'pointer',
+    cursor: disabled ? 'not-allowed' : 'pointer',
     transition: 'all 0.15s',
+    opacity: disabled ? 0.45 : 1,
   }
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       aria-label={label}
+      title={label}
+      disabled={disabled}
       style={baseStyle}
       onMouseEnter={(e) => {
-        if (active) return
+        if (active || disabled) return
         e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
         e.currentTarget.style.color = 'var(--dash-text)'
       }}
       onMouseLeave={(e) => {
-        if (active) return
+        if (active || disabled) return
         e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
         e.currentTarget.style.color = 'var(--dash-text-2)'
       }}

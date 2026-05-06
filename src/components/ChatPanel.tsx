@@ -25,11 +25,10 @@ interface ChatPanelProps {
   isStreaming?: boolean
   streamingText?: string
   initialPrompt?: string
-  /** Optional reference image attached on the dashboard via the Camera icon.
-   *  When set together with initialPrompt, the auto-send on mount fires
-   *  with both the prompt and the image. Same shape as the in-chat
-   *  attachedImage state for consistency. */
-  initialImage?: { data: string; mediaType: string; fileName: string }
+  /** Optional reference images attached on the dashboard via the Camera icon
+   *  (up to 4). When set together with initialPrompt, the auto-send on mount
+   *  fires with both the prompt and the images. Empty array = none. */
+  initialImages?: Array<{ data: string; mediaType: string; fileName: string }>
   /** Callback when user clicks a screen name in a flow message */
   onFlowScreenClick?: (screenName: string) => void
   /** Whether any screens have been generated (hides example cards) */
@@ -79,7 +78,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImage, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
@@ -148,14 +147,15 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     if (!screensLoaded) return // Wait for Supabase fetch to complete
     if (initialPrompt && !initialPromptHandled.current && !hasScreens) {
       initialPromptHandled.current = true
-      // If the dashboard handed off a reference image alongside the prompt,
-      // dispatch both so the very first generation sees the visual context.
-      const wrapped = initialImage
-        ? [{ data: initialImage.data, mimeType: initialImage.mediaType }]
-        : undefined
+      // If the dashboard handed off reference images alongside the prompt,
+      // dispatch all of them so the very first generation sees full context.
+      const wrapped =
+        initialImages && initialImages.length > 0
+          ? initialImages.map((img) => ({ data: img.data, mimeType: img.mediaType }))
+          : undefined
       onSendRef.current(initialPrompt, wrapped)
     }
-  }, [initialPrompt, initialImage, hasScreens, screensLoaded])
+  }, [initialPrompt, initialImages, hasScreens, screensLoaded])
 
   const handleSend = () => {
     const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')
