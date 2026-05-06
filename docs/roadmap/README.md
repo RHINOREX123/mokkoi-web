@@ -10,6 +10,7 @@ Every task file starts with a status:
 - **`scoped`** — clear plan, ready for someone to pick up
 - **`in-progress`** — actively being worked on (someone owns it)
 - **`shipped`** — merged to main, deployed; archived here for history
+- **`superseded`** — earlier attempt, replaced by another task; kept for context, do NOT pick up
 
 ## How to pick up a task
 
@@ -32,9 +33,10 @@ Every task file starts with a status:
 
 | File | Status | Brief |
 |---|---|---|
+| `multi-image-app-generation.md` | scoped, **HIGH** | Proper fix for image-attached app generation — routing + multi-screen pipeline + chat history display |
 | `conversational-intent.md` | scoped | Haiku-powered chat intent gating — Mokkoi chats when asked, builds when told |
-| `reference-image-prompt-fix.md` | scoped | System prompt update so attached images are inspiration, not exact clones |
 | `templates-page.md` | idea | `/templates` route + sidebar entry; pre-built starter library |
 | `public-gallery-remix.md` | idea | `/gallery` page + Remix button on public projects |
 | `voice-prompt.md` | idea | Mic icon next to Camera; Web Speech or Whisper transcription |
 | `figma-export-pro.md` | idea | Pro-tier feature: export Mokkoi project → Figma frames |
+| `reference-image-prompt-fix.md` | **superseded** | Earlier attempt, prompt-only; didn't work; replaced by `multi-image-app-generation.md` |

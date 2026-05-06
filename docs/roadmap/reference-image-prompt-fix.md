@@ -1,9 +1,48 @@
-# Reference image prompt fix
+# Reference image prompt fix — SUPERSEDED
 
-**Status:** `scoped`
-**Estimated effort:** 1–2 hours focused work + iteration testing
-**Priority:** High (real bug observed in production)
-**Owner:** unassigned
+**Status:** `superseded` — replaced by `multi-image-app-generation.md`
+**Outcome:** Shipped as commit `f9a5d44`, tested live, **didn't work**,
+reverted from main on 2026-05-06.
+
+## Why this approach failed
+
+The fix was prompt-only — it added a new "INSPIRATION MODE" prompt
+branch inside `api/generate.ts`'s **single-screen multimodal flow**
+(around line 1568). The new prompt told Sonnet to "build a complete
+multi-screen app with functional bottom nav."
+
+The problem: that code path only returns a **single component tree**.
+Sonnet did the most reasonable thing it could — built one screen with
+a beautiful bottom-nav UI element, but with no real screens wired to
+those tabs. Tapping any tab on the generated app showed
+*"No screen wired for 'Home'"*.
+
+Live test result (post-deploy):
+- Attach 4 food-app screenshots + prompt "create a meal planner"
+- Got: 1 screen ("Favorites"), bottom nav present but non-functional
+- Expected: multi-screen app inspired by references with working nav
+
+Root cause: the multi-screen pipeline (`appRequest`) is a separate code
+path that explicitly excludes image submissions
+(`!imageData` in its gating condition). The prompt fix lived in the
+wrong path.
+
+## What ships instead
+
+`multi-image-app-generation.md` covers the proper fix:
+
+1. Routing — image + app-prompt + no-clone-intent → multi-screen path
+2. Multi-screen pipeline accepts image content blocks
+3. Chat history displays all attached images (separate display bug
+   discovered during testing)
+
+DO NOT pick up the work below. It's left here for history.
+
+---
+
+(Original spec preserved below for context — but the approach is wrong.)
+
+---
 
 ## The problem
 
