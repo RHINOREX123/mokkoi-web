@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react'
+import { type CSSProperties } from 'react'
 import { Star } from 'lucide-react'
 import { PhoneThumbnail } from './PhoneThumbnail'
 import { ScaledScreenPreview } from './ScaledScreenPreview'
@@ -63,14 +63,12 @@ export function RecentProjectsStrip({
 }: RecentProjectsStripProps) {
   const { has: isFavorite, toggle: toggleFavorite } = useFavorites()
 
-  // Promote favorites to the front while preserving the input order otherwise.
-  const ordered = useMemo(() => {
-    const favs = projects.filter((p) => isFavorite(p.id))
-    const rest = projects.filter((p) => !isFavorite(p.id))
-    return [...favs, ...rest]
-  }, [projects, isFavorite])
-
-  const visible = ordered.slice(0, limit)
+  // Don't reorder on favorite — clicking the star used to slide the card to
+  // position 1, which read as a bug ("I clicked the 3rd card but the 1st one
+  // got starred"). Now favorites stay where they are; the filled amber star
+  // is the indicator. The dedicated Favourites tab in the sidebar is where
+  // users go for the focused list.
+  const visible = projects.slice(0, limit)
   const totalCount = projects.length
 
   if (loading) {

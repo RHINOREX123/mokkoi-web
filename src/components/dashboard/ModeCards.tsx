@@ -49,26 +49,26 @@ export function ModeCards({ onMode }: ModeCardsProps) {
         desc="Multi-screen React Native app from your prompt."
       />
       <Card
-        ariaLabel="Clone a screenshot"
+        ariaLabel="From a screenshot"
         onClick={() => onMode('screenshot')}
         badge={
           <Badge tone="amber">
-            <Camera size={12} /> Screenshot
+            <Camera size={12} /> From a screenshot
           </Badge>
         }
-        title="Clone what you see"
-        desc="Drop a screenshot, get a working clone."
+        title="Match a design you love"
+        desc="Drop an app screenshot — Mokkoi extends the design across screens."
       />
       <Card
-        ariaLabel="Import from Figma or HTML"
+        ariaLabel="Import HTML"
         onClick={() => onMode('import')}
         badge={
           <Badge tone="lavender">
-            <Diamond size={12} /> Import
+            <Diamond size={12} /> Import HTML
           </Badge>
         }
-        title="From Figma / HTML"
-        desc="Pixel-true import via MCP server."
+        title="Bring your code over"
+        desc="Paste HTML, React, or Tailwind — get a mobile screen."
       />
     </div>
   )

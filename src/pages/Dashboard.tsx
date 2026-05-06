@@ -99,7 +99,7 @@ export default function Dashboard() {
   type SidebarTab = 'projects' | 'favourites' | 'imports' | 'shared'
   const [activeTab, setActiveTab] = useState<SidebarTab>('projects')
   const [importProjects, setImportProjects] = useState<Project[]>([])
-  const { has: isFavorite } = useFavorites()
+  const { has: isFavorite, toggle: toggleFavorite } = useFavorites()
   // V2: prompt mode (Build / Plan), auto-suggest toast, locked-state HUD.
   const [submitMode, setSubmitMode] = useState<SubmitMode>('build')
   const [hudState, setHudState] = useState<SignalsState | undefined>(undefined)
@@ -471,6 +471,24 @@ export default function Dashboard() {
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
             ><Copy size={13} /> Duplicate</button>
+            {/* Toggle favourites — same useFavorites hook the dashboard
+                recents strip uses, so the state stays in sync. Label flips
+                between "Add to favourites" / "Remove from favourites". */}
+            <button onClick={() => { toggleFavorite(project.id); setMenuOpen(null) }}
+              style={{
+                ...sidebarItemStyle,
+                fontSize: 12,
+                color: isFavorite(project.id) ? '#fbbf24' : '#e2e8f0',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.10)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            >
+              <Star
+                size={13}
+                fill={isFavorite(project.id) ? 'currentColor' : 'transparent'}
+              />
+              {isFavorite(project.id) ? 'Remove from favourites' : 'Add to favourites'}
+            </button>
             <button onClick={() => { setDeleteConfirmId(project.id); setMenuOpen(null) }}
               style={{ ...sidebarItemStyle, fontSize: 12, color: '#f87171' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)' }}
@@ -829,8 +847,7 @@ export default function Dashboard() {
             mode={submitMode}
             onModeChange={setSubmitMode}
             disabled={isSubmitting}
-            onScreenshot={() => setToastMessage('Screenshot import coming soon')}
-            onAttach={() => setToastMessage('Attach coming soon')}
+            onScreenshot={() => handleModeCard('screenshot')}
           />
 
           <SignalsHUD

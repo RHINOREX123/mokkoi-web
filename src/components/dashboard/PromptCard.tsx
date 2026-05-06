@@ -1,5 +1,5 @@
 import { useRef, type CSSProperties, type KeyboardEvent } from 'react'
-import { ArrowUp, Camera, Plus } from 'lucide-react'
+import { ArrowUp, Camera } from 'lucide-react'
 
 export type SubmitMode = 'build' | 'plan'
 
@@ -14,12 +14,11 @@ export interface PromptCardProps {
   mode?: SubmitMode
   /** Setter for the toggle. */
   onModeChange?: (mode: SubmitMode) => void
-  /** Optional handlers for the bottom-left action buttons. Each falls back to
-   *  a no-op if not provided so the buttons never crash.
-   *  Figma was deliberately removed — the Import ModeCard already covers it,
-   *  so the Diamond icon was redundant. */
+  /** Camera handler — opens the screenshot upload flow. Used to be paired
+   *  with a "Plus / Attach" icon, but both icons served the same purpose
+   *  (attach an image) so the Plus was removed. Figma was also removed
+   *  earlier since the Import ModeCard covers it. */
   onScreenshot?: () => void
-  onAttach?: () => void
 }
 
 /**
@@ -44,7 +43,6 @@ export function PromptCard({
   mode = 'build',
   onModeChange,
   onScreenshot,
-  onAttach,
 }: PromptCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -129,11 +127,8 @@ export function PromptCard({
           gap: 6,
         }}
       >
-        <IconBtn label="Add screenshot" onClick={onScreenshot}>
+        <IconBtn label="Attach a screenshot" onClick={onScreenshot}>
           <Camera size={16} />
-        </IconBtn>
-        <IconBtn label="Attach file" onClick={onAttach}>
-          <Plus size={16} />
         </IconBtn>
       </div>
 
