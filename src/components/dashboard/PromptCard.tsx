@@ -1,7 +1,14 @@
 import { useRef, type CSSProperties, type KeyboardEvent } from 'react'
-import { ArrowUp, Camera } from 'lucide-react'
+import { ArrowUp, Camera, X } from 'lucide-react'
 
 export type SubmitMode = 'build' | 'plan'
+
+export interface AttachedImage {
+  /** Data URL ("data:image/png;base64,...") for inline preview + send. */
+  dataUrl: string
+  mimeType: string
+  fileName: string
+}
 
 export interface PromptCardProps {
   value: string
@@ -14,11 +21,11 @@ export interface PromptCardProps {
   mode?: SubmitMode
   /** Setter for the toggle. */
   onModeChange?: (mode: SubmitMode) => void
-  /** Camera handler — opens the screenshot upload flow. Used to be paired
-   *  with a "Plus / Attach" icon, but both icons served the same purpose
-   *  (attach an image) so the Plus was removed. Figma was also removed
-   *  earlier since the Import ModeCard covers it. */
-  onScreenshot?: () => void
+  /** Currently attached reference image (selected via the Camera icon).
+   *  Optional — when null/undefined the image chip is not rendered. */
+  attachedImage?: AttachedImage | null
+  /** Setter for the attached image. Pass `null` to clear. */
+  onAttachImage?: (img: AttachedImage | null) => void
 }
 
 /**
@@ -27,11 +34,13 @@ export interface PromptCardProps {
  * - Glassmorphic surface over the hero atmosphere
  * - Animated holographic conic-gradient border (slow rotation)
  * - Multi-line textarea, Enter submits / Shift+Enter newlines
- * - Bottom-left: screenshot / attach / figma icon buttons
+ * - Bottom-left: Camera icon → opens native file picker, attaches image
+ *   inline as a thumbnail chip above the textarea (X to remove)
  * - Bottom-right: Plan / Build segmented toggle + Send button
  *
- * The auto-suggest Plan logic (when clarity < 50) is wired up in Step 10
- * (Wave 3); this component just routes the chosen mode to onSubmit.
+ * The Camera intentionally bypasses the ScreenshotModal — it's for "attach a
+ * reference image to my prompt", not "build an app from this screenshot".
+ * The Screenshot mode card on the dashboard handles the latter.
  *
  * Spec: docs/superpowers/specs/2026-05-06-dashboard-redesign.md (§4, §8)
  */
@@ -42,18 +51,52 @@ export function PromptCard({
   disabled = false,
   mode = 'build',
   onModeChange,
-  onScreenshot,
+  attachedImage,
+  onAttachImage,
 }: PromptCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (!disabled && value.trim()) onSubmit(mode)
+      if (canSubmit) onSubmit(mode)
     }
   }
 
-  const canSubmit = !disabled && value.trim().length > 0
+  // The Camera icon opens the native file picker directly. No modal in the
+  // way — that's the differentiator from the Screenshot mode card.
+  const handleCameraClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // Reset the input so picking the same file twice still fires onChange.
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) return
+    if (file.size > 5 * 1024 * 1024) {
+      // Soft fail — caller should surface a toast. We don't have toast access
+      // from inside this component, so just bail silently. The accept attr
+      // already filters non-images at the OS level.
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return
+      onAttachImage?.({
+        dataUrl: reader.result,
+        mimeType: file.type,
+        fileName: file.name,
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Allow Send when there's text OR an attached image. Image-only submissions
+  // are valid for "build me an app like this" intents.
+  const canSubmit = !disabled && (value.trim().length > 0 || !!attachedImage)
 
   return (
     <div
@@ -92,6 +135,34 @@ export function PromptCard({
         }}
       />
 
+      {/* Hidden file input — clicked programmatically by the Camera icon. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+
+      {/* Attached image chip (inline above the textarea). Only rendered when
+          an image is attached. X removes it. */}
+      {attachedImage && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            padding: '14px 14px 0',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          <ImageChip
+            image={attachedImage}
+            onRemove={() => onAttachImage?.(null)}
+          />
+        </div>
+      )}
+
       <textarea
         ref={textareaRef}
         value={value}
@@ -99,11 +170,15 @@ export function PromptCard({
         onKeyDown={handleKeyDown}
         disabled={disabled}
         rows={3}
-        placeholder="Let's build — describe your app, paste a screenshot, or import a Figma file…"
+        placeholder={
+          attachedImage
+            ? "Describe what to build with this image…"
+            : "Let's build — describe your app, paste a screenshot, or import a Figma file…"
+        }
         aria-label="App prompt"
         style={{
           width: '100%',
-          padding: '18px 18px 56px',
+          padding: attachedImage ? '12px 18px 56px' : '18px 18px 56px',
           borderRadius: 16,
           background: 'transparent',
           border: 'none',
@@ -127,7 +202,11 @@ export function PromptCard({
           gap: 6,
         }}
       >
-        <IconBtn label="Attach a screenshot" onClick={onScreenshot}>
+        <IconBtn
+          label="Attach a reference image"
+          onClick={handleCameraClick}
+          active={!!attachedImage}
+        >
           <Camera size={16} />
         </IconBtn>
       </div>
@@ -175,22 +254,82 @@ export function PromptCard({
 
 // ---- internals ------------------------------------------------------------
 
+function ImageChip({
+  image,
+  onRemove,
+}: {
+  image: AttachedImage
+  onRemove: () => void
+}) {
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: 64,
+        height: 64,
+        borderRadius: 10,
+        overflow: 'hidden',
+        border: '1px solid rgba(45,212,191,0.30)',
+        background: '#0a0d0e',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        flexShrink: 0,
+      }}
+    >
+      <img
+        src={image.dataUrl}
+        alt={image.fileName}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        }}
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove attached image"
+        style={{
+          position: 'absolute',
+          top: 4,
+          right: 4,
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          border: 'none',
+          background: 'rgba(0,0,0,0.7)',
+          color: '#fff',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          padding: 0,
+        }}
+      >
+        <X size={11} />
+      </button>
+    </div>
+  )
+}
+
 function IconBtn({
   label,
   onClick,
+  active = false,
   children,
 }: {
   label: string
   onClick?: () => void
+  active?: boolean
   children: React.ReactNode
 }) {
   const baseStyle: CSSProperties = {
     width: 32,
     height: 32,
     borderRadius: 8,
-    border: '1px solid var(--dash-border)',
-    background: 'rgba(255,255,255,0.04)',
-    color: 'var(--dash-text-2)',
+    border: active ? '1px solid rgba(45,212,191,0.40)' : '1px solid var(--dash-border)',
+    background: active ? 'rgba(45,212,191,0.12)' : 'rgba(255,255,255,0.04)',
+    color: active ? 'var(--dash-teal)' : 'var(--dash-text-2)',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -204,10 +343,12 @@ function IconBtn({
       aria-label={label}
       style={baseStyle}
       onMouseEnter={(e) => {
+        if (active) return
         e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
         e.currentTarget.style.color = 'var(--dash-text)'
       }}
       onMouseLeave={(e) => {
+        if (active) return
         e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
         e.currentTarget.style.color = 'var(--dash-text-2)'
       }}

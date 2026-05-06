@@ -13,7 +13,7 @@ import { PlanChip } from '../components/PlanChip'
 import { PaywallModal } from '../components/PaywallModal'
 import { DashboardHero } from '../components/dashboard/DashboardHero'
 import { PhoneThumbnail } from '../components/dashboard/PhoneThumbnail'
-import { PromptCard, type SubmitMode } from '../components/dashboard/PromptCard'
+import { PromptCard, type AttachedImage, type SubmitMode } from '../components/dashboard/PromptCard'
 import { SignalsHUD, type SignalsState } from '../components/dashboard/SignalsHUD'
 import { ModeCards, type DashboardMode } from '../components/dashboard/ModeCards'
 import { HudFooter } from '../components/dashboard/HudFooter'
@@ -104,6 +104,10 @@ export default function Dashboard() {
   const [submitMode, setSubmitMode] = useState<SubmitMode>('build')
   const [hudState, setHudState] = useState<SignalsState | undefined>(undefined)
   const [planSuggest, setPlanSuggest] = useState(false)
+  // Reference image attached via the Camera button on the prompt card.
+  // Lives at the dashboard level so submitWithMode can hand it off to
+  // App.tsx via sessionStorage on navigate.
+  const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null)
   const promptScore = usePromptScore(prompt)
 
 
@@ -209,7 +213,29 @@ export default function Dashboard() {
 
     if (data) {
       trackEvent('dashboard_prompt_submitted')
-      trackEvent('project_created', { source: 'dashboard', mode })
+      trackEvent('project_created', {
+        source: 'dashboard',
+        mode,
+        hasImage: !!attachedImage,
+      })
+
+      // If the user attached a reference image, hand it off via
+      // sessionStorage keyed by project id. App.tsx reads + clears the key
+      // on mount and pipes the image into ai.handleSend so generation gets
+      // both the prompt and the visual reference. URL params are too small
+      // for base64 image data, hence sessionStorage.
+      if (attachedImage) {
+        try {
+          sessionStorage.setItem(
+            `mokkoi.pendingImage.${data.id}`,
+            JSON.stringify(attachedImage),
+          )
+        } catch {
+          // sessionStorage can fail in private mode / quota. Submission
+          // still proceeds with the prompt; the image is just dropped.
+        }
+      }
+
       // Brief hold so the SUBMITTED HUD state is visible before nav.
       setTimeout(() => {
         const params = new URLSearchParams({ prompt: prompt.trim() })
@@ -607,17 +633,6 @@ export default function Dashboard() {
           size={18}
           fill={activeTab === 'favourites' ? 'currentColor' : 'transparent'}
         /> Favourites
-        {(() => {
-          const count = projects.filter((p) => isFavorite(p.id)).length
-          return count > 0 ? (
-            <span style={{
-              marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-              padding: '2px 8px', borderRadius: 10,
-              background: activeTab === 'favourites' ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)',
-              color: activeTab === 'favourites' ? '#fbbf24' : '#94a3b8',
-            }}>{count}</span>
-          ) : null
-        })()}
       </button>
       <button onClick={() => setActiveTab('imports')} style={{
         display: 'flex', alignItems: 'center', gap: 10,
@@ -633,14 +648,6 @@ export default function Dashboard() {
         onMouseLeave={e => { if (activeTab !== 'imports') e.currentTarget.style.background = 'transparent' }}
       >
         <Download size={18} /> Imports
-        {importProjects.length > 0 && (
-          <span style={{
-            marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-            padding: '2px 8px', borderRadius: 10,
-            background: activeTab === 'imports' ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.06)',
-            color: activeTab === 'imports' ? '#34d399' : '#94a3b8',
-          }}>{importProjects.length}</span>
-        )}
       </button>
       {/* Shared with me — functional placeholder. The empty-state copy in
           renderGroupedProjects explains what users will see here once the
@@ -847,7 +854,8 @@ export default function Dashboard() {
             mode={submitMode}
             onModeChange={setSubmitMode}
             disabled={isSubmitting}
-            onScreenshot={() => handleModeCard('screenshot')}
+            attachedImage={attachedImage}
+            onAttachImage={setAttachedImage}
           />
 
           <SignalsHUD

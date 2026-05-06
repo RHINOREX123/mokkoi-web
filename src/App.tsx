@@ -53,6 +53,47 @@ function App() {
   const initialPromptRef = useRef(searchParams.get('prompt') || undefined)
   const initialPrompt = initialPromptRef.current
 
+  // Capture an optional image attachment that the dashboard handed off via
+  // sessionStorage (the Camera button on the prompt card). URL params are
+  // too small for base64 image data, so we use sessionStorage keyed by
+  // project id. Read once + clear so refreshes don't re-trigger.
+  //
+  // The dashboard stores a full data URL ("data:image/png;base64,..."); the
+  // ai.handleSend pipeline expects bare base64 + mime type separately, so
+  // we strip the prefix on read. Shape returned matches ChatPanel's
+  // attachedImage state shape so initialImage drops in cleanly.
+  const initialAttachedImageRef = useRef<{
+    data: string          // bare base64
+    mediaType: string
+    fileName: string
+  } | null>(null)
+  if (initialAttachedImageRef.current === null && projectId) {
+    try {
+      const raw = sessionStorage.getItem(`mokkoi.pendingImage.${projectId}`)
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          dataUrl?: string
+          mimeType?: string
+          fileName?: string
+        }
+        if (parsed.dataUrl && parsed.mimeType) {
+          // Strip "data:image/png;base64," prefix → bare base64
+          const commaIdx = parsed.dataUrl.indexOf(',')
+          const base64 = commaIdx >= 0 ? parsed.dataUrl.slice(commaIdx + 1) : parsed.dataUrl
+          initialAttachedImageRef.current = {
+            data: base64,
+            mediaType: parsed.mimeType,
+            fileName: parsed.fileName ?? 'attachment',
+          }
+        }
+        sessionStorage.removeItem(`mokkoi.pendingImage.${projectId}`)
+      }
+    } catch {
+      // ignore — sessionStorage can throw in private mode
+    }
+  }
+  const initialAttachedImage = initialAttachedImageRef.current
+
   // Clean ?prompt= from URL after capturing it (prevents re-generation on refresh)
   useEffect(() => {
     if (searchParams.get('prompt')) {
@@ -580,7 +621,7 @@ function App() {
             <ChatPanel
               messages={screens.projectMessages} onSend={ai.handleSend}
               onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
-              isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt}
+              isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImage={initialAttachedImage ?? undefined}
               onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens} screensLoaded={screens.screensLoaded}
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
