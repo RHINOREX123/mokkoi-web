@@ -447,9 +447,16 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       ? generatedScreens.find(s => s.id === editingScreenId)
       : null
 
-    // App generation — "Build me a fitness app" type prompts. Plan-mode build
-    // click passes forceAppMode:true with the Haiku summary as the prompt;
-    // tight summaries don't always start with a create-verb the regex requires.
+    // App generation — "Build me a fitness app" type prompts.
+    //
+    // Reference images flow through the multi-screen path — they inform
+    // visual style of the planner + screen generation. Domain still comes
+    // from the user's text prompt (see REFERENCE_INSPIRATION_BLOCK in
+    // api/generate-flow.ts).
+    //
+    // Plan-mode Build click passes forceAppMode:true with the Haiku summary
+    // as the prompt; tight summaries don't always start with a create-verb
+    // the regex requires, so we bypass isAppPrompt for that path.
     const appRequest = (forceAppMode || isAppPrompt(prompt)) && !editingScreen
     if (appRequest) {
       const placeholderId = crypto.randomUUID()
@@ -475,7 +482,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         const res = await fetch('/api/generate-flow', {
           method: 'POST',
           headers: { ...authHeaders, 'Accept': 'text/event-stream' },
-          body: JSON.stringify({ mode: 'app', prompt, projectId, conversationHistory, deviceId }),
+          body: JSON.stringify({ mode: 'app', prompt, projectId, conversationHistory, deviceId, images: imagesArr }),
         })
 
         if (!res.ok) {
