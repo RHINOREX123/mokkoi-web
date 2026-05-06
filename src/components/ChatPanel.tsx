@@ -3,6 +3,26 @@ import type { ComponentNode } from '../types/mokkoi'
 import { ScreenRenderer } from './ScreenRenderer'
 import { convertTreeToTSX } from '../utils/exportTsx'
 import { useUserPlan } from '../hooks/useUserPlan'
+import ChipRow from './ChipRow'
+
+export interface PlanExtracted {
+  domain: string | null
+  primary_action: string | null
+  vibe: string | null
+  screens: string[] | null
+  brand: string | null
+}
+
+export interface PlanMessageMetadata {
+  /** Suggested 2-3 reply chips emitted by the Haiku planner */
+  chips?: string[]
+  /** Latest extracted snapshot — drives <PlanSummaryCard> */
+  extracted?: PlanExtracted
+  /** When true, planner has enough info to build */
+  ready_to_build?: boolean
+  /** 2-3 sentence build prompt; passed to /api/generate-flow on Build click */
+  summary?: string | null
+}
 
 export interface ChatMessage {
   id: string
@@ -15,6 +35,9 @@ export interface ChatMessage {
   flowScreenNames?: string[]
   /** Which model generated this response (e.g. "Sonnet", "Haiku") */
   modelUsed?: string
+  /** Plan-mode metadata (chips, extracted, ready_to_build, summary).
+   *  Present on assistant messages emitted by /api/plan-conversation. */
+  metadata?: PlanMessageMetadata
 }
 
 interface ChatPanelProps {
@@ -52,11 +75,20 @@ interface ChatPanelProps {
   /** App generation progress (current/total screens) */
   appProgress?: { current: number; total: number } | null
   /** True when the user submitted from the dashboard's Plan toggle.
-   *  Renders an informational banner above the messages list. Today this is
-   *  purely cosmetic — generation still runs the same pipeline. The actual
-   *  conversational behavior is the future task at
-   *  docs/roadmap/conversational-intent.md. */
+   *  Routes input to onPlanSend instead of onSend, renders a "Build my app"
+   *  button in the chat header, and (when chips are present on the latest
+   *  assistant message) renders ChipRow under it. */
   planMode?: boolean
+  /** Plan-mode message handler — POST /api/plan-conversation. Required when
+   *  planMode is true; ignored otherwise. */
+  onPlanSend?: (userMessage: string) => void
+  /** Sticky once Haiku emits ready_to_build:true; drives Build CTA glow. */
+  readyToBuildLatched?: boolean
+  /** Click handler for the Plan-mode Build button — feeds the latest summary
+   *  into the build pipeline via handleSend(summary, ..., forceAppMode:true). */
+  onBuildFromPlan?: () => void
+  /** Whether the latest planning turn is in flight (drives chip disabled state). */
+  planInflight?: boolean
 }
 
 const PLACEHOLDERS = [
@@ -84,7 +116,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight }: ChatPanelProps) {
   // Plan-mode banner — dismissible, local state only. App.tsx strips the
   // ?mode=plan param on mount, so a refresh does NOT re-show the banner;
   // dismiss is effectively per-page-load. That's intentional: the banner is
@@ -173,6 +205,13 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')
     if ((!prompt && !attachedImage) || isGenerating) return
     setInput('')
+    // Plan mode routes free-text input to /api/plan-conversation. Image
+    // attach is currently a Build-only affordance (Plan is text-first per
+    // V1 spec); if both are active, we still go to onPlanSend with text only.
+    if (planMode && onPlanSend && !attachedImage) {
+      onPlanSend(prompt)
+      return
+    }
     const wrapped = attachedImage
       ? [{ data: attachedImage.data, mimeType: attachedImage.mediaType }]
       : undefined
@@ -236,6 +275,10 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
       <style>{`
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes mokkoi-buildbtn-pulse {
+          0%, 100% { box-shadow: 0 0 12px rgba(45,212,191,0.18); }
+          50%      { box-shadow: 0 0 20px rgba(45,212,191,0.42); }
+        }
       `}</style>
       {/* Hidden file input */}
       <input
@@ -314,6 +357,42 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               ×
             </button>
           </div>
+        )}
+
+        {/* Plan-mode persistent Build button — always available, lets user
+            skip ahead at any turn. Disabled until at least one user message.
+            Glows when readyToBuildLatched flips true. */}
+        {planMode && onBuildFromPlan && messages.some(m => m.role === 'user') && (
+          <button
+            type="button"
+            onClick={onBuildFromPlan}
+            disabled={isGenerating}
+            style={{
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: readyToBuildLatched
+                ? '1px solid rgba(45,212,191,0.55)'
+                : '1px solid var(--dash-border, rgba(255,255,255,0.1))',
+              background: readyToBuildLatched
+                ? 'linear-gradient(135deg, rgba(45,212,191,0.18), rgba(167,139,250,0.18))'
+                : 'rgba(255,255,255,0.04)',
+              color: readyToBuildLatched ? '#5eead4' : '#e2e8f0',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: isGenerating ? 'not-allowed' : 'pointer',
+              opacity: isGenerating ? 0.5 : 1,
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              transition: 'all 0.18s',
+              boxShadow: readyToBuildLatched
+                ? '0 0 12px rgba(45,212,191,0.18)'
+                : 'none',
+              animation: readyToBuildLatched
+                ? 'mokkoi-buildbtn-pulse 2.4s ease-in-out infinite'
+                : undefined,
+            }}
+          >
+            {readyToBuildLatched ? '✨ Build my app' : 'Build my app'}
+          </button>
         )}
 
         {/* Empty state — quiet hint, no generic template buttons. The user
@@ -514,6 +593,35 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             )}
           </div>
         ))}
+
+        {/* Plan-mode chips — render under the latest assistant message that
+            has chip suggestions. Only shown when planMode is active and the
+            user is mid-conversation. Chips are SUGGESTIONS, not constraints —
+            free text always works via the input below. */}
+        {planMode && onPlanSend && (() => {
+          // Latest assistant message with chips. Earlier turns' chips are
+          // intentionally not rendered (would create a stale forest of chips).
+          let latestChipMsg: ChatMessage | null = null
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i]
+            if (m.role === 'assistant' && m.metadata?.chips && m.metadata.chips.length > 0) {
+              latestChipMsg = m
+              break
+            }
+          }
+          if (!latestChipMsg) return null
+          // Hide chips once Build is the natural next action — keep input free.
+          if (readyToBuildLatched) return null
+          return (
+            <div style={{ marginTop: -4, marginLeft: 24 }}>
+              <ChipRow
+                chips={latestChipMsg.metadata!.chips!}
+                onTap={(chip) => onPlanSend(chip)}
+                disabled={planInflight === true || isGenerating}
+              />
+            </div>
+          )
+        })()}
 
         {/* Multi-step generating indicator with streaming text */}
         {isGenerating && (

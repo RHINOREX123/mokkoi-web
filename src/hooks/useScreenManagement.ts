@@ -192,6 +192,10 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
           content: m.content,
           timestamp: new Date(m.created_at).getTime(),
           imageData: m.image_url ?? undefined,
+          // Plan-mode metadata (may be undefined / empty for pre-Plan rows).
+          metadata: (m.metadata && typeof m.metadata === 'object' && Object.keys(m.metadata).length > 0)
+            ? m.metadata
+            : undefined,
         }))
         setProjectMessages(loaded)
       }
@@ -372,6 +376,10 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
       role: msg.role,
       content: msg.content,
       image_url: msg.imageData ?? null,
+      // Plan-mode metadata (chips, extracted, ready_to_build, summary).
+      // Default to {} so the column's NOT NULL constraint is honored on
+      // pre-Plan-mode rows that never set this.
+      metadata: msg.metadata ?? {},
     })
   }, [projectId])
 

@@ -5,6 +5,7 @@ import { PreviewPhoneFrame } from './components/PreviewPhoneFrame'
 import { PreviewToolbar } from './components/PreviewToolbar'
 import { getCanvasDimensions, type DeviceId } from './constants/devices'
 import { ChatPanel } from './components/ChatPanel'
+import PlanSummaryCard from './components/canvas/PlanSummaryCard'
 import { CodeExportModal } from './components/CodeExportModal'
 import { ShareModal } from './components/ShareModal'
 import { MousePointer2, Hand, ZoomIn, ZoomOut, PenTool, Sparkles, Download, Share2, Plus, X, Upload, Pencil, LogOut, Maximize2, Check, RotateCcw, ImagePlus } from 'lucide-react'
@@ -247,6 +248,20 @@ function App() {
   const [showPaywallModal, setShowPaywallModal] = useState(false)
   const [showExportProjectModal, setShowExportProjectModal] = useState(false)
   const userPlan = useUserPlan()
+
+  // Plan-mode FE guard. Free users who land on ?mode=plan (direct nav, or
+  // a downgraded user with a stale state='planning' project) get the paywall
+  // immediately; we also flip the local mode flag off so plan UI doesn't
+  // render. Backend would also reject the first /api/plan-conversation call
+  // with 402, but we want to short-circuit before the UI even fires it.
+  useEffect(() => {
+    if (userPlan.loading) return
+    if (!initialPlanModeRef.current) return
+    if (userPlan.plan !== 'free') return
+    initialPlanModeRef.current = false
+    setShowPaywallModal(true)
+  }, [userPlan.loading, userPlan.plan])
+
   const [showExpoPreview, setShowExpoPreview] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -668,6 +683,29 @@ function App() {
               onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
               isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImages={initialAttachedImages}
               planMode={initialPlanModeRef.current}
+              onPlanSend={(msg) => ai.sendPlanMessage(msg)}
+              readyToBuildLatched={ai.readyToBuildLatched}
+              onBuildFromPlan={() => {
+                // Plan-mode Build: feed Haiku-emitted summary to the build
+                // pipeline. forceAppMode bypasses isAppPrompt regex (a tight
+                // summary often lacks the "build/create" verb the regex
+                // needs). When summary is null (user clicked Build before
+                // ready_to_build fired), concat user-only messages instead.
+                const summary = ai.planContext?.summary
+                if (summary && summary.length > 0) {
+                  ai.handleSend(summary, undefined, true, undefined, { forceAppMode: true })
+                  return
+                }
+                const userOnly = screens.projectMessages
+                  .filter(m => m.role === 'user' && !m.imageData)
+                  .map(m => m.content)
+                  .join('\n')
+                  .trim()
+                const fallback = userOnly.length > 0
+                  ? `Build an app: ${userOnly}`
+                  : 'Build an app'
+                ai.handleSend(fallback, undefined, true, undefined, { forceAppMode: true })
+              }}
               onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens} screensLoaded={screens.screensLoaded}
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
@@ -710,7 +748,23 @@ function App() {
 
             {!screens.hasScreens && !ai.isGenerating && referenceImages.length === 0 ? (
               <div data-canvas-bg="true" style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, pointerEvents: 'none', userSelect: 'none', transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)` }}>
-                <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>Your designs will appear here</span>
+                {initialPlanModeRef.current && ai.planContext ? (
+                  <div style={{ pointerEvents: 'auto' }}>
+                    <PlanSummaryCard
+                      extracted={ai.planContext.extracted}
+                      readyToBuild={ai.readyToBuildLatched}
+                    />
+                  </div>
+                ) : initialPlanModeRef.current ? (
+                  <div style={{ pointerEvents: 'auto' }}>
+                    <PlanSummaryCard
+                      extracted={{ domain: null, primary_action: null, vibe: null, screens: null, brand: null }}
+                      readyToBuild={false}
+                    />
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>Your designs will appear here</span>
+                )}
               </div>
             ) : (
               <>

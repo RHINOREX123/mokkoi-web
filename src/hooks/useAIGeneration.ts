@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import type { ChatMessage } from '../components/ChatPanel'
 import { supabase } from '../lib/supabase'
@@ -140,11 +140,41 @@ export interface AIGeneration {
   appPhase: 'idle' | 'planning' | 'generating'
   appProgress: { current: number; total: number } | null
 
-  handleSend: (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode) => Promise<void>
+  handleSend: (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode, opts?: HandleSendOpts) => Promise<void>
   handleRegenerate: () => void
   handleGenerateVariations: (settings: VariationSettings) => Promise<void>
   handleGenerateFromImage: (screen: GeneratedScreen) => void
   handleStopGenerating: () => void
+  // ── Plan mode ──
+  /** Latest extracted snapshot + summary from the Haiku planner */
+  planContext: PlanContext | null
+  /** Sticky once flipped to true — survives Haiku oscillation when user asks
+   *  follow-up questions after summary is emitted. Drives Build-button glow. */
+  readyToBuildLatched: boolean
+  /** Send a turn to /api/plan-conversation. Optimistically appends user
+   *  message; 30s timeout; surfaces paywall on 402, rate-limit on 429,
+   *  generic error on 500. */
+  sendPlanMessage: (userMessage: string) => Promise<void>
+}
+
+/** Plan-mode optional flags on handleSend. forceAppMode bypasses
+ *  isAppPrompt() — used when we route a Haiku-summary string to app
+ *  generation; the regex requires "build/create/..." verbs which a tight
+ *  summary often lacks. */
+export interface HandleSendOpts {
+  forceAppMode?: boolean
+}
+
+export interface PlanContext {
+  extracted: {
+    domain: string | null
+    primary_action: string | null
+    vibe: string | null
+    screens: string[] | null
+    brand: string | null
+  }
+  summary: string | null
+  ready_to_build: boolean
 }
 
 interface AIGenerationDeps {
@@ -220,7 +250,146 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
   const [appProgress, setAppProgress] = useState<{ current: number; total: number } | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  const handleSend = useCallback(async (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode) => {
+  // ── Plan mode state ──
+  const [planContext, setPlanContext] = useState<PlanContext | null>(null)
+  // Sticky latch: once Haiku says ready_to_build, frontend keeps the Build
+  // CTA glowing even if a follow-up turn briefly emits ready_to_build:false.
+  const [readyToBuildLatched, setReadyToBuildLatched] = useState(false)
+  const planInflightRef = useRef<AbortController | null>(null)
+
+  // ── Resume Plan-mode state from DB ──
+  // When projectMessages first lands (refresh case), pull the latest assistant
+  // message's metadata.extracted into planContext. No Haiku call needed.
+  // Also re-arm the readyToBuildLatched if any historical message had it true.
+  useEffect(() => {
+    if (planContext) return // already populated this session
+    if (!projectMessages || projectMessages.length === 0) return
+    let latched = false
+    let latestMeta: ChatMessage['metadata'] | undefined
+    for (const m of projectMessages) {
+      if (m.role !== 'assistant' || !m.metadata) continue
+      latestMeta = m.metadata
+      if (m.metadata.ready_to_build === true) latched = true
+    }
+    if (latestMeta && latestMeta.extracted) {
+      setPlanContext({
+        extracted: latestMeta.extracted,
+        summary: latestMeta.summary ?? null,
+        ready_to_build: latestMeta.ready_to_build === true,
+      })
+    }
+    if (latched) setReadyToBuildLatched(true)
+  }, [projectMessages, planContext])
+
+  // ── sendPlanMessage ──
+  // Plain JSON endpoint (NOT SSE). Optimistic user-message append, 30s timeout,
+  // 402 → paywall, 429 → toast, 500 → toast (no broken assistant message).
+  const sendPlanMessage = useCallback(async (userMessage: string) => {
+    if (!projectId || !userMessage.trim()) return
+
+    // Cancel any in-flight previous call (rare; user-typed messages serial)
+    planInflightRef.current?.abort()
+    const controller = new AbortController()
+    planInflightRef.current = controller
+    const timeoutId = setTimeout(() => controller.abort(), 30_000)
+
+    // Optimistic append. Save user message to DB so write-then-call ordering
+    // means refresh-during-flight resumes correctly.
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: userMessage,
+      timestamp: Date.now(),
+    }
+    setProjectMessages(prev => [...prev, userMsg])
+    saveMessage(userMsg)
+
+    // Build conversation history from CURRENT messages (BEFORE the optimistic
+    // append above). Endpoint also reads the user turn from the request body.
+    const history = projectMessages
+      .filter(m => !m.imageData && !(m.role === 'assistant' && m.content.startsWith('Error:')))
+      .map(m => ({ role: m.role, content: m.content }))
+
+    try {
+      const authHeaders = await getAuthHeaders()
+      const res = await fetch('/api/plan-conversation', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ projectId, userMessage, conversationHistory: history }),
+        signal: controller.signal,
+      })
+
+      if (res.status === 402) {
+        // Free tier or downgraded mid-session.
+        if (onPaywall) onPaywall()
+        else setToastMessage('Plan mode requires a Pro plan.')
+        return
+      }
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({} as { error?: string; retryAfter?: number }))
+        if (body.error === 'plan_turns_exceeded') {
+          setToastMessage("You've talked through a lot — try Build to ship it now.")
+        } else {
+          const wait = body.retryAfter ? ` ${body.retryAfter}s` : ''
+          setToastMessage(`Slow down — try again in${wait}.`)
+        }
+        return
+      }
+      if (!res.ok) {
+        // Includes 500 planner_unavailable
+        setToastMessage('Mokkoi got tangled — try sending again.')
+        return
+      }
+
+      const body = await res.json() as {
+        reply: string
+        chips: string[]
+        ready_to_build: boolean
+        summary: string | null
+        extracted: PlanContext['extracted']
+      }
+
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: body.reply,
+        timestamp: Date.now(),
+        modelUsed: 'Haiku',
+        metadata: {
+          chips: body.chips,
+          extracted: body.extracted,
+          ready_to_build: body.ready_to_build,
+          summary: body.summary,
+        },
+      }
+      setProjectMessages(prev => [...prev, assistantMsg])
+      // Server already persists the assistant message with metadata. Skip
+      // saveMessage on the client to avoid the duplicate insert race.
+
+      setPlanContext({
+        extracted: body.extracted,
+        summary: body.summary,
+        ready_to_build: body.ready_to_build,
+      })
+      if (body.ready_to_build) setReadyToBuildLatched(true)
+
+      trackEvent('plan_turn', { ready_to_build: body.ready_to_build })
+    } catch (err) {
+      const aborted = (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && err.message.toLowerCase().includes('abort'))
+      if (aborted) {
+        setToastMessage('Network slow — tap to retry.')
+      } else {
+        setToastMessage('Mokkoi got tangled — try sending again.')
+      }
+    } finally {
+      clearTimeout(timeoutId)
+      if (planInflightRef.current === controller) planInflightRef.current = null
+    }
+  }, [projectId, projectMessages, setProjectMessages, saveMessage, onPaywall, setToastMessage])
+
+  const handleSend = useCallback(async (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode, opts?: HandleSendOpts) => {
+    const forceAppMode = opts?.forceAppMode === true
     // Clear any previous error messages
     setProjectMessages(prev => {
       const lastMsg = prev[prev.length - 1]
@@ -278,8 +447,10 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       ? generatedScreens.find(s => s.id === editingScreenId)
       : null
 
-    // App generation — "Build me a fitness app" type prompts
-    const appRequest = isAppPrompt(prompt) && !hasImages && !editingScreen
+    // App generation — "Build me a fitness app" type prompts. Plan-mode build
+    // click passes forceAppMode:true with the Haiku summary as the prompt;
+    // tight summaries don't always start with a create-verb the regex requires.
+    const appRequest = (forceAppMode || isAppPrompt(prompt)) && !editingScreen
     if (appRequest) {
       const placeholderId = crypto.randomUUID()
       const placeholderName = prompt.length > 25 ? prompt.slice(0, 25) + '...' : prompt
@@ -850,5 +1021,8 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     handleGenerateVariations,
     handleGenerateFromImage,
     handleStopGenerating,
+    planContext,
+    readyToBuildLatched,
+    sendPlanMessage,
   }
 }

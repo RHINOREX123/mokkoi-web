@@ -287,7 +287,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId: user.id,
       projectId,
       modelUsed: MODEL,
-      generationType: 'flow',
+      generationType: 'plan_turn',
       promptPreview: trimmedUserMessage,
       success: false,
     })
@@ -324,7 +324,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tokensOut: parsed.usage.output_tokens,
       cacheReadTokens: parsed.usage.cache_read_input_tokens,
       cacheCreationTokens: parsed.usage.cache_creation_input_tokens,
-      generationType: 'flow',
+      generationType: 'plan_turn',
       promptPreview: trimmedUserMessage,
       success: true,
     })

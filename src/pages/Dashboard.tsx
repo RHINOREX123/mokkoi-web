@@ -250,6 +250,19 @@ export default function Dashboard() {
 
   const handleSubmitPrompt = (mode: SubmitMode = submitMode) => {
     if (!prompt.trim() || isSubmitting) return
+    // Plan mode is paid-tier only. Block free users at submit (toggle is
+    // also gated, but a user could submit via Enter key with mode already
+    // set). Save the typed prompt for restoration after Stripe round-trip.
+    if (mode === 'plan' && userPlanState.plan === 'free') {
+      try {
+        sessionStorage.setItem(
+          'mokkoi.pendingPlanPrompt',
+          JSON.stringify({ prompt: prompt.trim(), mode: 'plan' }),
+        )
+      } catch { /* private mode / quota — ignore */ }
+      setShowPaywallModal(true)
+      return
+    }
     // Auto-suggest Plan mode for low-clarity prompts in Build mode.
     if (
       mode === 'build' &&
@@ -262,6 +275,39 @@ export default function Dashboard() {
     }
     submitWithMode(mode)
   }
+
+  // Plan-mode toggle gate: free users get paywall on tap, no state change.
+  // No "Pro" pill on the toggle itself — the paywall is the discoverability
+  // signal, per the spec's UX decision.
+  const handleModeChange = (next: SubmitMode) => {
+    if (next === 'plan' && userPlanState.plan === 'free') {
+      setShowPaywallModal(true)
+      return
+    }
+    setSubmitMode(next)
+  }
+
+  // Restore pending Plan prompt after Stripe round-trip. useUserPlan's
+  // realtime subscription auto-flips the plan; this effect runs on plan
+  // change and pulls back the typed prompt + Plan toggle so the user
+  // resumes where they left off.
+  useEffect(() => {
+    if (userPlanState.loading) return
+    if (userPlanState.plan === 'free') return
+    let raw: string | null = null
+    try { raw = sessionStorage.getItem('mokkoi.pendingPlanPrompt') } catch { /* ignore */ }
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as { prompt?: unknown; mode?: unknown }
+      if (typeof parsed.prompt === 'string' && parsed.prompt.length > 0) {
+        setPrompt(parsed.prompt)
+      }
+      if (parsed.mode === 'plan') setSubmitMode('plan')
+      sessionStorage.removeItem('mokkoi.pendingPlanPrompt')
+    } catch {
+      try { sessionStorage.removeItem('mokkoi.pendingPlanPrompt') } catch { /* ignore */ }
+    }
+  }, [userPlanState.loading, userPlanState.plan])
 
   /**
    * Mode-card handler. Build focuses the prompt input; Import creates an
@@ -855,7 +901,7 @@ export default function Dashboard() {
             onChange={setPrompt}
             onSubmit={handleSubmitPrompt}
             mode={submitMode}
-            onModeChange={setSubmitMode}
+            onModeChange={handleModeChange}
             disabled={isSubmitting}
             attachedImages={attachedImages}
             onAttachImagesChange={setAttachedImages}
