@@ -16,6 +16,7 @@ import SettingsPage from './pages/SettingsPage'
 import AdminGuard from './components/AdminGuard'
 import ComingSoonPage from './pages/ComingSoonPage'
 import RuntimePoc from './pages/RuntimePoc'
+import PlanModePreview from './pages/PlanModePreview'
 import { supabase } from './lib/supabase'
 
 initAnalytics()
@@ -85,6 +86,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/settings" element={<AuthGuard><SettingsPage /></AuthGuard>} />
         <Route path="/admin" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
         <Route path="/runtime-poc" element={<RuntimePoc />} />
+        <Route path="/__plan-mode-preview" element={<PlanModePreview />} />
         <Route path="/docs" element={<ComingSoonPage title="Docs" blurb="Full developer docs are on the way. In the meantime, hop into the app and start building — it's pretty self-explanatory." />} />
         <Route path="/blog" element={<ComingSoonPage title="Blog" blurb="We're writing. Follow along for build logs, launches, and what we're learning." />} />
         <Route path="/changelog" element={<ComingSoonPage title="Changelog" blurb="Every update, every fix. Public changelog coming soon." />} />
