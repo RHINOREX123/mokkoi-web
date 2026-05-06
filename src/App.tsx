@@ -437,7 +437,7 @@ function App() {
     const reader = new FileReader()
     reader.onload = () => {
       const match = (reader.result as string).match(/^data:([^;]+);base64,(.+)$/)
-      if (match) ai.handleSend('Recreate this screen design', match[2], match[1], true)
+      if (match) ai.handleSend('Recreate this screen design', [{ data: match[2], mimeType: match[1] }], true)
     }
     reader.readAsDataURL(file)
   }, [ai.handleSend])
@@ -907,10 +907,10 @@ function App() {
           setShowScreenshotModal(false)
           maybeCleanupOrphanProject('screenshot')
         }}
-        onGenerate={(imageData, imageMimeType, prompt) => {
+        onGenerate={(images, prompt) => {
           didCommitFromDashModalRef.current = true
           setShowScreenshotModal(false)
-          ai.handleSend(prompt || 'Recreate this screen design', imageData, imageMimeType, true)
+          ai.handleSend(prompt || 'Recreate this screen design', images, true)
         }}
         isGenerating={ai.isGenerating}
       />}

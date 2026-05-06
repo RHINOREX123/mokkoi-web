@@ -1415,9 +1415,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // --- Normal generation mode ---
-  const { prompt, currentScreen, imageData, imageMimeType, projectId, screenId, screenName, conversationHistory, brandColor, deviceId } = req.body ?? {}
+  const { prompt, currentScreen, imageData, imageMimeType, images: rawImages, projectId, screenId, screenName, conversationHistory, brandColor, deviceId } = req.body ?? {}
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Missing or invalid prompt' })
+  }
+
+  // Normalize images: prefer the new `images` array; fall back to the legacy
+  // single-image fields. Cap at 4 defensively (UI also enforces).
+  type ImageInput = { data: string; mimeType: string }
+  let normalizedImages: ImageInput[] = []
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    normalizedImages = rawImages
+      .filter((it: unknown): it is ImageInput =>
+        !!it && typeof it === 'object'
+        && typeof (it as { data?: unknown }).data === 'string'
+        && typeof (it as { mimeType?: unknown }).mimeType === 'string'
+      )
+      .slice(0, 4)
+  } else if (typeof imageData === 'string' && imageData.length > 0) {
+    normalizedImages = [{ data: imageData, mimeType: typeof imageMimeType === 'string' ? imageMimeType : 'image/png' }]
   }
 
   // Smart model routing: detect if this is a new screen or an edit
@@ -1425,7 +1441,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     /\b(create|build|design|make a|generate|new screen|from scratch)\b/i.test(prompt)
   const isVariation = /variation/i.test(prompt) || prompt.includes('VARIATION_PROMPT')
   const isRegenerate = /regenerate/i.test(prompt)
-  const hasImage = Boolean(imageData)
+  const hasImage = normalizedImages.length > 0
 
   // Determine credit type for deduction
   const creditType: 'new_screen' | 'edit' | 'screenshot' = hasImage
@@ -1549,8 +1565,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Dynamic context (theme palette, device info, brand color, design.md, learned patterns)
   // is prepended to user message to keep system prompt static for cache hits.
   let userContent: string | Array<{ type: string; [key: string]: unknown }>
-  if (imageData && typeof imageData === 'string') {
-    // Screenshot-to-screen: send image with text prompt
+  if (hasImage) {
+    // Screenshot-to-screen: send image(s) with text prompt
     const textPrompt = currentScreen
       ? `${dynamicContext}Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${cleanPrompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
       : `${dynamicContext}SCREENSHOT RECREATION — STRUCTURAL ANALYSIS REQUIRED
@@ -1594,14 +1610,14 @@ The user says: ${cleanPrompt}
 
 Now generate the complete React Native component tree JSON that faithfully recreates this screenshot. Return ONLY valid JSON.`
     userContent = [
-      {
+      ...normalizedImages.map(img => ({
         type: 'image',
         source: {
           type: 'base64',
-          media_type: imageMimeType || 'image/png',
-          data: imageData,
+          media_type: img.mimeType || 'image/png',
+          data: img.data,
         },
-      },
+      })),
       { type: 'text', text: textPrompt },
     ]
   } else if (isRegenerate && currentScreen) {

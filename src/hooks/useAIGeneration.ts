@@ -140,7 +140,7 @@ export interface AIGeneration {
   appPhase: 'idle' | 'planning' | 'generating'
   appProgress: { current: number; total: number } | null
 
-  handleSend: (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => Promise<void>
+  handleSend: (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode) => Promise<void>
   handleRegenerate: () => void
   handleGenerateVariations: (settings: VariationSettings) => Promise<void>
   handleGenerateFromImage: (screen: GeneratedScreen) => void
@@ -220,7 +220,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
   const [appProgress, setAppProgress] = useState<{ current: number; total: number } | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  const handleSend = useCallback(async (prompt: string, imageData?: string, imageMimeType?: string, forceNew?: boolean, regenerateTree?: ComponentNode) => {
+  const handleSend = useCallback(async (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode) => {
     // Clear any previous error messages
     setProjectMessages(prev => {
       const lastMsg = prev[prev.length - 1]
@@ -230,19 +230,26 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       return prev
     })
 
+    // Cap images at 4 defensively (UI also enforces).
+    const imagesArr = Array.isArray(images) ? images.slice(0, 4) : []
+    const hasImages = imagesArr.length > 0
+    // Legacy callers stored a single base64 string on the chat message.
+    // Preserve the same shape (first image) for in-conversation thumbnails.
+    const firstImageData = hasImages ? imagesArr[0].data : undefined
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content: prompt,
       timestamp: Date.now(),
-      imageData,
+      imageData: firstImageData,
     }
 
     setProjectMessages(prev => [...prev, userMsg])
     saveMessage(userMsg)
 
     const startTime = Date.now()
-    const flowRequest = isFlowPrompt(prompt) && !imageData
+    const flowRequest = isFlowPrompt(prompt) && !hasImages
 
     // Intent detection: strong create signals always win over edit
     let editingScreenId: string | null = null
@@ -272,7 +279,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       : null
 
     // App generation — "Build me a fitness app" type prompts
-    const appRequest = isAppPrompt(prompt) && !imageData && !editingScreen
+    const appRequest = isAppPrompt(prompt) && !hasImages && !editingScreen
     if (appRequest) {
       const placeholderId = crypto.randomUUID()
       const placeholderName = prompt.length > 25 ? prompt.slice(0, 25) + '...' : prompt
@@ -616,7 +623,12 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         deviceId,
         ...(editingScreen ? { currentScreen: editingScreen.tree, screenId: editingScreenId } : {}),
         ...(regenerateTree ? { currentScreen: regenerateTree, screenName: screenName } : {}),
-        ...(imageData ? { imageData, imageMimeType: imageMimeType || 'image/png' } : {}),
+        ...(hasImages ? {
+          images: imagesArr,
+          // Legacy fields for backward-compat with the older API contract.
+          imageData: imagesArr[0].data,
+          imageMimeType: imagesArr[0].mimeType || 'image/png',
+        } : {}),
       }
 
       const res = await fetch('/api/generate?stream=true', {
@@ -734,7 +746,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       || activeGenerated.name.replace(/\s*v\d+/gi, '').replace(/\s*\(failed\)/gi, '').trim()
       || 'this mobile app screen'
     const regeneratePrompt = `Regenerate this screen with a fresh design approach. Original request: "${originalPrompt}"`
-    handleSend(regeneratePrompt, undefined, undefined, true, activeGenerated.tree)
+    handleSend(regeneratePrompt, undefined, true, activeGenerated.tree)
   }, [activeGenerated, handleSend])
 
   const handleGenerateVariations = useCallback(async (settings: VariationSettings) => {
@@ -822,7 +834,7 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     const match = screen.imageUrl.match(/^data:([^;]+);base64,(.+)$/)
     if (!match) return
     const [, mimeType, base64] = match
-    handleSend('Recreate this screen design', base64, mimeType, true)
+    handleSend('Recreate this screen design', [{ data: base64, mimeType }], true)
   }, [handleSend])
 
   return {

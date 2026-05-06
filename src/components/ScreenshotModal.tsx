@@ -1,17 +1,25 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { ImagePlus, X, Upload, Loader2 } from 'lucide-react'
 
+interface ScreenshotImage {
+  dataUrl: string
+  mimeType: string
+  fileName: string
+  size: number
+}
+
 interface ScreenshotModalProps {
   onClose: () => void
-  onGenerate: (imageData: string, imageMimeType: string, prompt?: string) => void
+  onGenerate: (images: Array<{ data: string; mimeType: string }>, prompt?: string) => void
   isGenerating: boolean
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_IMAGES = 4
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 
 export function ScreenshotModal({ onClose, onGenerate, isGenerating }: ScreenshotModalProps) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [images, setImages] = useState<ScreenshotImage[]>([])
   const [prompt, setPrompt] = useState('Recreate this screen design')
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState('')
@@ -23,41 +31,94 @@ export function ScreenshotModal({ onClose, onGenerate, isGenerating }: Screensho
     return () => window.removeEventListener('keydown', handleKey)
   }, [onClose])
 
-  const processFile = useCallback((file: File) => {
+  const processFiles = useCallback((files: File[]) => {
     setError('')
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      setError('Please use PNG, JPG, or WEBP images only.')
-      return
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      setError('Image must be under 5MB.')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => setPreviewUrl(reader.result as string)
-    reader.readAsDataURL(file)
+    setImages(prev => {
+      const remainingSlots = MAX_IMAGES - prev.length
+      if (remainingSlots <= 0) {
+        setError(`You can only attach up to ${MAX_IMAGES} images.`)
+        return prev
+      }
+
+      const accepted: ScreenshotImage[] = []
+      let blockedByCount = false
+      let blockedByType = false
+      let blockedBySize = false
+
+      for (const file of files) {
+        if (accepted.length >= remainingSlots) {
+          blockedByCount = true
+          break
+        }
+        if (!ACCEPTED_TYPES.includes(file.type)) {
+          blockedByType = true
+          continue
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          blockedBySize = true
+          continue
+        }
+        accepted.push({
+          dataUrl: '',
+          mimeType: file.type,
+          fileName: file.name,
+          size: file.size,
+        })
+        // Read async — patch in dataUrl when ready
+        const reader = new FileReader()
+        const fileName = file.name
+        const fileSize = file.size
+        reader.onload = () => {
+          const dataUrl = reader.result as string
+          setImages(curr => curr.map(img =>
+            img.fileName === fileName && img.size === fileSize && !img.dataUrl
+              ? { ...img, dataUrl }
+              : img
+          ))
+        }
+        reader.readAsDataURL(file)
+      }
+
+      if (blockedBySize) setError('Some images were skipped — each must be under 5MB.')
+      else if (blockedByType) setError('Only PNG, JPG, or WEBP images are accepted.')
+      else if (blockedByCount) setError(`Only the first ${MAX_IMAGES} images were accepted.`)
+
+      return [...prev, ...accepted]
+    })
   }, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) processFile(file)
-  }, [processFile])
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length) processFiles(files)
+  }, [processFiles])
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) processFile(file)
+    const files = Array.from(e.target.files || [])
+    if (files.length) processFiles(files)
     e.target.value = ''
-  }, [processFile])
+  }, [processFiles])
+
+  const removeImage = useCallback((idx: number) => {
+    setImages(prev => prev.filter((_, i) => i !== idx))
+    setError('')
+  }, [])
 
   const handleGenerate = useCallback(() => {
-    if (!previewUrl) return
-    const match = previewUrl.match(/^data:([^;]+);base64,(.+)$/)
-    if (!match) return
-    const [, mimeType, base64] = match
-    onGenerate(base64, mimeType, prompt || undefined)
-  }, [previewUrl, prompt, onGenerate])
+    if (images.length === 0) return
+    const ready = images.filter(img => img.dataUrl)
+    const payload: Array<{ data: string; mimeType: string }> = []
+    for (const img of ready) {
+      const match = img.dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+      if (!match) continue
+      payload.push({ data: match[2], mimeType: match[1] })
+    }
+    if (payload.length === 0) return
+    onGenerate(payload, prompt || undefined)
+  }, [images, prompt, onGenerate])
+
+  const canAddMore = images.length < MAX_IMAGES
 
   return (
     <div
@@ -99,8 +160,8 @@ export function ScreenshotModal({ onClose, onGenerate, isGenerating }: Screensho
           </button>
         </div>
 
-        {/* Drop zone / Preview */}
-        {!previewUrl ? (
+        {/* Drop zone (always shown when more images can be added) */}
+        {canAddMore && (
           <div
             onDragOver={e => { e.preventDefault(); setIsDragOver(true) }}
             onDragLeave={() => setIsDragOver(false)}
@@ -109,52 +170,84 @@ export function ScreenshotModal({ onClose, onGenerate, isGenerating }: Screensho
             style={{
               border: `2px dashed ${isDragOver ? '#818CF8' : 'rgba(255,255,255,0.15)'}`,
               borderRadius: 12,
-              minHeight: 200,
+              minHeight: images.length === 0 ? 200 : 100,
               display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
-              gap: 12,
+              gap: images.length === 0 ? 12 : 6,
               cursor: 'pointer',
               background: isDragOver ? 'rgba(129,140,248,0.06)' : 'rgba(255,255,255,0.02)',
               transition: 'all 0.2s ease',
               transform: isDragOver ? 'scale(1.01)' : 'scale(1)',
             }}
           >
-            <ImagePlus size={40} style={{ color: isDragOver ? '#818CF8' : '#64748B', transition: 'color 0.2s' }} />
-            <span style={{ color: isDragOver ? '#818CF8' : '#94A3B8', fontSize: 14, fontWeight: 500 }}>
-              Drop screenshot here
+            <ImagePlus size={images.length === 0 ? 40 : 24} style={{ color: isDragOver ? '#818CF8' : '#64748B', transition: 'color 0.2s' }} />
+            <span style={{ color: isDragOver ? '#818CF8' : '#94A3B8', fontSize: 13, fontWeight: 500 }}>
+              {images.length === 0 ? 'Drop screenshots here' : 'Add another image'}
             </span>
-            <span style={{ color: '#64748B', fontSize: 13 }}>
-              or click to browse
-            </span>
-            <span style={{ color: '#475569', fontSize: 11, marginTop: 4 }}>
-              PNG, JPG, WEBP &middot; Max 5MB
-            </span>
+            {images.length === 0 && (
+              <>
+                <span style={{ color: '#64748B', fontSize: 13 }}>or click to browse</span>
+                <span style={{ color: '#475569', fontSize: 11, marginTop: 4 }}>
+                  PNG, JPG, WEBP &middot; Max 5MB &middot; Up to {MAX_IMAGES} images
+                </span>
+              </>
+            )}
           </div>
-        ) : (
-          <div style={{ position: 'relative' }}>
-            <img
-              src={previewUrl}
-              alt="Screenshot preview"
-              style={{
-                width: '100%', maxHeight: 300, objectFit: 'contain',
-                borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)',
-                background: '#111',
-              }}
-            />
-            <button
-              onClick={() => { setPreviewUrl(null); setError('') }}
-              style={{
-                position: 'absolute', top: 8, right: 8,
-                width: 28, height: 28, borderRadius: 8,
-                background: 'rgba(0,0,0,0.7)', border: 'none',
-                color: '#94A3B8', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#F1F5F9' }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#94A3B8' }}
-            >
-              <X size={16} />
-            </button>
+        )}
+
+        {/* Thumbnail grid */}
+        {images.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, color: '#64748B', fontWeight: 500 }}>
+                {images.length}/{MAX_IMAGES} images
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {images.map((img, idx) => (
+                <div
+                  key={`${img.fileName}-${idx}`}
+                  style={{
+                    position: 'relative',
+                    width: 80, height: 80,
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: '#111',
+                    flexShrink: 0,
+                  }}
+                >
+                  {img.dataUrl ? (
+                    <img
+                      src={img.dataUrl}
+                      alt={img.fileName}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: '100%', height: '100%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#475569', fontSize: 11,
+                    }}>
+                      …
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeImage(idx)}
+                    style={{
+                      position: 'absolute', top: 4, right: 4,
+                      width: 20, height: 20, borderRadius: 6,
+                      background: 'rgba(0,0,0,0.75)', border: 'none',
+                      color: '#F1F5F9', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: 0,
+                    }}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -162,6 +255,7 @@ export function ScreenshotModal({ onClose, onGenerate, isGenerating }: Screensho
           ref={fileInputRef}
           type="file"
           accept=".png,.jpg,.jpeg,.webp"
+          multiple
           style={{ display: 'none' }}
           onChange={handleFileSelect}
         />
@@ -198,23 +292,23 @@ export function ScreenshotModal({ onClose, onGenerate, isGenerating }: Screensho
         {/* Generate button */}
         <button
           onClick={handleGenerate}
-          disabled={!previewUrl || isGenerating}
+          disabled={images.length === 0 || isGenerating}
           style={{
             width: '100%', marginTop: 16, padding: '12px 0',
-            background: !previewUrl || isGenerating ? '#333' : '#818CF8',
-            color: !previewUrl || isGenerating ? '#666' : '#fff',
+            background: images.length === 0 || isGenerating ? '#333' : '#818CF8',
+            color: images.length === 0 || isGenerating ? '#666' : '#fff',
             border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600,
-            cursor: !previewUrl || isGenerating ? 'not-allowed' : 'pointer',
+            cursor: images.length === 0 || isGenerating ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             transition: 'all 0.2s',
           }}
-          onMouseEnter={e => { if (previewUrl && !isGenerating) e.currentTarget.style.background = '#6366F1' }}
-          onMouseLeave={e => { if (previewUrl && !isGenerating) e.currentTarget.style.background = '#818CF8' }}
+          onMouseEnter={e => { if (images.length > 0 && !isGenerating) e.currentTarget.style.background = '#6366F1' }}
+          onMouseLeave={e => { if (images.length > 0 && !isGenerating) e.currentTarget.style.background = '#818CF8' }}
         >
           {isGenerating ? (
             <>
               <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-              Analyzing screenshot...
+              Analyzing screenshot{images.length > 1 ? 's' : ''}...
             </>
           ) : (
             <>

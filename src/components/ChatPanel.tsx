@@ -19,7 +19,7 @@ export interface ChatMessage {
 
 interface ChatPanelProps {
   messages: ChatMessage[]
-  onSend: (prompt: string, imageData?: string, imageMimeType?: string) => void
+  onSend: (prompt: string, images?: Array<{ data: string; mimeType: string }>) => void
   onExportCode?: () => void
   isGenerating: boolean
   isStreaming?: boolean
@@ -150,7 +150,10 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
       initialPromptHandled.current = true
       // If the dashboard handed off a reference image alongside the prompt,
       // dispatch both so the very first generation sees the visual context.
-      onSendRef.current(initialPrompt, initialImage?.data, initialImage?.mediaType)
+      const wrapped = initialImage
+        ? [{ data: initialImage.data, mimeType: initialImage.mediaType }]
+        : undefined
+      onSendRef.current(initialPrompt, wrapped)
     }
   }, [initialPrompt, initialImage, hasScreens, screensLoaded])
 
@@ -158,10 +161,11 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')
     if ((!prompt && !attachedImage) || isGenerating) return
     setInput('')
-    const imgData = attachedImage?.data ?? undefined
-    const imgMimeType = attachedImage?.mediaType ?? undefined
+    const wrapped = attachedImage
+      ? [{ data: attachedImage.data, mimeType: attachedImage.mediaType }]
+      : undefined
     setAttachedImage(null)
-    onSend(prompt, imgData, imgMimeType)
+    onSend(prompt, wrapped)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -334,7 +338,12 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   if (!prevUserMsg) return null
                   return (
                     <button
-                      onClick={() => onSend(prevUserMsg.content, prevUserMsg.imageData)}
+                      onClick={() => onSend(
+                        prevUserMsg.content,
+                        prevUserMsg.imageData
+                          ? [{ data: prevUserMsg.imageData, mimeType: 'image/png' }]
+                          : undefined
+                      )}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4,
                         marginTop: 8, padding: '4px 10px', borderRadius: 6,
