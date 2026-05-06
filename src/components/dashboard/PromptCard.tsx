@@ -81,10 +81,15 @@ export function PromptCard({
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
+    // Snapshot the picks into a plain array BEFORE we clear the input.
+    // In some browsers, clearing input.value mutates the live FileList,
+    // so a `const files = e.target.files` reference can become empty by
+    // the time we try to iterate it. Array.from copies the File refs,
+    // and individual File objects survive the input being cleared.
+    const filesArr = e.target.files ? Array.from(e.target.files) : []
     // Reset the input so picking the same file twice still fires onChange.
     e.target.value = ''
-    if (!files || files.length === 0) return
+    if (filesArr.length === 0) return
 
     // How many slots remain. If full, we silently drop the picks; the UI
     // will already have the chip count visible so the user understands.
@@ -92,7 +97,7 @@ export function PromptCard({
     if (remaining <= 0) return
 
     // Validate + read each candidate file, capping at the remaining slots.
-    const accepted = Array.from(files)
+    const accepted = filesArr
       .filter((f) => f.type.startsWith('image/') && f.size <= MAX_FILE_BYTES)
       .slice(0, remaining)
 
