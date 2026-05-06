@@ -53,13 +53,11 @@ const PLACEHOLDERS = [
   'Ask Mokkoi…',
 ]
 
-const EXAMPLE_CARDS = [
-  { emoji: '\u{1F3CB}\uFE0F', title: 'Fitness Dashboard', desc: 'Activity rings & step counter', prompt: 'A fitness dashboard with activity rings, step counter, and calorie tracker' },
-  { emoji: '\u{1F510}', title: 'Login Screen', desc: 'Email, password & social auth', prompt: 'A login screen with email, password fields and social auth buttons for Google and Apple' },
-  { emoji: '\u{1F4AC}', title: 'Chat Interface', desc: 'Message bubbles & avatars', prompt: 'A chat interface with message bubbles, user avatars, and a message input bar' },
-  { emoji: '\u{1F6D2}', title: 'Product Page', desc: 'Images, price & reviews', prompt: 'An e-commerce product page with product image, price, star reviews, and add to cart button' },
-  { emoji: '\u{1F504}', title: 'App Flow', desc: 'Complete onboarding or checkout flow', prompt: 'Create a complete onboarding flow for a mobile app with welcome, sign up, profile setup, preferences, and home screen' },
-]
+// (V1's EXAMPLE_CARDS \u2014 Fitness Dashboard / Login Screen / Chat Interface /
+//  Product Page / App Flow \u2014 removed. Mokkoi has shifted from a single-screen
+//  design tool to an app builder; landing on a fresh project page should not
+//  push generic single-screen suggestions. Users either arrive with a prompt
+//  (from the dashboard) or get a quiet "describe what to build" empty state.)
 
 const QUICK_SUGGESTIONS = [
   'Make it darker',
@@ -235,61 +233,38 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
         flexDirection: 'column',
         gap: 16,
       }}>
-        {/* Empty state with example cards */}
+        {/* Empty state — quiet hint, no generic template buttons. The user
+            most often lands here with a prompt already in the URL from the
+            dashboard, which immediately starts generation. The empty state
+            only shows on truly-blank projects. */}
         {showExampleCards && (
           <div style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
-            gap: 24,
-            padding: '0 4px',
+            alignItems: 'center',
+            gap: 12,
+            padding: '0 24px',
+            textAlign: 'center',
           }}>
-            <div style={{ fontSize: 20, fontWeight: 600, color: '#F1F5F9', textAlign: 'center' }}>
+            <div style={{
+              fontSize: 18,
+              fontWeight: 600,
+              color: '#F1F5F9',
+              fontFamily: "'Bricolage Grotesque', system-ui, sans-serif",
+              letterSpacing: '-0.01em',
+            }}>
               What would you like to build?
             </div>
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 10,
+              fontSize: 13,
+              color: '#64748B',
+              lineHeight: 1.55,
+              maxWidth: 320,
             }}>
-              {EXAMPLE_CARDS.map((card, idx) => (
-                <button
-                  key={card.title}
-                  onClick={() => onSend(card.prompt)}
-                  className="example-card"
-                  style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 16,
-                    padding: '16px 14px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'all 0.25s ease',
-                    ...(idx === 4 ? { gridColumn: '1 / -1' } : {}),
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                    e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'
-                    e.currentTarget.style.transform = 'translateY(-2px)'
-                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-                    e.currentTarget.style.transform = 'translateY(0)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
-                >
-                  <div style={{ fontSize: 22, marginBottom: 6 }}>{card.emoji}</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#F1F5F9', marginBottom: 4 }}>
-                    {card.title}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.4 }}>
-                    {card.desc}
-                  </div>
-                </button>
-              ))}
+              Describe your app below — the more specific you are about screens
+              and the user, the better Mokkoi can shape the first build.
             </div>
           </div>
         )}
