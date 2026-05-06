@@ -273,9 +273,11 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     onSend(s)
   }
 
-  // Check if the last message is an assistant (non-error) message — show suggestions
+  // Check if the last message is an assistant (non-error) message — show suggestions.
+  // In plan mode, the per-message Haiku chips replace these generic edit-screen
+  // suggestions ("Make it darker", "Copy as TSX", etc.); suppress them.
   const lastMsg = messages[messages.length - 1]
-  const showSuggestions = lastMsg?.role === 'assistant' && !lastMsg.content.startsWith('Error:') && !lastMsg.flowScreenNames && !isGenerating
+  const showSuggestions = !planMode && lastMsg?.role === 'assistant' && !lastMsg.content.startsWith('Error:') && !lastMsg.flowScreenNames && !isGenerating
 
   // Show example cards only when zero screens AND zero messages
   const showExampleCards = messages.length === 0 && !isGenerating && !hasScreens
