@@ -187,10 +187,20 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   // Supabase fetch completes, which would incorrectly trigger generation on existing projects.
   const onSendRef = useRef(onSend)
   onSendRef.current = onSend
+  const onPlanSendRef = useRef(onPlanSend)
+  onPlanSendRef.current = onPlanSend
   useEffect(() => {
     if (!screensLoaded) return // Wait for Supabase fetch to complete
     if (initialPrompt && !initialPromptHandled.current && !hasScreens) {
       initialPromptHandled.current = true
+      // Plan mode: route the very first prompt to the Haiku planner
+      // (/api/plan-conversation), NOT the build pipeline. Without this branch
+      // the auto-send fires onSend(prompt) which short-circuits the entire
+      // conversational flow into a direct generation.
+      if (planMode && onPlanSendRef.current) {
+        onPlanSendRef.current(initialPrompt)
+        return
+      }
       // If the dashboard handed off reference images alongside the prompt,
       // dispatch all of them so the very first generation sees full context.
       const wrapped =
@@ -199,7 +209,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
           : undefined
       onSendRef.current(initialPrompt, wrapped)
     }
-  }, [initialPrompt, initialImages, hasScreens, screensLoaded])
+  }, [initialPrompt, initialImages, hasScreens, screensLoaded, planMode])
 
   const handleSend = () => {
     const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')
