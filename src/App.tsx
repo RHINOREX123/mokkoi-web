@@ -747,25 +747,59 @@ function App() {
             )}
 
             {!screens.hasScreens && !ai.isGenerating && referenceImages.length === 0 ? (
-              <div data-canvas-bg="true" style={{ display: 'flex', flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, pointerEvents: 'none', userSelect: 'none', transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)` }}>
-                {initialPlanModeRef.current && ai.planContext ? (
-                  <div style={{ pointerEvents: 'auto' }}>
+              <>
+                {/* PlanSummaryCard is pinned to the canvas viewport — NOT
+                    inside the pan-transform layer below — so it doesn't
+                    drift when the user pans/zooms the canvas the way
+                    generated screens do. UI overlay, not artifact. */}
+                {initialPlanModeRef.current && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 5,
+                      pointerEvents: 'auto',
+                    }}
+                  >
                     <PlanSummaryCard
-                      extracted={ai.planContext.extracted}
+                      extracted={
+                        ai.planContext?.extracted ?? {
+                          domain: null,
+                          primary_action: null,
+                          vibe: null,
+                          screens: null,
+                          brand: null,
+                        }
+                      }
                       readyToBuild={ai.readyToBuildLatched}
                     />
                   </div>
-                ) : initialPlanModeRef.current ? (
-                  <div style={{ pointerEvents: 'auto' }}>
-                    <PlanSummaryCard
-                      extracted={{ domain: null, primary_action: null, vibe: null, screens: null, brand: null }}
-                      readyToBuild={false}
-                    />
-                  </div>
-                ) : (
-                  <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>Your designs will appear here</span>
                 )}
-              </div>
+                {/* Default empty-canvas placeholder. Hidden in plan mode
+                    because the PlanSummaryCard is the relevant message. */}
+                {!initialPlanModeRef.current && (
+                  <div
+                    data-canvas-bg="true"
+                    style={{
+                      display: 'flex',
+                      flex: 1,
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 12,
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      transform: `translate(${canvas.panOffset.x}px, ${canvas.panOffset.y}px)`,
+                    }}
+                  >
+                    <span style={{ fontSize: 15, color: 'rgba(0,0,0,0.3)', fontWeight: 500 }}>
+                      Your designs will appear here
+                    </span>
+                  </div>
+                )}
+              </>
             ) : (
               <>
                 {viewMode === 'preview' && (
