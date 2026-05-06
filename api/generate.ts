@@ -1566,10 +1566,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // is prepended to user message to keep system prompt static for cache hits.
   let userContent: string | Array<{ type: string; [key: string]: unknown }>
   if (hasImage) {
-    // Screenshot-to-screen: send image(s) with text prompt
+    // Screenshot-to-screen: send image(s) with text prompt.
+    //
+    // Intent detection: the user has attached one or more reference images.
+    // By default treat them as visual INSPIRATION (vibe, palette, layout
+    // language) rather than literal clones, and build a complete app.
+    // Only switch to pixel-tight recreation if the user explicitly asks.
+    const explicitCloneIntent = /\b(clone|recreate|replicate|copy|reproduce|pixel[-\s]?(?:perfect|tight|by[-\s]?pixel)|match\s+(?:exactly|pixel)|just\s+rebuild|exact(?:ly)?\s+(?:this|the\s+screen))\b/i.test(cleanPrompt)
     const textPrompt = currentScreen
       ? `${dynamicContext}Here is the current screen JSON:\n${JSON.stringify(currentScreen, null, 2)}\n\nThe user attached a screenshot and says: ${cleanPrompt}\n\nRecreate or modify the screen to match the screenshot. Return complete JSON.`
-      : `${dynamicContext}SCREENSHOT RECREATION — STRUCTURAL ANALYSIS REQUIRED
+      : explicitCloneIntent
+      ? `${dynamicContext}SCREENSHOT RECREATION — STRUCTURAL ANALYSIS REQUIRED
 
 Before generating JSON, you MUST perform this structural analysis of the screenshot:
 
@@ -1609,6 +1616,60 @@ CRITICAL RULES:
 The user says: ${cleanPrompt}
 
 Now generate the complete React Native component tree JSON that faithfully recreates this screenshot. Return ONLY valid JSON.`
+      : `${dynamicContext}REFERENCE IMAGES — VISUAL INSPIRATION ONLY
+
+The user attached reference image(s). The reference images decide HOW the screen LOOKS. The user's text prompt decides WHAT the screen IS.
+
+THE DOMAIN COMES FROM THE USER'S TEXT PROMPT — NEVER FROM THE IMAGES.
+
+Concrete example:
+  - User says: "create a fitness app"
+  - User attaches: 4 screenshots of a food/recipe app
+  - You build: a FITNESS screen (workouts, calories, steps, BPM,
+    progress rings) styled with the food app's visual language —
+    its palette, card radii, typography weight, spacing rhythm.
+  - You do NOT build: a recipe/food screen. You do NOT include
+    "Thai Green Curry", "Lemon Roast Chicken", recipe times,
+    ingredient lists, or any food-domain content from the images.
+
+Pull from the references (visual style ONLY):
+  - Color palette and accent colors
+  - Typography vibe (weights, sizes, hierarchy)
+  - Spacing and layout rhythm
+  - Card shapes, corner radii, shadow style
+  - Iconography style and density
+  - Overall mood: dark/light, minimal/dense, playful/serious
+
+Do NOT pull from the references:
+  - The subject matter or app domain
+  - Specific text labels, brand names, dish names, product names
+  - Numerical data (prices, ratings, counts, times)
+  - Section titles tied to the reference's domain
+  - User names, profile photos, or any literal data values
+
+What to build (single screen):
+  - ONE screen that fulfills the user's prompt for their domain.
+  - This API call returns one screen. Do not try to describe
+    multiple screens or app structure — just the single screen
+    appropriate for the user's prompt.
+  - If the prompt implies a "home" or main screen (e.g. "fitness
+    app", "shopping app"), build the home/dashboard screen for
+    that domain. If the prompt names a specific screen, build that.
+  - Include realistic content native to the user's domain:
+    fitness app → workouts, stats, progress; shopping → products,
+    cart, deals; finance → balances, transactions, charts.
+  - Bottom tab bar should reflect the user's domain (Home, the
+    primary feature, secondary features, Profile) — NOT the
+    reference images' tabs.
+
+The user explicitly did NOT use clone keywords ("clone",
+"recreate exactly", "pixel-perfect", "match exactly", "just
+rebuild"). They want a screen for THEIR domain styled like the
+references — not a recreation of the references.
+
+The user says: ${cleanPrompt}
+
+Return ONLY valid JSON.`
     userContent = [
       ...normalizedImages.map(img => ({
         type: 'image',
