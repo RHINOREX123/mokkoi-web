@@ -29,6 +29,11 @@ type HistoryMsg = { role: 'user' | 'assistant'; content: string }
 interface PlanRequestBody {
   projectId?: unknown
   userMessage?: unknown
+  /** UUID of the just-inserted user-message row. When present, the server
+   *  dedupes the trailing-row-by-id rather than by content equality, which
+   *  prevents the (rare) case where a user sends the same text twice in a
+   *  row from accidentally dropping the legitimate second turn. */
+  userMessageId?: unknown
   conversationHistory?: unknown
 }
 
@@ -233,14 +238,18 @@ async function saveAssistantMessage(projectId: string, response: PlanResponse): 
  * been validated as a UUID owned by an authenticated caller upstream of this
  * helper (per the plan-mode rate / paywall checks).
  */
-async function loadConversationHistory(projectId: string): Promise<HistoryMsg[]> {
+interface HistoryMsgWithId extends HistoryMsg {
+  id: string
+}
+
+async function loadConversationHistory(projectId: string): Promise<HistoryMsgWithId[]> {
   const { url } = getSupabaseConfig()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !serviceKey) return []
   const supabase = createClient(url, serviceKey)
   const { data, error } = await supabase
     .from('messages')
-    .select('role, content')
+    .select('id, role, content')
     .eq('project_id', projectId)
     .in('role', ['user', 'assistant'])
     .order('created_at', { ascending: true })
@@ -248,13 +257,15 @@ async function loadConversationHistory(projectId: string): Promise<HistoryMsg[]>
     console.warn('[plan-conversation] load history failed:', error.message)
     return []
   }
-  const out: HistoryMsg[] = []
+  const out: HistoryMsgWithId[] = []
   for (const row of data ?? []) {
+    const id = row.id
     const role = row.role
     const content = row.content
+    if (typeof id !== 'string') continue
     if (typeof content !== 'string') continue
     if (role !== 'user' && role !== 'assistant') continue
-    out.push({ role, content })
+    out.push({ id, role, content })
   }
   return out
 }
@@ -290,21 +301,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const trimmedUserMessage = userMessage.trim().slice(0, USER_MESSAGE_MAX_LEN)
 
+  // Defense-in-depth ownership check. Service-role reads/writes below
+  // (loadConversationHistory, saveAssistantMessage, getProjectTurnCount)
+  // bypass RLS, so a stolen JWT pointing at someone else's projectId would
+  // otherwise leak history / poison plans. Failing fast here returns a clean
+  // 403 rather than reasoning against another user's data and quietly
+  // succeeding.
+  {
+    const { url } = getSupabaseConfig()
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (url && serviceKey) {
+      const supabase = createClient(url, serviceKey)
+      const { data: project, error: projectErr } = await supabase
+        .from('projects')
+        .select('user_id')
+        .eq('id', projectId)
+        .maybeSingle()
+      if (projectErr) {
+        console.error('[plan-conversation] ownership check failed:', projectErr.message)
+        return jsonError(res, 500, { error: 'ownership_check_failed' })
+      }
+      if (!project) return jsonError(res, 404, { error: 'project_not_found' })
+      if (project.user_id !== user.id) return jsonError(res, 403, { error: 'project_not_owned' })
+    }
+    // If service key is missing, ownership is unverifiable — skip rather than
+    // 500. The check is defence-in-depth on top of the bearer-token auth that
+    // already ran at the top of this handler; absence of the key is a config
+    // error, not a security incident.
+  }
+
   // Load history from DB — the canonical source. Client-sent
   // `conversationHistory` is intentionally ignored even if present; trusting
   // it was the bug that let an unsaved assistant turn silently disappear from
   // the planner's memory.
   void normalizeHistory(body.conversationHistory)
   const dbHistory = await loadConversationHistory(projectId)
+
   // The client awaits the user-message insert before calling this endpoint,
   // so the just-sent user turn is already in `dbHistory` as the last row.
   // callHaiku appends `userMessage` separately, so drop the duplicate tail.
-  const history =
-    dbHistory.length > 0 &&
-    dbHistory[dbHistory.length - 1].role === 'user' &&
-    dbHistory[dbHistory.length - 1].content === trimmedUserMessage
-      ? dbHistory.slice(0, -1)
-      : dbHistory
+  //
+  // Dedupe by id when the client sends userMessageId (current path). Falls
+  // back to content equality for older clients — content-only dedupe was
+  // wrong for the case where a user types the same text twice in a row, but
+  // it's still a better default than including the duplicate turn twice.
+  const userMessageId = typeof body.userMessageId === 'string' ? body.userMessageId : null
+  const dropTrailing = (() => {
+    if (dbHistory.length === 0) return false
+    const tail = dbHistory[dbHistory.length - 1]
+    if (tail.role !== 'user') return false
+    if (userMessageId && tail.id === userMessageId) return true
+    if (!userMessageId && tail.content === trimmedUserMessage) return true
+    return false
+  })()
+  const trimmedHistory = dropTrailing ? dbHistory.slice(0, -1) : dbHistory
+  // Strip ids before passing to callHaiku — its input shape is { role, content }.
+  const history: HistoryMsg[] = trimmedHistory.map(({ role, content }) => ({ role, content }))
   // Server-derived. Client `turnCount` is NOT in the schema and is ignored
   // even if sent — prevents a malicious client from pinning turnCount=0 to
   // bypass trim or the ≥2-turn ready_to_build guard.

@@ -689,7 +689,14 @@ function App() {
             <ChatPanel
               messages={screens.projectMessages} onSend={ai.handleSend}
               onExportCode={() => screens.generatedTree && setShowCodeExport(true)}
-              isGenerating={ai.isGenerating} isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImages={initialAttachedImages}
+              // OR-in the live generation_run state so a second tab (or a
+              // navigate-back mid-stream) treats the project as busy: input
+              // disabled, send button gated, no duplicate Build click. The
+              // Stop button stays gated by ai.isGenerating only via the
+              // onStopGenerating prop below — only the originating client
+              // can cancel.
+              isGenerating={ai.isGenerating || generationRun.isRunning}
+              isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImages={initialAttachedImages}
               planMode={initialPlanModeRef.current}
               onPlanSend={(msg) => ai.sendPlanMessage(msg)}
               readyToBuildLatched={ai.readyToBuildLatched}

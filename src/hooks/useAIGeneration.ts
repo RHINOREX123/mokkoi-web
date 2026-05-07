@@ -311,7 +311,10 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         headers: authHeaders,
         // No `conversationHistory` — server reloads from `messages` table to
         // avoid optimistic state silently diverging from durable history.
-        body: JSON.stringify({ projectId, userMessage }),
+        // userMessageId lets the server dedupe the trailing user-row by id
+        // rather than by content equality (handles the edge case where a
+        // user sends the same text twice in a row).
+        body: JSON.stringify({ projectId, userMessage, userMessageId: userMsg.id }),
         signal: controller.signal,
       })
 
@@ -483,6 +486,19 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}))
+          // 409 = another generation is already running for this project (the
+          // server's unique partial index on generation_runs caught a race
+          // beyond the UI button-disable). Silently absorb so the user doesn't
+          // accumulate duplicate "Build app" messages — the existing run will
+          // surface progress via useGenerationRun.
+          if (res.status === 409 && errData.error === 'generation_in_progress') {
+            setGeneratedScreens(prev => prev.filter(s => s.id !== placeholderId))
+            setProjectMessages(prev => prev.filter(m => m.id !== userMsg.id))
+            setIsGenerating(false)
+            setAppPhase('idle')
+            setToastMessage?.('Generation already in progress — hang tight.')
+            return
+          }
           throw new Error(errData.error || 'Failed to generate app')
         }
 
