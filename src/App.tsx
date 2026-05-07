@@ -685,15 +685,21 @@ function App() {
               planMode={initialPlanModeRef.current}
               onPlanSend={(msg) => ai.sendPlanMessage(msg)}
               readyToBuildLatched={ai.readyToBuildLatched}
-              onBuildFromPlan={() => {
+              onBuildFromPlan={(planImages) => {
                 // Plan-mode Build: feed Haiku-emitted summary to the build
                 // pipeline. forceAppMode bypasses isAppPrompt regex (a tight
                 // summary often lacks the "build/create" verb the regex
                 // needs). When summary is null (user clicked Build before
                 // ready_to_build fired), concat user-only messages instead.
+                //
+                // planImages: any reference images attached during the plan
+                // conversation (or carried over from the dashboard's Camera
+                // button). These flow to /api/generate-flow as visual style
+                // refs — same code path as the multi-image-app-generation
+                // task we shipped earlier.
                 const summary = ai.planContext?.summary
                 if (summary && summary.length > 0) {
-                  ai.handleSend(summary, undefined, true, undefined, { forceAppMode: true })
+                  ai.handleSend(summary, planImages, true, undefined, { forceAppMode: true })
                   return
                 }
                 const userOnly = screens.projectMessages
@@ -704,7 +710,7 @@ function App() {
                 const fallback = userOnly.length > 0
                   ? `Build an app: ${userOnly}`
                   : 'Build an app'
-                ai.handleSend(fallback, undefined, true, undefined, { forceAppMode: true })
+                ai.handleSend(fallback, planImages, true, undefined, { forceAppMode: true })
               }}
               onFlowScreenClick={handleFlowScreenClick} hasScreens={screens.hasScreens} screensLoaded={screens.screensLoaded}
               selectedScreenName={screens.activeGenerated?.name} selectedScreenTree={screens.activeGenerated?.tree}

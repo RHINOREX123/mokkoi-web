@@ -85,8 +85,11 @@ interface ChatPanelProps {
   /** Sticky once Haiku emits ready_to_build:true; drives Build CTA glow. */
   readyToBuildLatched?: boolean
   /** Click handler for the Plan-mode Build button — feeds the latest summary
-   *  into the build pipeline via handleSend(summary, ..., forceAppMode:true). */
-  onBuildFromPlan?: () => void
+   *  into the build pipeline via handleSend(summary, ..., forceAppMode:true).
+   *  Receives any images the user attached during the planning conversation
+   *  (or from the dashboard's Camera button via initialImages). Build pipeline
+   *  forwards them to /api/generate-flow as visual references. */
+  onBuildFromPlan?: (images?: Array<{ data: string; mimeType: string }>) => void
   /** Whether the latest planning turn is in flight (drives chip disabled state). */
   planInflight?: boolean
 }
@@ -145,7 +148,13 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
   const [genStep, setGenStep] = useState(0)
-  const [attachedImage, setAttachedImage] = useState<{ data: string; name: string; mediaType: string } | null>(null)
+  // Multi-image attachment in the chat input. Up to MAX_IMAGES — matches the
+  // dashboard PromptCard's Camera button behavior. Tapping the paperclip
+  // multiple times APPENDS rather than REPLACES; user can also remove
+  // individual thumbnails before sending.
+  const MAX_IMAGES = 4
+  type ChatImage = { data: string; name: string; mediaType: string }
+  const [attachedImages, setAttachedImages] = useState<ChatImage[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatInputRef = useRef<HTMLInputElement>(null)
@@ -215,7 +224,20 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
       // (/api/plan-conversation), NOT the build pipeline. Without this branch
       // the auto-send fires onSend(prompt) which short-circuits the entire
       // conversational flow into a direct generation.
+      //
+      // Images attached on the dashboard (via Camera button) get held in the
+      // chat-input attachedImages state instead of immediately dispatched.
+      // Haiku is text-only, so images don't reach the planner — they ride
+      // through to the build step when user clicks "Build my app". The chat
+      // input shows them as thumbnails so the user knows they're queued.
       if (planMode && onPlanSendRef.current) {
+        if (initialImages && initialImages.length > 0) {
+          setAttachedImages(initialImages.map(img => ({
+            data: img.data,
+            name: img.fileName,
+            mediaType: img.mediaType,
+          })))
+        }
         onPlanSendRef.current(initialPrompt)
         return
       }
@@ -230,20 +252,21 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   }, [initialPrompt, initialImages, hasScreens, screensLoaded, planMode])
 
   const handleSend = () => {
-    const prompt = input.trim() || (attachedImage ? 'Recreate this screen design' : '')
-    if ((!prompt && !attachedImage) || isGenerating) return
+    const hasAttached = attachedImages.length > 0
+    const prompt = input.trim() || (hasAttached ? 'Recreate this screen design' : '')
+    if ((!prompt && !hasAttached) || isGenerating) return
     setInput('')
-    // Plan mode routes free-text input to /api/plan-conversation. Image
-    // attach is currently a Build-only affordance (Plan is text-first per
-    // V1 spec); if both are active, we still go to onPlanSend with text only.
-    if (planMode && onPlanSend && !attachedImage) {
+    // Plan mode: route free-text to /api/plan-conversation. Haiku is text-only,
+    // so attached images don't reach the planner — but they're held in state
+    // and ride through to the build step when user clicks "Build my app".
+    if (planMode && onPlanSend && !hasAttached) {
       onPlanSend(prompt)
       return
     }
-    const wrapped = attachedImage
-      ? [{ data: attachedImage.data, mimeType: attachedImage.mediaType }]
+    const wrapped = hasAttached
+      ? attachedImages.map(img => ({ data: img.data, mimeType: img.mediaType }))
       : undefined
-    setAttachedImage(null)
+    setAttachedImages([])
     onSend(prompt, wrapped)
   }
 
@@ -255,18 +278,26 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
     e.target.value = ''
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      const base64 = result.split(',')[1]
-      const mediaType = file.type || 'image/png'
-      setAttachedImage({ data: base64, name: file.name, mediaType })
-    }
-    reader.readAsDataURL(file)
+    // Append (don't replace). Cap at MAX_IMAGES total. Each file is read
+    // independently because FileReader is async; setState callback ensures
+    // we don't race when multiple files load in different ticks.
+    files.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        const base64 = result.split(',')[1]
+        const mediaType = file.type || 'image/png'
+        setAttachedImages(prev => {
+          if (prev.length >= MAX_IMAGES) return prev
+          return [...prev, { data: base64, name: file.name, mediaType }]
+        })
+      }
+      reader.readAsDataURL(file)
+    })
   }
 
   const handleSuggestionClick = async (s: string) => {
@@ -340,6 +371,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
         ref={fileInputRef}
         type="file"
         accept=".png,.jpg,.jpeg,.webp"
+        multiple
         style={{ display: 'none' }}
         onChange={handleFileSelect}
       />
@@ -425,7 +457,11 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
           && messages.filter(m => m.role === 'user').length >= 4 && (
           <button
             type="button"
-            onClick={onBuildFromPlan}
+            onClick={() => onBuildFromPlan(
+              attachedImages.length > 0
+                ? attachedImages.map(img => ({ data: img.data, mimeType: img.mediaType }))
+                : undefined
+            )}
             style={{
               alignSelf: 'flex-end',
               padding: '4px 10px',
@@ -783,7 +819,11 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             </div>
             <button
               type="button"
-              onClick={onBuildFromPlan}
+              onClick={() => onBuildFromPlan(
+                attachedImages.length > 0
+                  ? attachedImages.map(img => ({ data: img.data, mimeType: img.mediaType }))
+                  : undefined
+              )}
               style={{
                 padding: '10px 14px',
                 borderRadius: 10,
@@ -1048,46 +1088,80 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             )}
           </div>
         )}
-        {/* Attached image preview */}
-        {attachedImage && (
+        {/* Attached images preview — supports up to MAX_IMAGES thumbnails.
+            Each has its own remove button. The paperclip button below appends
+            to this row up to the cap. Plan mode also routes images here from
+            the dashboard via `initialImages`. */}
+        {attachedImages.length > 0 && (
           <div style={{
             marginBottom: 10,
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '8px 12px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            padding: 10,
             background: 'rgba(255,255,255,0.04)',
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: 12,
           }}>
-            <img
-              src={`data:${attachedImage.mediaType};base64,${attachedImage.data}`}
-              alt="Attached"
-              style={{
-                width: 48, height: 48, borderRadius: 8,
-                objectFit: 'cover',
-                border: '1px solid rgba(255,255,255,0.1)',
-              }}
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: '#F1F5F9', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {attachedImage.name}
+            {attachedImages.map((img, i) => (
+              <div
+                key={`${img.name}-${i}`}
+                style={{
+                  position: 'relative',
+                  width: 56,
+                  height: 56,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  flexShrink: 0,
+                }}
+                title={img.name}
+              >
+                <img
+                  src={`data:${img.mediaType};base64,${img.data}`}
+                  alt={img.name}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setAttachedImages(prev => prev.filter((_, idx) => idx !== i))}
+                  aria-label={`Remove ${img.name}`}
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: 'rgba(0,0,0,0.7)',
+                    color: '#fff',
+                    fontSize: 11,
+                    lineHeight: 1,
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                  }}
+                >
+                  ×
+                </button>
               </div>
-              <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
-                Screenshot attached — will recreate as screen
-              </div>
+            ))}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: 11,
+              color: '#64748B',
+              padding: '0 4px',
+            }}>
+              {attachedImages.length} of {MAX_IMAGES} attached
+              {planMode && ' · used as visual reference at build'}
             </div>
-            <button
-              onClick={() => setAttachedImage(null)}
-              style={{
-                width: 24, height: 24, borderRadius: 6,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: '#94A3B8', fontSize: 14, cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              &times;
-            </button>
           </div>
         )}
 
@@ -1145,7 +1219,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 className="w-full bg-transparent text-[14px] text-mokkoi-text outline-none disabled:opacity-50"
                 style={{ caretColor: '#818cf8' }}
               />
-              {!input && !attachedImage && (
+              {!input && attachedImages.length === 0 && (
                 <span
                   className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none text-[14px] text-white/25 transition-opacity duration-300"
                   style={{ opacity: placeholderVisible ? 1 : 0 }}
@@ -1153,7 +1227,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   {PLACEHOLDERS[placeholderIdx]}
                 </span>
               )}
-              {!input && attachedImage && (
+              {!input && attachedImages.length > 0 && (
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none text-[14px] text-white/25">
                   Describe the screen, or press Generate
                 </span>
@@ -1163,25 +1237,25 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             {/* Generate button */}
             <button
               onClick={handleSend}
-              disabled={(!input.trim() && !attachedImage) || isGenerating}
+              disabled={(!input.trim() && attachedImages.length === 0) || isGenerating}
               className="shrink-0 flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed text-[13px] font-semibold text-white"
               style={{
                 padding: '8px 20px',
                 borderRadius: 10,
-                background: (input.trim() || attachedImage) && !isGenerating
+                background: (input.trim() || attachedImages.length > 0) && !isGenerating
                   ? 'linear-gradient(135deg, #2dd4bf, #06b6d4)'
                   : 'rgba(255,255,255,0.06)',
-                boxShadow: (input.trim() || attachedImage) && !isGenerating
+                boxShadow: (input.trim() || attachedImages.length > 0) && !isGenerating
                   ? '0 2px 12px rgba(99,102,241,0.2)'
                   : 'none',
               }}
               onMouseEnter={e => {
-                if ((input.trim() || attachedImage) && !isGenerating) {
+                if ((input.trim() || attachedImages.length > 0) && !isGenerating) {
                   e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,0.35)'
                 }
               }}
               onMouseLeave={e => {
-                if ((input.trim() || attachedImage) && !isGenerating) {
+                if ((input.trim() || attachedImages.length > 0) && !isGenerating) {
                   e.currentTarget.style.boxShadow = '0 2px 12px rgba(99,102,241,0.2)'
                 }
               }}
