@@ -95,6 +95,24 @@ const PLACEHOLDERS = [
   'Ask Mokkoi…',
 ]
 
+/** Human-readable timestamp under message labels in plan mode.
+ *  - <1min: "now"
+ *  - <60min: "5 min ago"
+ *  - <24h:   "2:13 PM"
+ *  - older:  "May 7 · 2:13 PM"
+ *  Pattern adapted from Rocket's chat panel. */
+function formatTimestamp(ts: number): string {
+  const now = Date.now()
+  const diffMs = now - ts
+  if (diffMs < 60_000) return 'now'
+  if (diffMs < 60 * 60_000) return `${Math.floor(diffMs / 60_000)} min ago`
+  const d = new Date(ts)
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  if (diffMs < 24 * 60 * 60_000) return time
+  const monthDay = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  return `${monthDay} · ${time}`
+}
+
 // (V1's EXAMPLE_CARDS \u2014 Fitness Dashboard / Login Screen / Chat Interface /
 //  Product Page / App Flow \u2014 removed. Mokkoi has shifted from a single-screen
 //  design tool to an app builder; landing on a fresh project page should not
@@ -288,8 +306,33 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes mokkoi-buildbtn-pulse {
-          0%, 100% { box-shadow: 0 0 12px rgba(45,212,191,0.18); }
-          50%      { box-shadow: 0 0 20px rgba(45,212,191,0.42); }
+          0%, 100% { box-shadow: 0 4px 16px -4px rgba(45,212,191,0.55); }
+          50%      { box-shadow: 0 6px 22px -4px rgba(167,139,250,0.65); }
+        }
+        @keyframes mokkoi-build-card-in {
+          from { opacity: 0; transform: translateY(8px) scale(0.98); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes mokkoi-msg-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes mokkoi-name-shift {
+          from { background-position: 0% 0%; }
+          to   { background-position: 200% 0%; }
+        }
+        @keyframes mokkoi-avatar-glow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(45,212,191,0), 0 0 0 0 rgba(167,139,250,0); }
+          50%      { box-shadow: 0 0 0 4px rgba(45,212,191,0.16), 0 0 16px 0 rgba(167,139,250,0.18); }
+        }
+        @keyframes mokkoi-bubble-shine {
+          0%   { transform: translateX(-100%); }
+          50%  { transform: translateX(100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes mokkoi-typing-dot {
+          0%, 60%, 100% { transform: scale(0.6); opacity: 0.4; }
+          30%           { transform: scale(1.0); opacity: 1; }
         }
       `}</style>
       {/* Hidden file input */}
@@ -371,39 +414,41 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
           </div>
         )}
 
-        {/* Plan-mode persistent Build button — always available, lets user
-            skip ahead at any turn. Disabled until at least one user message.
-            Glows when readyToBuildLatched flips true. */}
-        {planMode && onBuildFromPlan && messages.some(m => m.role === 'user') && (
+        {/* Plan-mode skip-ahead link — small, unobtrusive, top of panel.
+            Only appears at turn 4+ (substantial conversation underway) AND
+            before ready_to_build fires. Once Mokkoi flags ready, the inline
+            featured Build card below the latest message takes over.
+            User feedback yesterday: header button at turn 1 was distracting
+            and forced scroll-up to reach. Now hidden early, surfaced only
+            when escape-hatch is genuinely useful. */}
+        {planMode && onBuildFromPlan && !readyToBuildLatched && !isGenerating
+          && messages.filter(m => m.role === 'user').length >= 4 && (
           <button
             type="button"
             onClick={onBuildFromPlan}
-            disabled={isGenerating}
             style={{
-              padding: '10px 14px',
-              borderRadius: 10,
-              border: readyToBuildLatched
-                ? '1px solid rgba(45,212,191,0.55)'
-                : '1px solid var(--dash-border, rgba(255,255,255,0.1))',
-              background: readyToBuildLatched
-                ? 'linear-gradient(135deg, rgba(45,212,191,0.18), rgba(167,139,250,0.18))'
-                : 'rgba(255,255,255,0.04)',
-              color: readyToBuildLatched ? '#5eead4' : '#e2e8f0',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: isGenerating ? 'not-allowed' : 'pointer',
-              opacity: isGenerating ? 0.5 : 1,
+              alignSelf: 'flex-end',
+              padding: '4px 10px',
+              borderRadius: 999,
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: 'transparent',
+              color: 'rgba(255,255,255,0.55)',
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: 'pointer',
               fontFamily: "'DM Sans', system-ui, sans-serif",
               transition: 'all 0.18s',
-              boxShadow: readyToBuildLatched
-                ? '0 0 12px rgba(45,212,191,0.18)'
-                : 'none',
-              animation: readyToBuildLatched
-                ? 'mokkoi-buildbtn-pulse 2.4s ease-in-out infinite'
-                : undefined,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = 'rgba(45,212,191,0.4)'
+              e.currentTarget.style.color = '#5eead4'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+              e.currentTarget.style.color = 'rgba(255,255,255,0.55)'
             }}
           >
-            {readyToBuildLatched ? '✨ Build my app' : 'Build my app'}
+            Build now →
           </button>
         )}
 
@@ -445,39 +490,110 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
 
         {messages.map((msg, idx) => (
           <div key={msg.id}>
-            {/* Clean message style: label above, no background bubbles */}
+            {/* Plan-mode messages get Variant B styling: gradient-bordered
+                Mokkoi bubbles, asymmetric corners, gradient name with shift
+                animation, soft avatar glow, timestamp under name. Non-plan
+                messages keep the existing minimal layout to avoid disrupting
+                the build-mode UX. */}
             <div style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              animation: planMode ? 'mokkoi-msg-in 280ms ease-out' : undefined,
             }}>
-              {/* Label row */}
+              {/* Label row — for plan mode, add timestamp; assistant gets
+                  pulse glow on the avatar and gradient-shift on the name. */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 marginBottom: 4,
               }}>
                 {msg.role === 'assistant' && (
                   <div style={{
-                    width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                    background: 'linear-gradient(135deg, #2dd4bf, #06b6d4)',
+                    width: planMode ? 22 : 18,
+                    height: planMode ? 22 : 18,
+                    borderRadius: planMode ? 7 : 5,
+                    flexShrink: 0,
+                    background: 'linear-gradient(135deg, #2dd4bf, #a78bfa)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 8, fontWeight: 800, color: '#fff',
+                    fontSize: planMode ? 10 : 8,
+                    fontWeight: 800, color: '#fff',
+                    animation: planMode
+                      ? 'mokkoi-avatar-glow 3.2s ease-in-out infinite'
+                      : undefined,
                   }}>
                     M
                   </div>
                 )}
-                <span style={{ fontSize: 11, color: '#555', fontWeight: 500 }}>
-                  {msg.role === 'user' ? 'You' : 'Mokkoi'}
-                </span>
+                {planMode && msg.role === 'assistant' ? (
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    background: 'linear-gradient(90deg, #2dd4bf, #a78bfa, #2dd4bf)',
+                    backgroundSize: '200% 100%',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                    animation: 'mokkoi-name-shift 6s linear infinite',
+                  }}>
+                    MOKKOI
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11, color: '#555', fontWeight: 500 }}>
+                    {msg.role === 'user' ? 'You' : 'Mokkoi'}
+                  </span>
+                )}
+                {planMode && (
+                  <span style={{
+                    fontSize: 10,
+                    color: 'rgba(148,163,184,0.5)',
+                    fontWeight: 400,
+                    marginLeft: 4,
+                  }}>
+                    {formatTimestamp(msg.timestamp)}
+                  </span>
+                )}
               </div>
 
-              {/* Message content — no background */}
+              {/* Message content — gradient bubble in plan mode, plain in build. */}
               <div style={{
-                maxWidth: '90%',
+                maxWidth: planMode ? '92%' : '90%',
                 fontSize: 13,
                 lineHeight: 1.6,
                 color: msg.content.startsWith('Error:') ? '#f87171' : '#e2e8f0',
+                ...(planMode && msg.role === 'assistant' && !msg.content.startsWith('Error:') ? {
+                  // Gradient-bordered bubble for Mokkoi in plan mode
+                  padding: '12px 14px',
+                  borderRadius: '16px 16px 16px 4px',
+                  background:
+                    'linear-gradient(rgba(15,15,15,1), rgba(15,15,15,1)) padding-box,' +
+                    ' linear-gradient(135deg, rgba(45,212,191,0.55), rgba(167,139,250,0.55)) border-box',
+                  border: '1px solid transparent',
+                  position: 'relative' as const,
+                  overflow: 'hidden' as const,
+                } : {}),
+                ...(planMode && msg.role === 'user' ? {
+                  // Tinted right-leaning bubble for user in plan mode
+                  padding: '10px 14px',
+                  borderRadius: '16px 16px 4px 16px',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                } : {}),
               }}>
+                {/* Subtle shimmer sweep across Mokkoi bubbles in plan mode.
+                    7s loop — slow enough to feel premium, not jittery. */}
+                {planMode && msg.role === 'assistant' && !msg.content.startsWith('Error:') && (
+                  <div
+                    aria-hidden
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.04) 50%, transparent 70%)',
+                      animation: 'mokkoi-bubble-shine 7s ease-in-out infinite',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
                 {/* Show attached image thumbnail in user messages */}
                 {msg.imageData && (
                   <div style={{ marginBottom: 8 }}>
@@ -522,17 +638,10 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   )
                 })()}
 
-                {/* Model indicator */}
-                {msg.role === 'assistant' && msg.modelUsed && !msg.content.startsWith('Error:') && (
-                  <div style={{
-                    fontSize: 10,
-                    color: 'rgba(255,255,255,0.3)',
-                    fontStyle: 'italic',
-                    marginTop: 4,
-                  }}>
-                    via {msg.modelUsed}
-                  </div>
-                )}
+                {/* Model indicator removed — felt dev-toolish ("via Haiku" /
+                    "via Sonnet" exposed implementation detail to end users).
+                    Keep the modelUsed field on ChatMessage for telemetry; just
+                    don't render it. */}
 
                 {/* Flow screen names as clickable links */}
                 {msg.flowScreenNames && msg.flowScreenNames.length > 0 && (
@@ -634,6 +743,74 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             </div>
           )
         })()}
+
+        {/* Inline-featured Build card — appears as a "Suggested next step"
+            below the latest Mokkoi message once readyToBuildLatched fires.
+            Replaces the old persistent header button. User scrolls naturally
+            to the bottom of the conversation and finds this prominent
+            affordance. Pattern borrowed from Rocket's "Suggested next step"
+            cards. */}
+        {planMode && onBuildFromPlan && readyToBuildLatched && !isGenerating && (
+          <div
+            style={{
+              marginTop: 4,
+              padding: 14,
+              borderRadius: 14,
+              background:
+                'linear-gradient(rgba(13,13,13,1), rgba(13,13,13,1)) padding-box,' +
+                ' linear-gradient(135deg, rgba(45,212,191,0.55), rgba(167,139,250,0.55)) border-box',
+              border: '1px solid transparent',
+              boxShadow: '0 0 24px -8px rgba(45,212,191,0.35)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              animation: 'mokkoi-build-card-in 320ms ease-out',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                color: 'rgba(94,234,212,0.85)',
+              }}
+            >
+              ✨ Suggested next step
+            </div>
+            <div style={{ fontSize: 13, lineHeight: 1.5, color: '#e2e8f0' }}>
+              I have everything I need to start building. Want to ship it?
+            </div>
+            <button
+              type="button"
+              onClick={onBuildFromPlan}
+              style={{
+                padding: '10px 14px',
+                borderRadius: 10,
+                border: 'none',
+                background: 'linear-gradient(135deg, #2dd4bf, #a78bfa)',
+                color: '#001a1f',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                transition: 'transform 0.18s, box-shadow 0.18s',
+                boxShadow: '0 4px 16px -4px rgba(45,212,191,0.55)',
+                animation: 'mokkoi-buildbtn-pulse 2.4s ease-in-out infinite',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-1px)'
+                e.currentTarget.style.boxShadow = '0 8px 22px -4px rgba(45,212,191,0.7)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 4px 16px -4px rgba(45,212,191,0.55)'
+              }}
+            >
+              Build my app →
+            </button>
+          </div>
+        )}
 
         {/* Multi-step generating indicator with streaming text */}
         {isGenerating && (
