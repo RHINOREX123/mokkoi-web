@@ -390,7 +390,7 @@ function expandProfileStats(props: { stats?: Array<{ value: string; label: strin
 // FORM & INPUT
 // =============================================
 
-function expandFormInput(props: { label?: string; placeholder?: string; secureTextEntry?: boolean; error?: string; icon?: string }): any {
+function expandFormInput(props: { label?: string; placeholder?: string; secureTextEntry?: boolean; error?: string; icon?: string; id?: string; action?: string }): any {
   const children: any[] = []
   if (props.label) {
     children.push({ type: 'Text', style: { fontSize: 13, fontWeight: '500', color: TEXT_SECONDARY, marginBottom: 6 }, children: [props.label] })
@@ -399,10 +399,18 @@ function expandFormInput(props: { label?: string; placeholder?: string; secureTe
   if (props.icon) {
     inputChildren.push({ type: 'Icon', props: { name: props.icon, size: 18, color: TEXT_TERTIARY }, style: { marginRight: 8 } })
   }
+  // Thread through `id` (e.g. "email", "password") and `action` props so the
+  // exporter can wire useState bindings to TextInputs by id. Track B BYO-Backend.
   inputChildren.push({
     type: 'TextInput',
     style: { flex: 1, fontSize: 16, color: TEXT_PRIMARY },
-    props: { placeholder: props.placeholder || '', placeholderTextColor: TEXT_TERTIARY, ...(props.secureTextEntry ? { secureTextEntry: true } : {}) },
+    props: {
+      placeholder: props.placeholder || '',
+      placeholderTextColor: TEXT_TERTIARY,
+      ...(props.secureTextEntry ? { secureTextEntry: true } : {}),
+      ...(props.id ? { id: props.id } : {}),
+      ...(props.action ? { action: props.action } : {}),
+    },
   })
   children.push({
     type: 'View',
@@ -415,7 +423,7 @@ function expandFormInput(props: { label?: string; placeholder?: string; secureTe
   return { type: 'View', style: { marginBottom: 12 }, children }
 }
 
-function expandButton(props: { text?: string; variant?: 'primary' | 'secondary' | 'outline'; size?: 'sm' | 'md' | 'lg'; icon?: string; color?: string }): any {
+function expandButton(props: { text?: string; variant?: 'primary' | 'secondary' | 'outline'; size?: 'sm' | 'md' | 'lg'; icon?: string; color?: string; id?: string; action?: string }): any {
   const variant = props.variant || 'primary'
   const size = props.size || 'md'
   const color = props.color || ACCENT
@@ -430,9 +438,15 @@ function expandButton(props: { text?: string; variant?: 'primary' | 'secondary' 
   const children: any[] = []
   if (props.icon) children.push({ type: 'Icon', props: { name: props.icon, size: fontSizes[size], color: textColors[variant] }, style: { marginRight: 8 } })
   children.push({ type: 'Text', style: { fontSize: fontSizes[size], fontWeight: '600', color: textColors[variant] }, children: [props.text || 'Button'] })
+  // Thread through `id` and `action` so the exporter can wire onPress handlers
+  // (auth.signInWithPassword, etc.) to the right button. Track B BYO-Backend.
+  const buttonProps: Record<string, unknown> = {}
+  if (props.id) buttonProps.id = props.id
+  if (props.action) buttonProps.action = props.action
   return {
     type: 'TouchableOpacity',
     style: { height: heights[size], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, ...styles[variant] },
+    ...(Object.keys(buttonProps).length > 0 ? { props: buttonProps } : {}),
     children,
   }
 }
