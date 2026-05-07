@@ -4,6 +4,8 @@ import { ScreenRenderer } from './ScreenRenderer'
 import { convertTreeToTSX } from '../utils/exportTsx'
 import { useUserPlan } from '../hooks/useUserPlan'
 import ChipRow from './ChipRow'
+import { VoiceMicButton } from './VoiceMicButton'
+import { getAuthHeaders } from '../lib/authHeaders'
 
 export interface PlanExtracted {
   domain: string | null
@@ -16,7 +18,7 @@ export interface PlanExtracted {
 export interface PlanMessageMetadata {
   /** Suggested 2-3 reply chips emitted by the Haiku planner */
   chips?: string[]
-  /** Latest extracted snapshot — drives <PlanSummaryCard> */
+  /** Latest extracted snapshot ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â drives <PlanSummaryCard> */
   extracted?: PlanExtracted
   /** When true, planner has enough info to build */
   ready_to_build?: boolean
@@ -70,7 +72,7 @@ interface ChatPanelProps {
   focusTrigger?: number
   /** Callback to cancel in-progress generation */
   onStopGenerating?: () => void
-  /** App generation phase (planning → generating) */
+  /** App generation phase (planning ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ generating) */
   appPhase?: 'idle' | 'planning' | 'generating'
   /** App generation progress (current/total screens) */
   appProgress?: { current: number; total: number } | null
@@ -79,12 +81,12 @@ interface ChatPanelProps {
    *  button in the chat header, and (when chips are present on the latest
    *  assistant message) renders ChipRow under it. */
   planMode?: boolean
-  /** Plan-mode message handler — POST /api/plan-conversation. Required when
+  /** Plan-mode message handler ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â POST /api/plan-conversation. Required when
    *  planMode is true; ignored otherwise. */
   onPlanSend?: (userMessage: string) => void
   /** Sticky once Haiku emits ready_to_build:true; drives Build CTA glow. */
   readyToBuildLatched?: boolean
-  /** Click handler for the Plan-mode Build button — feeds the latest summary
+  /** Click handler for the Plan-mode Build button ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â feeds the latest summary
    *  into the build pipeline via handleSend(summary, ..., forceAppMode:true).
    *  Receives any images the user attached during the planning conversation
    *  (or from the dashboard's Camera button via initialImages). Build pipeline
@@ -93,21 +95,21 @@ interface ChatPanelProps {
   /** Whether the latest planning turn is in flight (drives chip disabled state). */
   planInflight?: boolean
   /** True when a server-side generation is running but this client did not
-   *  start it — i.e., we navigated back to a project mid-stream, or this is
-   *  a second tab observing live progress. Drives the "Resuming generation…"
+   *  start it ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â i.e., we navigated back to a project mid-stream, or this is
+   *  a second tab observing live progress. Drives the "Resuming generationÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦"
    *  indicator above the regular generating UI. */
   resumingRun?: boolean
 }
 
 const PLACEHOLDERS = [
-  'Ask Mokkoi…',
+  'Ask MokkoiÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦',
 ]
 
 /** Human-readable timestamp under message labels in plan mode.
  *  - <1min: "now"
  *  - <60min: "5 min ago"
  *  - <24h:   "2:13 PM"
- *  - older:  "May 7 · 2:13 PM"
+ *  - older:  "May 7 Ãƒâ€šÃ‚Â· 2:13 PM"
  *  Pattern adapted from Rocket's chat panel. */
 function formatTimestamp(ts: number): string {
   const now = Date.now()
@@ -118,7 +120,7 @@ function formatTimestamp(ts: number): string {
   const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   if (diffMs < 24 * 60 * 60_000) return time
   const monthDay = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-  return `${monthDay} · ${time}`
+  return `${monthDay} Ãƒâ€šÃ‚Â· ${time}`
 }
 
 // (V1's EXAMPLE_CARDS \u2014 Fitness Dashboard / Login Screen / Chat Interface /
@@ -143,7 +145,7 @@ const GENERATING_STEPS = [
 ]
 
 export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight, resumingRun }: ChatPanelProps) {
-  // Plan-mode banner — dismissible, local state only. App.tsx strips the
+  // Plan-mode banner ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â dismissible, local state only. App.tsx strips the
   // ?mode=plan param on mount, so a refresh does NOT re-show the banner;
   // dismiss is effectively per-page-load. That's intentional: the banner is
   // a one-time announcement of the user's mode choice, not a persistent
@@ -153,7 +155,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
   const [placeholderVisible, setPlaceholderVisible] = useState(true)
   const [genStep, setGenStep] = useState(0)
-  // Multi-image attachment in the chat input. Up to MAX_IMAGES — matches the
+  // Multi-image attachment in the chat input. Up to MAX_IMAGES ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â matches the
   // dashboard PromptCard's Camera button behavior. Tapping the paperclip
   // multiple times APPENDS rather than REPLACES; user can also remove
   // individual thumbnails before sending.
@@ -214,7 +216,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     return () => window.removeEventListener('mokkoi-set-chat-input', handler)
   }, [])
 
-  // Handle initial prompt from URL — only for NEW projects (no existing screens)
+  // Handle initial prompt from URL ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only for NEW projects (no existing screens)
   // MUST wait for screensLoaded to avoid race condition: hasScreens is false before
   // Supabase fetch completes, which would incorrectly trigger generation on existing projects.
   const onSendRef = useRef(onSend)
@@ -232,7 +234,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
       //
       // Images attached on the dashboard (via Camera button) get held in the
       // chat-input attachedImages state instead of immediately dispatched.
-      // Haiku is text-only, so images don't reach the planner — they ride
+      // Haiku is text-only, so images don't reach the planner ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â they ride
       // through to the build step when user clicks "Build my app". The chat
       // input shows them as thumbnails so the user knows they're queued.
       if (planMode && onPlanSendRef.current) {
@@ -262,7 +264,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     if ((!prompt && !hasAttached) || isGenerating) return
     setInput('')
     // Plan mode: route free-text to /api/plan-conversation. Haiku is text-only,
-    // so attached images don't reach the planner — but they're held in state
+    // so attached images don't reach the planner ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â but they're held in state
     // and ride through to the build step when user clicks "Build my app".
     if (planMode && onPlanSend && !hasAttached) {
       onPlanSend(prompt)
@@ -273,6 +275,23 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
       : undefined
     setAttachedImages([])
     onSend(prompt, wrapped)
+  }
+
+  // Voice transcription bypass: skip the input field, send straight to
+  // the same pipeline handleSend uses. Mirrors handleSend's mode-routing
+  // (plan vs build) so voice has identical semantics to typed prompts.
+  const handleVoiceTranscribed = (text: string) => {
+    if (!text.trim() || isGenerating) return
+    const hasAttached = attachedImages.length > 0
+    if (planMode && onPlanSend && !hasAttached) {
+      onPlanSend(text.trim())
+      return
+    }
+    const wrapped = hasAttached
+      ? attachedImages.map(img => ({ data: img.data, mimeType: img.mediaType }))
+      : undefined
+    setAttachedImages([])
+    onSend(text.trim(), wrapped)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -327,7 +346,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
     onSend(s)
   }
 
-  // Check if the last message is an assistant (non-error) message — show suggestions.
+  // Check if the last message is an assistant (non-error) message ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â show suggestions.
   // In plan mode, the per-message Haiku chips replace these generic edit-screen
   // suggestions ("Make it darker", "Copy as TSX", etc.); suppress them.
   const lastMsg = messages[messages.length - 1]
@@ -391,7 +410,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
         flexDirection: 'column',
         gap: 16,
       }}>
-        {/* Plan-mode banner — purely informational. The generation pipeline
+        {/* Plan-mode banner ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â purely informational. The generation pipeline
             doesn't yet behave differently in Plan mode (that's the future
             conversational-intent task); this banner exists so the surface
             matches the user's expectation that they're in Plan mode. */}
@@ -446,12 +465,12 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 flexShrink: 0,
               }}
             >
-              ×
+              ÃƒÆ’Ã¢â‚¬â€
             </button>
           </div>
         )}
 
-        {/* Plan-mode skip-ahead link — small, unobtrusive, top of panel.
+        {/* Plan-mode skip-ahead link ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â small, unobtrusive, top of panel.
             Only appears at turn 4+ (substantial conversation underway) AND
             before ready_to_build fires. Once Mokkoi flags ready, the inline
             featured Build card below the latest message takes over.
@@ -489,11 +508,11 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               e.currentTarget.style.color = 'rgba(255,255,255,0.55)'
             }}
           >
-            Build now →
+            Build now ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
           </button>
         )}
 
-        {/* Empty state — quiet hint, no generic template buttons. The user
+        {/* Empty state ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â quiet hint, no generic template buttons. The user
             most often lands here with a prompt already in the URL from the
             dashboard, which immediately starts generation. The empty state
             only shows on truly-blank projects. */}
@@ -523,7 +542,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               lineHeight: 1.55,
               maxWidth: 320,
             }}>
-              Describe your app below — the more specific you are about screens
+              Describe your app below ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the more specific you are about screens
               and the user, the better Mokkoi can shape the first build.
             </div>
           </div>
@@ -542,7 +561,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
               animation: planMode ? 'mokkoi-msg-in 280ms ease-out' : undefined,
             }}>
-              {/* Label row — for plan mode, add timestamp; assistant gets
+              {/* Label row ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â for plan mode, add timestamp; assistant gets
                   pulse glow on the avatar and gradient-shift on the name. */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -596,7 +615,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 )}
               </div>
 
-              {/* Message content — gradient bubble in plan mode, plain in build. */}
+              {/* Message content ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gradient bubble in plan mode, plain in build. */}
               <div style={{
                 maxWidth: planMode ? '92%' : '90%',
                 fontSize: 13,
@@ -622,7 +641,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 } : {}),
               }}>
                 {/* Subtle shimmer sweep across Mokkoi bubbles in plan mode.
-                    7s loop — slow enough to feel premium, not jittery. */}
+                    7s loop ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â slow enough to feel premium, not jittery. */}
                 {planMode && msg.role === 'assistant' && !msg.content.startsWith('Error:') && (
                   <div
                     aria-hidden
@@ -679,7 +698,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   )
                 })()}
 
-                {/* Model indicator removed — felt dev-toolish ("via Haiku" /
+                {/* Model indicator removed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â felt dev-toolish ("via Haiku" /
                     "via Sonnet" exposed implementation detail to end users).
                     Keep the modelUsed field on ChatMessage for telemetry; just
                     don't render it. */}
@@ -756,9 +775,9 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
           </div>
         ))}
 
-        {/* Plan-mode chips — render under the latest assistant message that
+        {/* Plan-mode chips ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â render under the latest assistant message that
             has chip suggestions. Only shown when planMode is active and the
-            user is mid-conversation. Chips are SUGGESTIONS, not constraints —
+            user is mid-conversation. Chips are SUGGESTIONS, not constraints ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
             free text always works via the input below. */}
         {planMode && onPlanSend && (() => {
           // Latest assistant message with chips. Earlier turns' chips are
@@ -772,7 +791,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             }
           }
           if (!latestChipMsg) return null
-          // Hide chips once Build is the natural next action — keep input free.
+          // Hide chips once Build is the natural next action ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â keep input free.
           if (readyToBuildLatched) return null
           return (
             <div style={{ marginTop: -4, marginLeft: 24 }}>
@@ -785,7 +804,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
           )
         })()}
 
-        {/* Inline-featured Build card — appears as a "Suggested next step"
+        {/* Inline-featured Build card ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â appears as a "Suggested next step"
             below the latest Mokkoi message once readyToBuildLatched fires.
             Replaces the old persistent header button. User scrolls naturally
             to the bottom of the conversation and finds this prominent
@@ -817,7 +836,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 color: 'rgba(94,234,212,0.85)',
               }}
             >
-              ✨ Suggested next step
+              ÃƒÂ¢Ã…â€œÃ‚Â¨ Suggested next step
             </div>
             <div style={{ fontSize: 13, lineHeight: 1.5, color: '#e2e8f0' }}>
               I have everything I need to start building. Want to ship it?
@@ -852,7 +871,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 e.currentTarget.style.boxShadow = '0 4px 16px -4px rgba(45,212,191,0.55)'
               }}
             >
-              Build my app →
+              Build my app ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
             </button>
           </div>
         )}
@@ -911,7 +930,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 </div>
               </div>
             ) : appPhase && appPhase !== 'idle' ? (
-              /* App generation progress (planning → generating screens) */
+              /* App generation progress (planning ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ generating screens) */
               <div style={{
                 display: 'flex', flexDirection: 'column', gap: 8,
                 minWidth: 200,
@@ -1112,7 +1131,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
             )}
           </div>
         )}
-        {/* Attached images preview — supports up to MAX_IMAGES thumbnails.
+        {/* Attached images preview ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â supports up to MAX_IMAGES thumbnails.
             Each has its own remove button. The paperclip button below appends
             to this row up to the cap. Plan mode also routes images here from
             the dashboard via `initialImages`. */}
@@ -1172,7 +1191,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                     placeItems: 'center',
                   }}
                 >
-                  ×
+                  ÃƒÆ’Ã¢â‚¬â€
                 </button>
               </div>
             ))}
@@ -1184,12 +1203,12 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               padding: '0 4px',
             }}>
               {attachedImages.length} of {MAX_IMAGES} attached
-              {planMode && ' · used as visual reference at build'}
+              {planMode && ' Ãƒâ€šÃ‚Â· used as visual reference at build'}
             </div>
           </div>
         )}
 
-        {/* Ask Mokkoi header — sits just above the input bar so users see what
+        {/* Ask Mokkoi header ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sits just above the input bar so users see what
             this box does at a glance. The branded verb keeps Mokkoi front-of-mind. */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
@@ -1231,6 +1250,15 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 <path d="M8 3.5v9M3.5 8h9" />
               </svg>
             </button>
+
+            {/* Voice input — premium magic flow: tap, speak, silence auto-stops, transcribe, send.
+                No transcribed text shown; goes straight to handleVoiceTranscribed which mirrors handleSend's routing. */}
+            <VoiceMicButton
+              size="compact"
+              disabled={isGenerating}
+              getAuthHeaders={getAuthHeaders}
+              onTranscribed={handleVoiceTranscribed}
+            />
 
             <div className="flex-1 relative">
               <input

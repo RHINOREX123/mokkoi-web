@@ -1,10 +1,12 @@
 import { useRef, type CSSProperties, type KeyboardEvent } from 'react'
 import { ArrowUp, Camera, X } from 'lucide-react'
+import { VoiceMicButton } from '../VoiceMicButton'
+import { getAuthHeaders } from '../../lib/authHeaders'
 
 export type SubmitMode = 'build' | 'plan'
 
 /** Hard cap on how many reference images a single prompt can attach.
- *  4 is the product call — pairs with the Anthropic multimodal limit we
+ *  4 is the product call Ã¢â‚¬â€ pairs with the Anthropic multimodal limit we
  *  set on the API side and stays cheap to render as inline chips. */
 export const MAX_ATTACHED_IMAGES = 4
 const MAX_FILE_BYTES = 5 * 1024 * 1024
@@ -19,7 +21,7 @@ export interface AttachedImage {
 export interface PromptCardProps {
   value: string
   onChange: (next: string) => void
-  /** Called when the user submits — Enter (without shift) or clicks Send. */
+  /** Called when the user submits Ã¢â‚¬â€ Enter (without shift) or clicks Send. */
   onSubmit: (mode: SubmitMode) => void
   /** Disable input + send (used during the brief 'submitted' state). */
   disabled?: boolean
@@ -31,19 +33,22 @@ export interface PromptCardProps {
    *  Owned by the parent (Dashboard) so the same array can be handed off to
    *  the project page via sessionStorage on submit. */
   attachedImages?: AttachedImage[]
-  /** Setter for the attached images list. Receives the next array — the
+  /** Setter for the attached images list. Receives the next array Ã¢â‚¬â€ the
    *  parent decides whether to enforce the cap (we also enforce it in the
    *  file picker for safety). Pass [] to clear. */
   onAttachImagesChange?: (next: AttachedImage[]) => void
+  /** Voice flow: receives the transcribed text and submits directly,
+   *  bypassing the textarea. Keeps the magic flow (no flash of words). */
+  onVoiceSubmit?: (text: string) => void
 }
 
 /**
- * PromptCard — the central input card on the V2 dashboard.
+ * PromptCard Ã¢â‚¬â€ the central input card on the V2 dashboard.
  *
  * - Glassmorphic surface over the hero atmosphere
  * - Animated holographic conic-gradient border (slow rotation)
  * - Multi-line textarea, Enter submits / Shift+Enter newlines
- * - Bottom-left: Camera icon → opens native file picker, attaches up to 4
+ * - Bottom-left: Camera icon Ã¢â€ â€™ opens native file picker, attaches up to 4
  *   reference images inline as a thumbnail strip above the textarea
  *   (X to remove individual)
  * - Bottom-right: Plan / Build segmented toggle + Send button
@@ -52,7 +57,7 @@ export interface PromptCardProps {
  * "From a screenshot" mode card was removed in favor of consolidating into
  * one paradigm: "your prompt + reference images".
  *
- * Spec: docs/superpowers/specs/2026-05-06-dashboard-redesign.md (§4, §8)
+ * Spec: docs/superpowers/specs/2026-05-06-dashboard-redesign.md (Ã‚Â§4, Ã‚Â§8)
  */
 export function PromptCard({
   value,
@@ -63,6 +68,7 @@ export function PromptCard({
   onModeChange,
   attachedImages = [],
   onAttachImagesChange,
+  onVoiceSubmit,
 }: PromptCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -75,7 +81,7 @@ export function PromptCard({
   }
 
   // The Camera icon opens the native file picker directly. No modal in the
-  // way — that's the differentiator from the in-chat ScreenshotModal.
+  // way Ã¢â‚¬â€ that's the differentiator from the in-chat ScreenshotModal.
   const handleCameraClick = () => {
     fileInputRef.current?.click()
   }
@@ -172,7 +178,7 @@ export function PromptCard({
         }}
       />
 
-      {/* Hidden file input — clicked programmatically by the Camera icon.
+      {/* Hidden file input Ã¢â‚¬â€ clicked programmatically by the Camera icon.
           `multiple` lets the user pick several at once; we still cap on
           intake so the cap is enforced regardless of how the OS picker
           behaves. */}
@@ -230,11 +236,11 @@ export function PromptCard({
         placeholder={
           hasImages
             ? mode === 'plan'
-              ? "Tell me about your idea + these images — we'll plan it together…"
-              : "Describe what to build with these images…"
+              ? "Tell me about your idea + these images Ã¢â‚¬â€ we'll plan it togetherÃ¢â‚¬Â¦"
+              : "Describe what to build with these imagesÃ¢â‚¬Â¦"
             : mode === 'plan'
-              ? "Tell me about your idea — we'll plan it together. I'll ask clarifying questions before building…"
-              : "Let's build — describe your app, paste a screenshot, or import a Figma file…"
+              ? "Tell me about your idea Ã¢â‚¬â€ we'll plan it together. I'll ask clarifying questions before buildingÃ¢â‚¬Â¦"
+              : "Let's build Ã¢â‚¬â€ describe your app, paste a screenshot, or import a Figma fileÃ¢â‚¬Â¦"
         }
         aria-label="App prompt"
         style={{
@@ -275,6 +281,14 @@ export function PromptCard({
         >
           <Camera size={16} />
         </IconBtn>
+        {onVoiceSubmit && (
+          <VoiceMicButton
+            size="regular"
+            disabled={disabled}
+            getAuthHeaders={getAuthHeaders}
+            onTranscribed={onVoiceSubmit}
+          />
+        )}
       </div>
 
       {/* Bottom-right: Plan/Build toggle + send */}
@@ -293,7 +307,7 @@ export function PromptCard({
           type="button"
           onClick={() => canSubmit && onSubmit(mode)}
           disabled={!canSubmit}
-          aria-label={`Submit prompt — ${mode} mode`}
+          aria-label={`Submit prompt Ã¢â‚¬â€ ${mode} mode`}
           style={{
             width: 36,
             height: 36,

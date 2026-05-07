@@ -39,7 +39,7 @@ const SUGGESTION_CHIPS = [
   'A food delivery app',
 ]
 
-// (V1's GRADIENT_PAIRS + hashString are gone — sidebar items now use
+// (V1's GRADIENT_PAIRS + hashString are gone ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sidebar items now use
 //  PhoneThumbnail's calm-pulse fallback, no per-name gradient needed.)
 
 function formatDate(dateStr: string): string {
@@ -119,7 +119,7 @@ export default function Dashboard() {
   useEffect(() => {
     const sb = supabase
     if (!sb) {
-      // Without supabase the dashboard has nothing to load — flip the loading
+      // Without supabase the dashboard has nothing to load ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â flip the loading
       // gate off so the hero still renders (otherwise opacity stays at 0
       // forever and the page looks blank).
       setLoading(false)
@@ -189,16 +189,20 @@ export default function Dashboard() {
 
   /**
    * Submit the prompt. Drives the SUBMITTED state of SignalsHUD for ~700ms
-   * before navigating, so the user gets the "analysis complete" beat — the
+   * before navigating, so the user gets the "analysis complete" beat ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the
    * brief check-mark moment that ties the dashboard's coaching into the
    * generation page.
    *
    * Plan auto-suggest: if the user clicks Send in Build mode but their
    * prompt's clarity score is < 50, we offer to switch to Plan mode (a
-   * discuss-first chat). Dismissed once → don't ask again this session.
+   * discuss-first chat). Dismissed once ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ don't ask again this session.
    */
-  const submitWithMode = async (mode: SubmitMode) => {
-    if (!prompt.trim() || isSubmitting) return
+  // textOverride lets the voice flow submit without ever putting the
+  // transcribed string into the prompt input Ã¢â‚¬â€ keeps the UX magical (user
+  // never sees the words appear and disappear).
+  const submitWithMode = async (mode: SubmitMode, textOverride?: string) => {
+    const text = (textOverride ?? prompt).trim()
+    if (!text || isSubmitting) return
     setIsSubmitting(true)
     setHudState('submitted')
 
@@ -208,7 +212,7 @@ export default function Dashboard() {
 
     const { data } = await supabase
       .from('projects')
-      .insert({ user_id: u.id, name: prompt.trim().slice(0, 30) })
+      .insert({ user_id: u.id, name: text.slice(0, 30) })
       .select().single()
 
     if (data) {
@@ -238,7 +242,7 @@ export default function Dashboard() {
 
       // Brief hold so the SUBMITTED HUD state is visible before nav.
       setTimeout(() => {
-        const params = new URLSearchParams({ prompt: prompt.trim() })
+        const params = new URLSearchParams({ prompt: text })
         if (mode === 'plan') params.set('mode', 'plan')
         navigate(`/app/${data.id}?${params.toString()}`)
       }, 700)
@@ -246,6 +250,26 @@ export default function Dashboard() {
       setIsSubmitting(false)
       setHudState(undefined)
     }
+  }
+
+  // Voice flow â€” same gate logic as keyboard submit (paywall for free
+  // user in plan mode, low-clarity auto-suggest for build) but the text
+  // comes from Whisper instead of the input field. Bypasses setPrompt so
+  // the user never sees their words flash on screen.
+  const handleVoiceSubmit = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || isSubmitting) return
+    if (submitMode === 'plan' && userPlanState.plan === 'free') {
+      try {
+        sessionStorage.setItem(
+          'mokkoi.pendingPlanPrompt',
+          JSON.stringify({ prompt: trimmed, mode: 'plan' }),
+        )
+      } catch { /* ignore */ }
+      setShowPaywallModal(true)
+      return
+    }
+    submitWithMode(submitMode, trimmed)
   }
 
   const handleSubmitPrompt = (mode: SubmitMode = submitMode) => {
@@ -259,7 +283,7 @@ export default function Dashboard() {
           'mokkoi.pendingPlanPrompt',
           JSON.stringify({ prompt: prompt.trim(), mode: 'plan' }),
         )
-      } catch { /* private mode / quota — ignore */ }
+      } catch { /* private mode / quota ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â ignore */ }
       setShowPaywallModal(true)
       return
     }
@@ -277,7 +301,7 @@ export default function Dashboard() {
   }
 
   // Plan-mode toggle gate: free users get paywall on tap, no state change.
-  // No "Pro" pill on the toggle itself — the paywall is the discoverability
+  // No "Pro" pill on the toggle itself ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the paywall is the discoverability
   // signal, per the spec's UX decision.
   const handleModeChange = (next: SubmitMode) => {
     if (next === 'plan' && userPlanState.plan === 'free') {
@@ -318,7 +342,7 @@ export default function Dashboard() {
    * (which assumes a project context: ai.handleSend, screen list, etc.)
    * without duplicating its logic on the dashboard. Untitled projects get
    * cleaned up by maybeCleanupOrphanProject in App.tsx if the user cancels
-   * the modal without committing — see Phase B.
+   * the modal without committing ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â see Phase B.
    *
    * Screenshot was previously a third mode card; it's been consolidated
    * into the Camera button on the prompt card (multi-image up to 4),
@@ -340,7 +364,7 @@ export default function Dashboard() {
       trackEvent('dashboard_mode_card', { mode })
       navigate(`/app/${data.id}?openModal=${mode}`)
     } else {
-      setToastMessage('Could not start a new project — try again')
+      setToastMessage('Could not start a new project ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try again')
     }
   }
 
@@ -368,7 +392,7 @@ export default function Dashboard() {
     setProjects(prev => prev.filter(p => p.id !== id))
     setImportProjects(prev => prev.filter(p => p.id !== id))
     // Use count: 'exact' so we can detect silent RLS blocks. supabase-js
-    // returns no error when RLS prevents the delete — only count=0 reveals it.
+    // returns no error when RLS prevents the delete ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only count=0 reveals it.
     // Without this check the row "deletes" optimistically then comes back on
     // the next loadProjects() refresh. Same defensive pattern applies to any
     // delete-via-RLS path.
@@ -383,7 +407,7 @@ export default function Dashboard() {
       setToastMessage(
         error
           ? `Failed to delete: ${error.message}`
-          : `Couldn't delete this project — you may not have permission. Please refresh and try again.`,
+          : `Couldn't delete this project ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â you may not have permission. Please refresh and try again.`,
       )
     }
   }
@@ -461,7 +485,7 @@ export default function Dashboard() {
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
         >
-          {/* Phone-frame thumbnail (sm). Calm-pulse fallback is intentional —
+          {/* Phone-frame thumbnail (sm). Calm-pulse fallback is intentional ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
               fetching the first-screen tree for every sidebar item is not
               free at 50+ projects, so v1 keeps the sidebar list fast and
               reserves real ScreenRenderer previews for the dashboard cards.
@@ -546,7 +570,7 @@ export default function Dashboard() {
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
             ><Copy size={13} /> Duplicate</button>
-            {/* Toggle favourites — same useFavorites hook the dashboard
+            {/* Toggle favourites ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â same useFavorites hook the dashboard
                 recents strip uses, so the state stays in sync. Label flips
                 between "Add to favourites" / "Remove from favourites". */}
             <button onClick={() => { toggleFavorite(project.id); setMenuOpen(null) }}
@@ -662,7 +686,7 @@ export default function Dashboard() {
       >
         <FolderOpen size={18} /> My Projects
       </button>
-      {/* Favourites tab — locally-favorited projects (localStorage). The
+      {/* Favourites tab ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â locally-favorited projects (localStorage). The
           set is shared with the dashboard recents strip via useFavorites,
           so starring a card from the dashboard immediately appears here. */}
       <button onClick={() => setActiveTab('favourites')} style={{
@@ -698,7 +722,7 @@ export default function Dashboard() {
       >
         <Download size={18} /> Imports
       </button>
-      {/* Shared with me — functional placeholder. The empty-state copy in
+      {/* Shared with me ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â functional placeholder. The empty-state copy in
           renderGroupedProjects explains what users will see here once the
           real sharing flow ships. Tapping the tab still works (selects it,
           shows the empty state) instead of toasting "coming soon". */}
@@ -769,7 +793,7 @@ export default function Dashboard() {
         background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
         position: 'sticky', top: 0, zIndex: 50, flexShrink: 0,
       }}>
-        {/* Hamburger menu — always visible, opens sidebar overlay */}
+        {/* Hamburger menu ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â always visible, opens sidebar overlay */}
         <button
           onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
           style={{
@@ -856,7 +880,7 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      {/* Sidebar overlay — always overlay-based, never persistent */}
+      {/* Sidebar overlay ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â always overlay-based, never persistent */}
       {mobileSidebarOpen && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 100,
@@ -878,7 +902,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Main content area — V2: hero + signals HUD + mode cards + recents.
+      {/* Main content area ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â V2: hero + signals HUD + mode cards + recents.
           DashboardHero owns the atmospheric background; we wrap it in a
           scrollable container so recents below scroll naturally with it. */}
       <div
@@ -900,6 +924,7 @@ export default function Dashboard() {
             value={prompt}
             onChange={setPrompt}
             onSubmit={handleSubmitPrompt}
+            onVoiceSubmit={handleVoiceSubmit}
             mode={submitMode}
             onModeChange={handleModeChange}
             disabled={isSubmitting}
@@ -917,7 +942,7 @@ export default function Dashboard() {
 
           <ModeCards onMode={handleModeCard} />
 
-          {/* Suggestion chips — first-time users only, kept from V1 since
+          {/* Suggestion chips ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â first-time users only, kept from V1 since
               they're a known good empty-state nudge. */}
           {!hasProjects && (
             <div
@@ -966,7 +991,7 @@ export default function Dashboard() {
           />
         </DashboardHero>
 
-        {/* Recent projects strip — only renders when user has projects. */}
+        {/* Recent projects strip ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only renders when user has projects. */}
         {!loading && (
           <RecentProjectsStrip
             projects={projects.map(p => ({
@@ -982,7 +1007,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Plan auto-suggest inline modal — fires when user clicks Send in
+      {/* Plan auto-suggest inline modal ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â fires when user clicks Send in
           Build mode but the prompt clarity is low (< 50). */}
       {planSuggest && (
         <div
@@ -1018,14 +1043,14 @@ export default function Dashboard() {
                 marginBottom: 8,
               }}
             >
-              ↳ PROMPT CLARITY {promptScore?.clarity ?? 0}
+              ÃƒÂ¢Ã¢â‚¬Â Ã‚Â³ PROMPT CLARITY {promptScore?.clarity ?? 0}
             </div>
             <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: 'var(--dash-text)' }}>
-              Your prompt is broad — want to plan it together first?
+              Your prompt is broad ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â want to plan it together first?
             </h3>
             <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--dash-text-2)', lineHeight: 1.5 }}>
               In Plan mode, Mokkoi asks a few clarifying questions before
-              generating — usually leads to a better first build. You can also
+              generating ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â usually leads to a better first build. You can also
               just build now and refine after.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -1050,7 +1075,7 @@ export default function Dashboard() {
                   fontSize: 13, fontWeight: 700, cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}
-              >Plan together →</button>
+              >Plan together ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢</button>
             </div>
           </div>
         </div>
