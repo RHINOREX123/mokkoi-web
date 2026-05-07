@@ -85,6 +85,12 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
   /** Flips true on the first frame above threshold. Auto-stop only fires
    *  after this â€” otherwise a quiet room kills recording before speech. */
   const hasSpeechDetectedRef = useRef<boolean>(false)
+  /** Flips true the first time any frame exceeds the 0.001 audio floor.
+   *  Stays false when the mic is OS-muted or routed to a dead device. */
+  const hasAnyAudioRef = useRef<boolean>(false)
+  /** Set in tick when we abort because the mic appears muted. onstop reads
+   *  this to surface 'mic_silent' instead of the generic 'no_speech'. */
+  const mutedAbortRef = useRef<boolean>(false)
   const startedAtRef = useRef<number>(0)
   const chunksRef = useRef<Blob[]>([])
   const mimeTypeRef = useRef<string>('')
@@ -177,6 +183,12 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
       cleanupAudioGraph()
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || 'audio/webm' })
       chunksRef.current = []
+      if (mutedAbortRef.current) {
+        mutedAbortRef.current = false
+        setState('idle')
+        setError('mic_silent')
+        return
+      }
       // Sub-second clips are usually accidental taps; bail out without
       // hitting the API.
       if (blob.size < 1024) {
@@ -239,6 +251,8 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
 
     silenceStartRef.current = 0
     hasSpeechDetectedRef.current = false
+    hasAnyAudioRef.current = false
+    mutedAbortRef.current = false
     startedAtRef.current = performance.now()
     setState('recording')
     recorder.start()
@@ -256,6 +270,18 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
       const now = performance.now()
       // Hard cap so a forgotten recording doesn't run forever.
       if (now - startedAtRef.current > maxDurationMs) {
+        stop()
+        return
+      }
+
+      // Track any audio above the noise floor (well below silenceThreshold).
+      // If we never see *any* signal in the first 4s, the mic is almost
+      // certainly muted at the OS level or routed to a dead input device.
+      // Bail out fast with a specific error rather than letting the user
+      // wait out the full maxDurationMs hard cap.
+      if (avg > 0.001) hasAnyAudioRef.current = true
+      if (!hasAnyAudioRef.current && now - startedAtRef.current > 4000) {
+        mutedAbortRef.current = true
         stop()
         return
       }

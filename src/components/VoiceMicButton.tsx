@@ -22,6 +22,7 @@ const ERROR_TEXT: Record<string, string> = {
   rate_limited: 'Too many voice prompts in a short window. Wait a minute and try again.',
   transcribe_failed: "Couldn't transcribe that — try again?",
   no_speech: "Didn't catch any speech. Try again.",
+  mic_silent: "We're not picking up any audio — check that your mic isn't muted in your OS settings or that Chrome has access to the right input device.",
 }
 
 /**
