@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mokkoi Chat Panel — Design Variants v2</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --bg-2: #111;
+    --border: rgba(255,255,255,0.08);
+    --border-2: rgba(255,255,255,0.14);
+    --text: #e2e8f0;
+    --text-2: #94a3b8;
+    --text-3: #64748b;
+    --teal: #2dd4bf;
+    --teal-2: #5eead4;
+    --cyan: #06b6d4;
+    --purple: #a78bfa;
+    --pink: #f472b6;
+    --orange: #fb923c;
+    --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    font-family: -apple-system, system-ui, 'DM Sans', sans-serif;
+    background: #050505;
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 32px 40px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 24px;
+    margin: 0 0 6px;
+    background: linear-gradient(135deg, var(--teal), var(--purple));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    width: fit-content;
+  }
+  header p { color: var(--text-2); margin: 0; font-size: 14px; max-width: 900px; }
+  header .lead {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(45,212,191,0.06);
+    border-left: 3px solid var(--teal);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--teal-2);
+    width: fit-content;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 20px;
+    padding: 24px 40px 40px;
+    max-width: 1800px;
+  }
+  .panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 720px;
+  }
+  .panel.lead {
+    border-color: rgba(45,212,191,0.4);
+    box-shadow: 0 0 28px -8px rgba(45,212,191,0.25);
+  }
+  .panel.lead .panel-head {
+    background: linear-gradient(90deg, rgba(45,212,191,0.10), transparent);
+  }
+  .panel-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .panel-head h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge-lead {
+    font-size: 10px;
+    padding: 2px 8px;
+    background: var(--teal);
+    color: #001a1f;
+    border-radius: 999px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+  }
+  .panel-head .blurb { color: var(--text-2); font-size: 12px; line-height: 1.5; }
+  .body {
+    flex: 1;
+    overflow: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .input {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    color: var(--text-3);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .input::before {
+    content: '+';
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-2);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+
+  .pill {
+    padding: 6px 12px;
+    border: 1px solid var(--border-2);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 140ms;
+  }
+  .pill:hover {
+    background: rgba(45,212,191,0.08);
+    border-color: rgba(45,212,191,0.35);
+    color: var(--teal-2);
+  }
+
+  /* Plan banner */
+  .plan-banner {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(167,139,250,0.08);
+    border: 1px solid rgba(167,139,250,0.28);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .plan-banner .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--purple);
+    box-shadow: 0 0 8px rgba(167,139,250,0.7);
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .plan-banner .title { font-weight: 600; color: #c4b5fd; }
+  .plan-banner .sub { color: var(--text-2); }
+
+  /* ───────── VARIANT A — minimal energetic ───────── */
+  .v-a .msg-mokkoi { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .v-a .label { display: flex; align-items: center; gap: 6px; }
+  .v-a .avatar {
+    width: 18px; height: 18px; border-radius: 5px;
+    background: linear-gradient(135deg, var(--teal), var(--cyan));
+    color: #fff; font-size: 8px; font-weight: 800;
+    display: grid; place-items: center;
+    animation: a-glow 2.4s ease-in-out infinite;
+  }
+  @keyframes a-glow {
+    0%,100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
+    50%     { box-shadow: 0 0 0 4px rgba(45,212,191,0.18); }
+  }
+  .v-a .name { font-size: 11px; color: var(--text-3); font-weight: 500; }
+  .v-a .bubble { font-size: 13px; line-height: 1.55; max-width: 88%; color: var(--text); animation: a-slidein 280ms ease-out; }
+  @keyframes a-slidein {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .v-a .bubble strong { color: var(--teal-2); font-weight: 600; }
+  .v-a .msg-user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, rgba(45,212,191,0.10), rgba(167,139,250,0.10));
+    border: 1px solid rgba(45,212,191,0.22);
+    padding: 8px 14px; border-radius: 14px;
+    font-size: 13px;
+    max-width: 80%;
+  }
+  .v-a .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; padding-left: 24px; }
+
+  /* ───────── VARIANT B — gradient bubbles ───────── */
+  .v-b .msg-mokkoi {
+    align-self: flex-start;
+    max-width: 88%;
+    padding: 14px 16px;
+    background:
+      linear-gradient(rgba(15,15,15,1), rgba(15,15,15,1)) padding-box,
+      linear-gradient(135deg, rgba(45,212,191,0.55), rgba(167,139,250,0.55)) border-box;
+    border: 1px solid transparent;
+    border-radius: 18px 18px 18px 4px;
+    animation: b-slidein 320ms ease-out;
+  }
+  @keyframes b-slidein {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .v-b .msg-mokkoi .name {
+    font-size: 11px;
+    background: linear-gradient(135deg, var(--teal), var(--purple));
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+  }
+  .v-b .msg-mokkoi .bubble { font-size: 13px; line-height: 1.55; color: var(--text); }
+  .v-b .msg-mokkoi .bubble em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--teal-2), var(--purple));
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; font-weight: 600;
+  }
+  .v-b .msg-user {
+    align-self: flex-end;
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 18px 18px 4px 18px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .v-b .chips { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 4px; }
+  .v-b .pill {
+    background: linear-gradient(135deg, rgba(45,212,191,0.06), rgba(167,139,250,0.06));
+    border-color: rgba(45,212,191,0.25);
+  }
+
+  /* ───────── VARIANT C — playful with sparkles ───────── */
+  .v-c .msg-mokkoi { align-self: flex-start; max-width: 88%; display: flex; flex-direction: column; gap: 4px; }
+  .v-c .label { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .v-c .avatar-wrap { position: relative; width: 22px; height: 22px; }
+  .v-c .avatar {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: conic-gradient(from 180deg, var(--teal), var(--purple), var(--pink), var(--teal));
+    display: grid; place-items: center;
+    color: #fff; font-size: 10px; font-weight: 800;
+    animation: c-rotate 8s linear infinite;
+  }
+  @keyframes c-rotate { to { transform: rotate(360deg); } }
+  .v-c .avatar-wrap::after {
+    content: '✨';
+    position: absolute; top: -8px; right: -10px;
+    font-size: 11px;
+    animation: c-sparkle 1.6s ease-in-out infinite;
+  }
+  @keyframes c-sparkle {
+    0%,100% { opacity: 0.4; transform: scale(0.8) rotate(0); }
+    50%     { opacity: 1;   transform: scale(1.1) rotate(20deg); }
+  }
+  .v-c .name {
+    font-size: 13px; font-weight: 700;
+    background: linear-gradient(135deg, var(--teal), var(--pink));
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .v-c .bubble {
+    font-size: 14px; line-height: 1.6;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: radial-gradient(circle at top left, rgba(45,212,191,0.10), transparent 70%), rgba(255,255,255,0.03);
+    border: 1px solid rgba(45,212,191,0.18);
+    color: var(--text);
+    position: relative;
+    overflow: hidden;
+  }
+  .v-c .bubble::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.04) 50%, transparent 70%);
+    animation: c-shine 5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes c-shine {
+    0%,100% { transform: translateX(-100%); }
+    50%     { transform: translateX(100%); }
+  }
+  .v-c .bubble strong {
+    background: linear-gradient(135deg, var(--teal-2), var(--pink));
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    font-weight: 700;
+  }
+  .v-c .msg-user {
+    align-self: flex-end;
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(45,212,191,0.18), rgba(167,139,250,0.18));
+    border: 1px solid rgba(45,212,191,0.32);
+    font-size: 14px;
+    box-shadow: 0 4px 20px -8px rgba(45,212,191,0.45);
+  }
+  .v-c .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; padding-left: 30px; }
+  .v-c .pill {
+    background: linear-gradient(135deg, rgba(45,212,191,0.10), rgba(167,139,250,0.10));
+    border: 1px solid rgba(45,212,191,0.32);
+    color: var(--teal-2);
+    font-weight: 600;
+  }
+
+  /* ───────── VARIANT D — B ENHANCED (LEAD) ───────── */
+  /* Option B's gradient bubbles + selective C energy:
+     - Animated gradient name
+     - Typing pulse on bubble entrance
+     - Subtle shine sweep on bubbles
+     - Gradient-text on key phrases
+     - Avatar with soft glow (not rotating, less distracting)
+     - Chip emoji prefixes
+  */
+  .v-d .row {
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .v-d .avatar-wrap {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    position: relative;
+  }
+  .v-d .avatar {
+    width: 26px; height: 26px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--teal), var(--purple));
+    color: #fff; font-size: 11px; font-weight: 800;
+    display: grid; place-items: center;
+    box-shadow: 0 0 0 0 rgba(45,212,191,0);
+    animation: d-glow 3.2s ease-in-out infinite;
+  }
+  @keyframes d-glow {
+    0%,100% { box-shadow: 0 0 0 0 rgba(45,212,191,0), 0 0 0 0 rgba(167,139,250,0); }
+    50%     { box-shadow: 0 0 0 4px rgba(45,212,191,0.16), 0 0 16px 0 rgba(167,139,250,0.18); }
+  }
+  .v-d .msg-mokkoi {
+    flex: 1;
+    min-width: 0;
+    background:
+      linear-gradient(rgba(13,13,13,1), rgba(13,13,13,1)) padding-box,
+      linear-gradient(135deg, rgba(45,212,191,0.6), rgba(167,139,250,0.6)) border-box;
+    border: 1px solid transparent;
+    border-radius: 16px 16px 16px 4px;
+    padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+    animation: d-arrive 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes d-arrive {
+    from { opacity: 0; transform: translateX(-4px) scale(0.96); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  .v-d .msg-mokkoi::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.03) 50%, transparent 70%);
+    animation: d-shine 7s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes d-shine {
+    0%   { transform: translateX(-100%); }
+    50%  { transform: translateX(100%); }
+    100% { transform: translateX(100%); }
+  }
+  .v-d .msg-mokkoi .name {
+    font-size: 11px;
+    background: linear-gradient(90deg, var(--teal), var(--purple), var(--teal));
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+    animation: d-name-shift 6s linear infinite;
+  }
+  @keyframes d-name-shift {
+    from { background-position: 0% 0%; }
+    to   { background-position: 200% 0%; }
+  }
+  .v-d .msg-mokkoi .bubble { font-size: 13px; line-height: 1.6; color: var(--text); }
+  .v-d .msg-mokkoi .bubble em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--teal-2), var(--purple));
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    font-weight: 600;
+  }
+  .v-d .msg-user {
+    align-self: flex-end;
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 16px 16px 4px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-2);
+    font-size: 13px;
+  }
+  .v-d .chips { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 36px; }
+  .v-d .pill {
+    background: linear-gradient(135deg, rgba(45,212,191,0.08), rgba(167,139,250,0.08));
+    border-color: rgba(45,212,191,0.30);
+    color: var(--teal-2);
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 180ms;
+  }
+  .v-d .pill:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, rgba(45,212,191,0.18), rgba(167,139,250,0.18));
+    border-color: rgba(45,212,191,0.55);
+    color: #fff;
+  }
+  /* typing indicator */
+  .v-d .typing {
+    display: flex; gap: 4px; padding: 14px 16px;
+    background:
+      linear-gradient(rgba(13,13,13,1), rgba(13,13,13,1)) padding-box,
+      linear-gradient(135deg, rgba(45,212,191,0.4), rgba(167,139,250,0.4)) border-box;
+    border: 1px solid transparent;
+    border-radius: 16px 16px 16px 4px;
+    width: fit-content;
+  }
+  .v-d .typing span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--teal-2);
+    animation: d-typing 1.2s ease-in-out infinite;
+  }
+  .v-d .typing span:nth-child(2) { animation-delay: 0.15s; }
+  .v-d .typing span:nth-child(3) { animation-delay: 0.30s; }
+  @keyframes d-typing {
+    0%, 60%, 100% { transform: scale(0.6); opacity: 0.4; }
+    30%           { transform: scale(1.0); opacity: 1; }
+  }
+
+  /* ───────── VARIANT E — Stitch / Linear inspired ───────── */
+  /* Quiet, designerly. Less marketing-energetic, more product-craft.
+     Shows we can also go MORE understated as a contrast. */
+  .v-e .msg-mokkoi {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding-left: 0;
+  }
+  .v-e .avatar {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: #1a1a1a;
+    border: 1px solid var(--border-2);
+    color: var(--teal-2); font-size: 11px; font-weight: 700;
+    display: grid; place-items: center;
+    margin-top: 2px;
+  }
+  .v-e .col { min-width: 0; }
+  .v-e .name {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: 0.2px;
+  }
+  .v-e .bubble {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--text);
+    max-width: 92%;
+  }
+  .v-e .bubble strong {
+    color: var(--teal-2);
+    font-weight: 600;
+  }
+  .v-e .msg-user {
+    align-self: flex-end;
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(45,212,191,0.10);
+    border: 1px solid rgba(45,212,191,0.22);
+    color: #fff;
+    font-size: 13px;
+  }
+  .v-e .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; padding-left: 36px; }
+  .v-e .pill {
+    background: transparent;
+    border: 1px solid var(--border-2);
+    color: var(--text);
+    font-size: 12px;
+  }
+  .v-e .pill:hover {
+    background: rgba(45,212,191,0.06);
+    border-color: rgba(45,212,191,0.4);
+    color: var(--teal-2);
+  }
+
+  /* tags below the panel for picking */
+  .footer-pick {
+    text-align: center;
+    margin: 32px 0 80px;
+    color: var(--text-2);
+    font-size: 14px;
+  }
+  .footer-pick code {
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px; border-radius: 6px;
+    color: var(--teal-2);
+    font-size: 13px;
+  }
+
+  @media (max-width: 1100px) {
+    .grid { grid-template-columns: 1fr; }
+    .panel { height: 560px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mokkoi Chat Panel — Design Variants v2</h1>
+  <p>Round 2: <strong>Variant D</strong> below is "B Enhanced" — your pick of B with selective energy from C. Variant E is added as a contrast (quieter, more designerly). Same conversation, five visual treatments.</p>
+  <div class="lead">⭐ <strong>D · Energetic Refined</strong> is my recommendation — keeps B's chat-app feel + adds shimmer, gradient name animation, typing indicator, hover lift on chips. Click around, see the animations.</div>
+</header>
+
+<div class="grid">
+
+  <!-- ───────── VARIANT A ───────── -->
+  <div class="panel v-a">
+    <div class="panel-head">
+      <h3>A · Minimal Energetic</h3>
+      <span class="blurb">Closest to current. Subtle pulse on avatar, accent words colored. Safest.</span>
+    </div>
+    <div class="body">
+      <div class="plan-banner">
+        <span class="dot"></span>
+        <div>
+          <div class="title">Plan mode</div>
+          <div class="sub">Mokkoi will ask clarifying questions before generating.</div>
+        </div>
+      </div>
+      <div class="msg-user">I want to build a fitness app</div>
+      <div class="msg-mokkoi">
+        <div class="label">
+          <div class="avatar">M</div>
+          <span class="name">Mokkoi</span>
+        </div>
+        <div class="bubble">
+          Love it — <strong>fitness</strong> is a great space. What's the core thing users will do most often in your app?
+        </div>
+      </div>
+      <div class="chips">
+        <button class="pill">Track workouts</button>
+        <button class="pill">Log meals & calories</button>
+        <button class="pill">Monitor progress metrics</button>
+      </div>
+    </div>
+    <div class="input">Ask Mokkoi…</div>
+  </div>
+
+  <!-- ───────── VARIANT B ───────── -->
+  <div class="panel v-b">
+    <div class="panel-head">
+      <h3>B · Gradient Bubbles</h3>
+      <span class="blurb">Real chat-app feel: gradient-bordered bubbles, asymmetric corners, gradient name. Less forum, more conversation.</span>
+    </div>
+    <div class="body">
+      <div class="plan-banner">
+        <span class="dot"></span>
+        <div>
+          <div class="title">Plan mode</div>
+          <div class="sub">Let's discuss your idea — pick chips or just type.</div>
+        </div>
+      </div>
+      <div class="msg-user">I want to build a fitness app</div>
+      <div class="msg-mokkoi">
+        <div class="name">MOKKOI</div>
+        <div class="bubble">
+          <em>Love it</em> — <em>fitness</em> is a great space. What's the core thing users will do most often in your app?
+        </div>
+      </div>
+      <div class="chips">
+        <button class="pill">Track workouts</button>
+        <button class="pill">Log meals & calories</button>
+        <button class="pill">Monitor progress metrics</button>
+      </div>
+    </div>
+    <div class="input">Ask Mokkoi…</div>
+  </div>
+
+  <!-- ───────── VARIANT D — LEAD ───────── -->
+  <div class="panel v-d lead">
+    <div class="panel-head">
+      <h3>D · Energetic Refined <span class="badge-lead">RECOMMENDED</span></h3>
+      <span class="blurb">B's gradient bubbles + selective C energy. Animated gradient name (subtle wave), typing indicator before reply, shimmer sweep across bubbles every 7s, hover-lift on chips, soft avatar glow. Premium without try-hard.</span>
+    </div>
+    <div class="body">
+      <div class="plan-banner">
+        <span class="dot"></span>
+        <div>
+          <div class="title">Plan mode</div>
+          <div class="sub">Tell me your idea — let's shape it together.</div>
+        </div>
+      </div>
+
+      <div class="msg-user">I want to build a fitness app</div>
+
+      <!-- typing indicator before reply -->
+      <div class="row">
+        <div class="avatar-wrap"><div class="avatar">M</div></div>
+        <div class="typing"><span></span><span></span><span></span></div>
+      </div>
+
+      <div class="row">
+        <div class="avatar-wrap"><div class="avatar">M</div></div>
+        <div class="msg-mokkoi">
+          <div class="name">MOKKOI</div>
+          <div class="bubble">
+            <em>Love it</em> — <em>fitness</em> is a great space. What's the core thing users will do most often in your app?
+          </div>
+        </div>
+      </div>
+
+      <div class="chips">
+        <button class="pill">Track workouts</button>
+        <button class="pill">Log meals & calories</button>
+        <button class="pill">Monitor progress</button>
+      </div>
+    </div>
+    <div class="input">Ask Mokkoi…</div>
+  </div>
+
+  <!-- ───────── VARIANT C ───────── -->
+  <div class="panel v-c">
+    <div class="panel-head">
+      <h3>C · Playful + Sparkles</h3>
+      <span class="blurb">Rotating conic-gradient avatar, ✨ next to name, shimmer sweep on bubbles, emoji chips. Most energetic. Risk: try-hard.</span>
+    </div>
+    <div class="body">
+      <div class="plan-banner">
+        <span class="dot"></span>
+        <div>
+          <div class="title">Plan mode ✨</div>
+          <div class="sub">Tell me your idea — let's build something amazing together.</div>
+        </div>
+      </div>
+      <div class="msg-user">I want to build a fitness app</div>
+      <div class="msg-mokkoi">
+        <div class="label">
+          <div class="avatar-wrap"><div class="avatar">M</div></div>
+          <span class="name">Mokkoi</span>
+        </div>
+        <div class="bubble">
+          <strong>Love it</strong> — fitness is a <strong>great space</strong>! What's the core thing users will do most often in your app?
+        </div>
+      </div>
+      <div class="chips">
+        <button class="pill">💪 Track workouts</button>
+        <button class="pill">🍱 Log meals & calories</button>
+        <button class="pill">📊 Monitor progress</button>
+      </div>
+    </div>
+    <div class="input">Ask Mokkoi…</div>
+  </div>
+
+  <!-- ───────── VARIANT E ───────── -->
+  <div class="panel v-e">
+    <div class="panel-head">
+      <h3>E · Linear / Stitch — Quiet Designerly</h3>
+      <span class="blurb">Contrast direction. Understated, no gradients, no animations. Avatar is just a black square with teal "M". Lets the conversation content speak. Pick this if you want Mokkoi to feel like a serious tool, not a marketing experience.</span>
+    </div>
+    <div class="body">
+      <div class="plan-banner" style="background: rgba(255,255,255,0.03); border-color: var(--border-2);">
+        <span class="dot" style="background: var(--text-2); box-shadow: none;"></span>
+        <div>
+          <div class="title" style="color: var(--text);">Plan mode</div>
+          <div class="sub">Mokkoi will ask clarifying questions before generating.</div>
+        </div>
+      </div>
+      <div class="msg-user">I want to build a fitness app</div>
+      <div class="msg-mokkoi">
+        <div class="avatar">M</div>
+        <div class="col">
+          <div class="name">Mokkoi</div>
+          <div class="bubble">
+            Love it — <strong>fitness</strong> is a great space. What's the core thing users will do most often in your app?
+          </div>
+        </div>
+      </div>
+      <div class="chips">
+        <button class="pill">Track workouts</button>
+        <button class="pill">Log meals & calories</button>
+        <button class="pill">Monitor progress metrics</button>
+      </div>
+    </div>
+    <div class="input">Ask Mokkoi…</div>
+  </div>
+
+</div>
+
+<div class="footer-pick">
+  Pick one and reply: <code>A</code>, <code>B</code>, <code>C</code>, <code>D</code>, <code>E</code>, or <code>D + emoji chips from C</code> / etc.<br/>
+  Tomorrow we implement.
+</div>
+
+</body>
+</html>
