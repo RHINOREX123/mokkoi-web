@@ -92,6 +92,11 @@ interface ChatPanelProps {
   onBuildFromPlan?: (images?: Array<{ data: string; mimeType: string }>) => void
   /** Whether the latest planning turn is in flight (drives chip disabled state). */
   planInflight?: boolean
+  /** True when a server-side generation is running but this client did not
+   *  start it — i.e., we navigated back to a project mid-stream, or this is
+   *  a second tab observing live progress. Drives the "Resuming generation…"
+   *  indicator above the regular generating UI. */
+  resumingRun?: boolean
 }
 
 const PLACEHOLDERS = [
@@ -137,7 +142,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight, resumingRun }: ChatPanelProps) {
   // Plan-mode banner — dismissible, local state only. App.tsx strips the
   // ?mode=plan param on mount, so a refresh does NOT re-show the banner;
   // dismiss is effectively per-page-load. That's intentional: the banner is
@@ -911,6 +916,25 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 display: 'flex', flexDirection: 'column', gap: 8,
                 minWidth: 200,
               }}>
+                {resumingRun && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 11, color: '#94a3b8',
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    background: 'rgba(129,140,248,0.08)',
+                    border: '1px solid rgba(129,140,248,0.18)',
+                    alignSelf: 'flex-start',
+                    marginBottom: 2,
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <circle cx="5" cy="5" r="3" fill="#818CF8">
+                        <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite" />
+                      </circle>
+                    </svg>
+                    Resuming generation
+                  </div>
+                )}
                 {/* Step 1: Planning */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8,

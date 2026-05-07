@@ -35,6 +35,7 @@ import { resetAnalytics } from './lib/analytics'
 import { useCanvasState } from './hooks/useCanvasState'
 import { useScreenManagement } from './hooks/useScreenManagement'
 import { useAIGeneration } from './hooks/useAIGeneration'
+import { useGenerationRun } from './hooks/useGenerationRun'
 import { useDirectEdit } from './hooks/useDirectEdit'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 
@@ -296,6 +297,13 @@ function App() {
   const [splitRatio, setSplitRatio] = useState(0.28)
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Live generation_run state for this project — used to render a
+  // "resuming…" banner + progress UI when the user navigates back to a
+  // project whose server-side generation is still in flight (or finished
+  // / failed while they were away). Updated via realtime so a second tab
+  // also sees live progress.
+  const generationRun = useGenerationRun(projectId ?? null)
 
   // AI Generation
   const ai = useAIGeneration({
@@ -717,7 +725,18 @@ function App() {
               onSelectedScreenClick={() => { if (screens.activeGeneratedId) phoneFrameRefs.current.get(screens.activeGeneratedId)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }) }}
               onDeselectScreen={() => screens.setActiveGeneratedId(null)} focusTrigger={focusTrigger}
               onStopGenerating={ai.isGenerating ? ai.handleStopGenerating : undefined}
-              appPhase={ai.appPhase} appProgress={ai.appProgress}
+              // When a server-side generation is running but THIS client
+              // didn't start it (navigate-back / second tab), surface the
+              // run's progress through the same appPhase/appProgress UI.
+              // ai.isGenerating still drives behaviour for the originating
+              // tab; the override only applies when local state is idle.
+              appPhase={ai.isGenerating
+                ? ai.appPhase
+                : (generationRun.isRunning ? 'generating' : ai.appPhase)}
+              appProgress={ai.isGenerating
+                ? ai.appProgress
+                : (generationRun.isRunning ? generationRun.progress : ai.appProgress)}
+              resumingRun={!ai.isGenerating && generationRun.isRunning}
             />
           </ErrorBoundary>
         </div>

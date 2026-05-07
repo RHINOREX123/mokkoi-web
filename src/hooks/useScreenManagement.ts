@@ -164,8 +164,31 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
         const realScreens = loaded.filter(s => !isOrphanPlaceholder(s))
         const orphanIds = loaded.filter(s => isOrphanPlaceholder(s)).map(s => s.id)
 
-        setGeneratedScreens(realScreens)
-        setActiveGeneratedId(realScreens[0]?.id ?? null)
+        // Position fixup for mid-stream rehydration. /api/generate-flow
+        // INSERTs screens with no x/y mid-stream (positions are computed
+        // on the originating client at SSE-completion). When a different
+        // client loads those screens (refresh / second tab), x/y come back
+        // null. Lay them out in a grid here so the user doesn't see a
+        // pile of overlapping phones at the canvas origin. The debounced
+        // auto-save below will persist these positions on next mutation.
+        const needsPositionFixup = realScreens.some(s => s.x == null || s.y == null)
+        const positionedScreens = needsPositionFixup
+          ? (() => {
+              const dims = getCanvasDimensions(DEFAULT_DEVICE as DeviceId)
+              const cols = realScreens.length <= 4 ? realScreens.length : Math.ceil(realScreens.length / 2)
+              return realScreens.map((s, i) => {
+                if (s.x != null && s.y != null) return s
+                return {
+                  ...s,
+                  x: PAD_X + (i % cols) * (dims.CANVAS_W + GAP),
+                  y: PAD_Y + Math.floor(i / cols) * (dims.CANVAS_H + GAP + 50),
+                }
+              })
+            })()
+          : realScreens
+
+        setGeneratedScreens(positionedScreens)
+        setActiveGeneratedId(positionedScreens[0]?.id ?? null)
 
         // Cleanup pass: delete the orphan rows so they don't accumulate.
         // Best-effort — log on failure; the filter above keeps the UI
