@@ -716,6 +716,7 @@ function App() {
               // can cancel.
               isGenerating={ai.isGenerating || generationRun.isRunning}
               isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImages={initialAttachedImages}
+              onVoiceError={setToastMessage}
               planMode={planModeActive}
               onPlanSend={(msg) => ai.sendPlanMessage(msg)}
               readyToBuildLatched={ai.readyToBuildLatched}
