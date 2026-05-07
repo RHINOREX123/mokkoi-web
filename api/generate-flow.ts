@@ -14,6 +14,7 @@ import { normalizeComponentTree } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, buildPlannerSystem } from './_lib/design-system.js'
+import type { ScreenDataAction } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
 import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
 
@@ -298,7 +299,18 @@ async function callAnthropic(apiKey: string, body: Record<string, unknown>): Pro
 
 interface AppPlan {
   appName: string
-  screens: Array<{ id: string; name: string; description: string; screenType: string; isHome: boolean }>
+  screens: Array<{
+    id: string
+    name: string
+    description: string
+    screenType: string
+    isHome: boolean
+    /** BYO-Backend: planner-emitted hint for screens whose primary button maps
+     * to a Supabase data action (auth, etc.). The exporter uses this to wire
+     * onPress to the matching supabase.auth.* call. Optional — undefined on
+     * non-auth screens. */
+    dataAction?: ScreenDataAction
+  }>
   navigation: { type: 'tabs' | 'stack' | 'hybrid'; tabScreens?: string[]; connections: Array<{ from: string; to: string; trigger: string }> }
   designDirection: { theme: string; accentColor: string; style: string }
 }

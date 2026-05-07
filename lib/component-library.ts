@@ -390,7 +390,7 @@ function expandProfileStats(props: { stats?: Array<{ value: string; label: strin
 // FORM & INPUT
 // =============================================
 
-function expandFormInput(props: { label?: string; placeholder?: string; secureTextEntry?: boolean; error?: string; icon?: string }): any {
+function expandFormInput(props: { label?: string; placeholder?: string; secureTextEntry?: boolean; error?: string; icon?: string; id?: string; action?: string }): any {
   const children: any[] = []
   if (props.label) {
     children.push({ type: 'Text', style: { fontSize: 13, fontWeight: '500', color: TEXT_SECONDARY, marginBottom: 6 }, children: [props.label] })
@@ -399,10 +399,19 @@ function expandFormInput(props: { label?: string; placeholder?: string; secureTe
   if (props.icon) {
     inputChildren.push({ type: 'Icon', props: { name: props.icon, size: 18, color: TEXT_TERTIARY }, style: { marginRight: 8 } })
   }
+  // BYO-Backend: thread id/action down to the actual TextInput so the exporter
+  // can match it as an auth-form field by marker (in addition to the
+  // secureTextEntry/placeholder convention). Harmless when absent.
   inputChildren.push({
     type: 'TextInput',
     style: { flex: 1, fontSize: 16, color: TEXT_PRIMARY },
-    props: { placeholder: props.placeholder || '', placeholderTextColor: TEXT_TERTIARY, ...(props.secureTextEntry ? { secureTextEntry: true } : {}) },
+    props: {
+      placeholder: props.placeholder || '',
+      placeholderTextColor: TEXT_TERTIARY,
+      ...(props.secureTextEntry ? { secureTextEntry: true } : {}),
+      ...(props.id ? { id: props.id } : {}),
+      ...(props.action ? { action: props.action } : {}),
+    },
   })
   children.push({
     type: 'View',
@@ -415,7 +424,7 @@ function expandFormInput(props: { label?: string; placeholder?: string; secureTe
   return { type: 'View', style: { marginBottom: 12 }, children }
 }
 
-function expandButton(props: { text?: string; variant?: 'primary' | 'secondary' | 'outline'; size?: 'sm' | 'md' | 'lg'; icon?: string; color?: string }): any {
+function expandButton(props: { text?: string; variant?: 'primary' | 'secondary' | 'outline'; size?: 'sm' | 'md' | 'lg'; icon?: string; color?: string; id?: string; action?: string }): any {
   const variant = props.variant || 'primary'
   const size = props.size || 'md'
   const color = props.color || ACCENT
@@ -430,11 +439,21 @@ function expandButton(props: { text?: string; variant?: 'primary' | 'secondary' 
   const children: any[] = []
   if (props.icon) children.push({ type: 'Icon', props: { name: props.icon, size: fontSizes[size], color: textColors[variant] }, style: { marginRight: 8 } })
   children.push({ type: 'Text', style: { fontSize: fontSizes[size], fontWeight: '600', color: textColors[variant] }, children: [props.text || 'Button'] })
-  return {
+  // BYO-Backend: preserve id/action on the emitted TouchableOpacity so the
+  // exporter can pick it out via marker rather than only the text-regex
+  // convention. Harmless when absent.
+  const out: any = {
     type: 'TouchableOpacity',
     style: { height: heights[size], flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, ...styles[variant] },
     children,
   }
+  if (props.id || props.action) {
+    out.props = {
+      ...(props.id ? { id: props.id } : {}),
+      ...(props.action ? { action: props.action } : {}),
+    }
+  }
+  return out
 }
 
 function expandSocialButton(props: { provider?: 'google' | 'apple'; text?: string }): any {

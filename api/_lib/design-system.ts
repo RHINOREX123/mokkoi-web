@@ -346,6 +346,22 @@ export const QUALITY_CHECKLIST = `
 VERIFY: 1) Root has flex:1, surface-0, paddingTop:64, paddingBottom:40. 2) All spacing/fontSize from scales. 3) Clear type hierarchy. 4) Realistic content. 5) Professional quality. 6) ALL TextInputs have useState. 7) ALL buttons have onPress. 8) ALL switches toggle.
 `
 
+// BYO-Backend: planner-emitted hints that the exporter uses to wire generated
+// screens to a Supabase backend. Currently scoped to auth on the auth screen;
+// extends naturally to other data actions (data.read, data.write, …) as the
+// pipeline grows. The exporter (src/utils/exportTsx.ts) reads these and emits
+// supabase.auth.* calls on the convention-matched primary button.
+export type ScreenDataActionKind =
+  | 'auth.signInWithPassword'
+  | 'auth.signUp'
+  | 'auth.signOut'
+
+export interface ScreenDataAction {
+  kind: ScreenDataActionKind
+  /** Plan ID of the screen to navigate to after success (typically the home screen). */
+  redirectScreen?: string
+}
+
 export const APP_PLANNER_SYSTEM_PROMPT = `You are an expert mobile app architect. Given a user's app description, produce a structured JSON plan for a mobile app.
 
 RULES:
@@ -372,6 +388,10 @@ RULES:
   - Default: indigo (#6366F1)
 - Default to "dark" theme unless user explicitly requests light.
 - style should be 2-3 words describing the visual mood (e.g. "modern minimal", "bold vibrant", "sleek dark").
+
+DATA ACTIONS (BYO-Backend):
+- For screens with screenType:"auth", if the screen contains a primary submit button (login or signup), set a screen-level "dataAction" object: {"kind":"auth.signInWithPassword"} for login screens, {"kind":"auth.signUp"} for signup screens. Set "redirectScreen" to the planId of the screen to navigate to after success (typically the home/dashboard screen).
+- Do NOT emit dataAction on non-auth screens. Omit the field entirely when not applicable.
 
 Return ONLY valid JSON. No markdown, no explanation, no code fences.
 
