@@ -66,8 +66,8 @@ function App() {
   // attachedImage state for consistency.
   //
   // Reads two keys for backward-compat across deploys:
-  //   mokkoi.pendingImages.{id}  → array (preferred, current dashboard)
-  //   mokkoi.pendingImage.{id}   → single (legacy; clears it too)
+  //   mokkoi.pendingImages.{id}  ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ array (preferred, current dashboard)
+  //   mokkoi.pendingImage.{id}   ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ single (legacy; clears it too)
   type ParsedImage = { data: string; mediaType: string; fileName: string }
   const initialAttachedImagesRef = useRef<ParsedImage[] | null>(null)
   if (initialAttachedImagesRef.current === null && projectId) {
@@ -77,7 +77,7 @@ function App() {
       return i >= 0 ? dataUrl.slice(i + 1) : dataUrl
     }
     try {
-      // Preferred plural key — array of { dataUrl, mimeType, fileName }
+      // Preferred plural key ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â array of { dataUrl, mimeType, fileName }
       const rawPlural = sessionStorage.getItem(`mokkoi.pendingImages.${projectId}`)
       if (rawPlural) {
         const arr = JSON.parse(rawPlural) as Array<{
@@ -99,7 +99,7 @@ function App() {
         sessionStorage.removeItem(`mokkoi.pendingImages.${projectId}`)
       }
 
-      // Legacy singular key — keep reading for users mid-flight on old code
+      // Legacy singular key ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â keep reading for users mid-flight on old code
       if (collected.length === 0) {
         const rawSingle = sessionStorage.getItem(`mokkoi.pendingImage.${projectId}`)
         if (rawSingle) {
@@ -119,7 +119,7 @@ function App() {
         }
       }
     } catch {
-      // ignore — sessionStorage can throw in private mode
+      // ignore ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â sessionStorage can throw in private mode
     }
     initialAttachedImagesRef.current = collected.length > 0 ? collected : []
   }
@@ -147,13 +147,16 @@ function App() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dashboard V2 also routes here with ?mode=plan when the user submitted in
-  // Plan mode. The flag is purely informational today — it surfaces a banner
+  // Plan mode. The flag is purely informational today ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â it surfaces a banner
   // in the chat panel announcing "Mokkoi will ask clarifying questions before
   // generating". The real conversational backend lives in the future task at
   // docs/roadmap/conversational-intent.md; current generation is unchanged.
   // Capture once on mount, then strip from the URL so refreshes don't keep
   // re-showing the banner if the user has dismissed it.
-  const initialPlanModeRef = useRef(searchParams.get('mode') === 'plan')
+  // Promoted from useRef to useState so the resume-from-DB effect below
+  // can flip it true once messages load. URL ?mode=plan is the FIRST source
+  // of truth; the SECOND is project state - see the next effect.
+  const [planModeActive, setPlanModeActive] = useState(searchParams.get('mode') === 'plan')
   useEffect(() => {
     if (searchParams.get('mode')) {
       const newParams = new URLSearchParams(searchParams)
@@ -162,9 +165,25 @@ function App() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+
   // --- Core hooks ---
   const canvas = useCanvasState()
   const screens = useScreenManagement(projectId)
+  // Resume plan mode from DB. When a user navigates back to a project whose
+  // first turn was in plan mode, the URL no longer has ?mode=plan. But the
+  // messages table has the conversation, and any assistant turn with
+  // metadata.extracted is the smoking gun - that field is only set by
+  // /api/plan-conversation. Flip the flag so the chat panel renders chips
+  // and the DNA card instead of Build-mode quick pills.
+  useEffect(() => {
+    if (planModeActive) return
+    const msgs = screens.projectMessages
+    if (!msgs || msgs.length === 0) return
+    const isPlanProject = msgs.some(
+      m => m.role === 'assistant' && m.metadata && (m.metadata as Record<string, unknown>).extracted,
+    )
+    if (isPlanProject) setPlanModeActive(true)
+  }, [screens.projectMessages, planModeActive])
   const phoneFrameRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // Screen drag state
@@ -179,7 +198,7 @@ function App() {
   // Track whether the modal opened from a dashboard mode card was actually
   // used (user clicked Generate/Import). If they close it without committing,
   // we treat the empty "Untitled" project the dashboard pre-created as an
-  // orphan and clean it up — see maybeCleanupOrphanProject below.
+  // orphan and clean it up ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â see maybeCleanupOrphanProject below.
   const didCommitFromDashModalRef = useRef(false)
 
   /**
@@ -187,8 +206,8 @@ function App() {
    * from the dashboard mode card (?openModal=screenshot|import), AND they
    * didn't actually commit anything (didCommitFromDashModalRef stayed false),
    * AND this project is still the empty "Untitled" placeholder we created
-   * upfront — delete it and bounce back to /. Otherwise we'd leave orphan
-   * "Untitled · 0 screens" cards on the dashboard cluttering the recents.
+   * upfront ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â delete it and bounce back to /. Otherwise we'd leave orphan
+   * "Untitled ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· 0 screens" cards on the dashboard cluttering the recents.
    *
    * Cheap, defensive checks:
    *   - was the modal launched from the dashboard? (initialOpenModalRef)
@@ -211,7 +230,7 @@ function App() {
       navigate('/', { replace: true })
       return
     }
-    // RLS-safe delete with count: 'exact' so we know the row was touched —
+    // RLS-safe delete with count: 'exact' so we know the row was touched ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â
     // if not, log for debugging but still navigate home.
     const { error, count } = await supabase
       .from('projects')
@@ -257,11 +276,11 @@ function App() {
   // with 402, but we want to short-circuit before the UI even fires it.
   useEffect(() => {
     if (userPlan.loading) return
-    if (!initialPlanModeRef.current) return
+    if (!planModeActive) return
     if (userPlan.plan !== 'free') return
-    initialPlanModeRef.current = false
+    setPlanModeActive(false)
     setShowPaywallModal(true)
-  }, [userPlan.loading, userPlan.plan])
+  }, [userPlan.loading, userPlan.plan, planModeActive])
 
   const [showExpoPreview, setShowExpoPreview] = useState(false)
   const [canvasDragOver, setCanvasDragOver] = useState(false)
@@ -274,21 +293,21 @@ function App() {
     setViewMode(m => m === 'preview' ? 'canvas-editor' : 'preview')
   }, [])
 
-  // Preview toolbar state — lifted from PreviewPhoneFrame so the toolbar can
+  // Preview toolbar state ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â lifted from PreviewPhoneFrame so the toolbar can
   // read the effective scale and override it via manual zoom controls.
   const [previewManualZoom, setPreviewManualZoom] = useState<number | null>(null)
   const [previewEffectiveScale, setPreviewEffectiveScale] = useState(1)
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0)
 
-  // Device is a project-level setting — every screen in the project renders
+  // Device is a project-level setting ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â every screen in the project renders
   // at the same dimensions. Per-screen overrides used to exist but caused
   // a class of state-sync bugs (the phone wouldn't visibly resize because
   // the active-screen device tracked separately from the project device,
   // and the two could disagree). Single source of truth now: the dropdown
   // in PreviewToolbar always writes the project default.
   const handlePreviewDeviceChange = useCallback((deviceId: DeviceId) => {
-    // TEMP DIAGNOSTIC — remove after verifying device picker fires
-    console.log('🔥 MOKKOI DEVICE CHANGE FIRED:', deviceId, '| projectDeviceId before:', screens.projectDeviceId)
+    // TEMP DIAGNOSTIC ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â remove after verifying device picker fires
+    console.log('ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â¥ MOKKOI DEVICE CHANGE FIRED:', deviceId, '| projectDeviceId before:', screens.projectDeviceId)
     screens.setProjectDeviceId(deviceId)
     setPreviewManualZoom(null) // re-fit on device swap
   }, [screens])
@@ -298,8 +317,8 @@ function App() {
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Live generation_run state for this project — used to render a
-  // "resuming…" banner + progress UI when the user navigates back to a
+  // Live generation_run state for this project ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â used to render a
+  // "resumingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦" banner + progress UI when the user navigates back to a
   // project whose server-side generation is still in flight (or finished
   // / failed while they were away). Updated via realtime so a second tab
   // also sees live progress.
@@ -352,7 +371,7 @@ function App() {
   useEffect(() => {
     if (viewMode !== 'canvas-editor') return
     // If direct-edit is active, useDirectEdit handles Escape itself
-    // (deselect → exit edit mode). Don't double-handle.
+    // (deselect ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ exit edit mode). Don't double-handle.
     if (directEdit.directEditMode) return
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -381,7 +400,7 @@ function App() {
 
   // Entry-point screens for hamburger SCREENS list. Project to {id, name}
   // here so the prop passed to TopNavbar is referentially stable across
-  // renders that don't change the upstream — keeps a future React.memo
+  // renders that don't change the upstream ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â keeps a future React.memo
   // wrapper from being defeated by a fresh array each render.
   const entryPointScreens = useMemo(
     () => getEntryPointScreens(
@@ -453,7 +472,7 @@ function App() {
   // Auto-hide toast (and detect credit errors)
   useEffect(() => {
     if (!toastMessage) return
-    const duration = toastMessage.startsWith('✅') || toastMessage.startsWith('❌') ? 5000 : 2000
+    const duration = toastMessage.startsWith('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦') || toastMessage.startsWith('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢') ? 5000 : 2000
     const t = setTimeout(() => setToastMessage(''), duration)
     return () => clearTimeout(t)
   }, [toastMessage])
@@ -693,11 +712,11 @@ function App() {
               // navigate-back mid-stream) treats the project as busy: input
               // disabled, send button gated, no duplicate Build click. The
               // Stop button stays gated by ai.isGenerating only via the
-              // onStopGenerating prop below — only the originating client
+              // onStopGenerating prop below ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â only the originating client
               // can cancel.
               isGenerating={ai.isGenerating || generationRun.isRunning}
               isStreaming={ai.isStreaming} streamingText={ai.streamingText} initialPrompt={initialPrompt} initialImages={initialAttachedImages}
-              planMode={initialPlanModeRef.current}
+              planMode={planModeActive}
               onPlanSend={(msg) => ai.sendPlanMessage(msg)}
               readyToBuildLatched={ai.readyToBuildLatched}
               onBuildFromPlan={(planImages) => {
@@ -710,7 +729,7 @@ function App() {
                 // planImages: any reference images attached during the plan
                 // conversation (or carried over from the dashboard's Camera
                 // button). These flow to /api/generate-flow as visual style
-                // refs — same code path as the multi-image-app-generation
+                // refs ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â same code path as the multi-image-app-generation
                 // task we shipped earlier.
                 const summary = ai.planContext?.summary
                 if (summary && summary.length > 0) {
@@ -780,11 +799,11 @@ function App() {
 
             {!screens.hasScreens && !ai.isGenerating && referenceImages.length === 0 ? (
               <>
-                {/* PlanSummaryCard is pinned to the canvas viewport — NOT
-                    inside the pan-transform layer below — so it doesn't
+                {/* PlanSummaryCard is pinned to the canvas viewport ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â NOT
+                    inside the pan-transform layer below ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â so it doesn't
                     drift when the user pans/zooms the canvas the way
                     generated screens do. UI overlay, not artifact. */}
-                {initialPlanModeRef.current && (
+                {planModeActive && (
                   <div
                     style={{
                       position: 'absolute',
@@ -811,7 +830,7 @@ function App() {
                 )}
                 {/* Default empty-canvas placeholder. Hidden in plan mode
                     because the PlanSummaryCard is the relevant message. */}
-                {!initialPlanModeRef.current && (
+                {!planModeActive && (
                   <div
                     data-canvas-bg="true"
                     style={{
@@ -846,7 +865,7 @@ function App() {
                       onTestOnPhone={() => setShowExpoPreview(true)}
                     />
                     <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                      {/* Static tree render — always mounted. Acts as the
+                      {/* Static tree render ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â always mounted. Acts as the
                           immediate-feedback view (paints in <100ms) and the
                           fallback if Snack fails / times out. */}
                       <PreviewPhoneFrame
@@ -862,9 +881,9 @@ function App() {
                         manualZoom={previewManualZoom}
                         onScaleChange={setPreviewEffectiveScale}
                       />
-                      {/* Live running app — overlays the static phone via
+                      {/* Live running app ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â overlays the static phone via
                           position:absolute, fades in once Snack acknowledges
-                          the postMessage handshake (~5–10s). Tap targets and
+                          the postMessage handshake (~5ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ10s). Tap targets and
                           navigation are handled by the running app. Disabled
                           while generation is in progress (avoids booting
                           Snack on a partial tree). */}
@@ -881,7 +900,7 @@ function App() {
                           deviceId: screens.projectDeviceId,
                           manualZoom: previewManualZoom,
                           disabled: ai.isGenerating || ai.isStreaming,
-                          // Threaded for Week 5 Day 0 telemetry — RuntimeIframePreview
+                          // Threaded for Week 5 Day 0 telemetry ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â RuntimeIframePreview
                           // tags PostHog events with project_id. InlineSnackPreview
                           // ignores the extra prop (extra props pass through harmlessly).
                           projectId,
@@ -889,7 +908,7 @@ function App() {
                         // Sibling keys are namespaced ("static-" on PreviewPhoneFrame
                         // above, "live-" here) so they never collide while still
                         // bumping in lockstep on refresh. Pre-namespace they both
-                        // resolved to the raw integer 0 → "two children with same
+                        // resolved to the raw integer 0 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ "two children with same
                         // key 0" warning. Pass key directly, never via spread.
                         return useRuntime
                           ? <RuntimeIframePreview
@@ -1027,7 +1046,7 @@ function App() {
             {directEdit.directEditMode && (
               <div style={{ position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: 'rgba(59,130,246,0.12)', borderRadius: 10, border: '1px solid rgba(59,130,246,0.3)', zIndex: 60, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
                 <PenTool size={14} color="#3B82F6" />
-                <span style={{ fontSize: 12, fontWeight: 500, color: '#93C5FD' }}>Direct Edit Mode — Click any element to edit</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#93C5FD' }}>Direct Edit Mode ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Click any element to edit</span>
                 <button onClick={() => directEdit.exitDirectEdit(false)} style={{ padding: '4px 12px', borderRadius: 6, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0', fontSize: 11, fontWeight: 600, cursor: 'pointer', marginLeft: 4 }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
                 >Exit</button>
@@ -1126,14 +1145,14 @@ function App() {
               const result = await resp.json()
               if (!resp.ok || !result.success) {
                 console.error('[import] server save failed:', result)
-                setToastMessage(`❌ Save failed: ${result.error || 'unknown'}`)
+                setToastMessage(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Save failed: ${result.error || 'unknown'}`)
               } else {
                 console.log('[import] screen saved via server:', newScreen.id, newScreen.name)
-                setToastMessage(`✅ Saved: ${screen.name}${modelLabel}`)
+                setToastMessage(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Saved: ${screen.name}${modelLabel}`)
               }
             } catch (err) {
               console.error('[import] server save error:', err)
-              setToastMessage(`❌ Save failed: ${(err as Error).message}`)
+              setToastMessage(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Save failed: ${(err as Error).message}`)
             }
           } else {
             setToastMessage(`Imported: ${screen.name}${modelLabel}`)
