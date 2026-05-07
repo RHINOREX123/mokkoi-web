@@ -295,6 +295,13 @@ export interface SnackFilesOpts {
    *  Mirrors the export path so free-tier users see consistent attribution
    *  whenever their app leaves Mokkoi's private web canvas. */
   addWatermark?: boolean
+  /** Bring-your-own Supabase credentials. When set, the Snack bundle gets the
+   *  @supabase/supabase-js dep plus a generated lib/supabase.ts that creates a
+   *  client with the URL/anonKey inlined as string literals (Snack has no env
+   *  vars, so values must live in the source). Validation lives upstream
+   *  (byoSupabaseValidation); we still defensively skip emission if either
+   *  field is empty. */
+  byoSupabase?: { url: string; anonKey: string } | null
 }
 
 export interface SnackPayload {
@@ -304,7 +311,7 @@ export interface SnackPayload {
 }
 
 export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
-  const { projectName, screens, connections, homeScreenId, addWatermark } = opts
+  const { projectName, screens, connections, homeScreenId, addWatermark, byoSupabase } = opts
 
   if (screens.length === 0) throw new Error('No screens to preview')
 
@@ -476,6 +483,32 @@ export default function App() {
     // That crashed Expo Go with "Cannot read property 'ReactCurrentOwner' of
     // undefined" whenever the pinned svg version disagreed with Snack's
     // bundled one (e.g. our 15.2.0 pin vs Snack SDK 52/53's newer svg).
+  }
+
+  // BYO-Backend: only emit Supabase wiring when creds are present and well-formed.
+  // Validation upstream (byoSupabaseValidation) is the source of truth, but we
+  // double-check here so a misconfigured project never produces a half-broken
+  // bundle that imports a client created with empty strings.
+  if (byoSupabase) {
+    const url = String(byoSupabase.url || '').trim()
+    const anonKey = String(byoSupabase.anonKey || '').trim()
+    if (!url || !anonKey) {
+      console.warn('[buildSnackPayload] byoSupabase provided but url/anonKey empty — skipping Supabase emission')
+    } else {
+      dependencies['@supabase/supabase-js'] = { version: '^2.105.3' }
+      // String literal injection (Snack has no envs). Use JSON.stringify so any
+      // embedded quotes/backslashes/newlines in the values are escaped safely.
+      files['lib/supabase.ts'] = {
+        type: 'CODE',
+        contents: `import { createClient } from '@supabase/supabase-js'
+
+export const supabase = createClient(
+  ${JSON.stringify(url)},
+  ${JSON.stringify(anonKey)}
+)
+`,
+      }
+    }
   }
 
   return {

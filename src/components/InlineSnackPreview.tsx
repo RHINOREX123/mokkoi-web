@@ -19,6 +19,11 @@ interface InlineSnackPreviewProps {
    *  worth booting Snack for, and it would just churn re-deploys as the tree
    *  streams in. Static fallback handles the streaming UX. */
   disabled?: boolean
+  /** Bring-your-own Supabase creds for the project. When set, the Snack bundle
+   *  ships @supabase/supabase-js + a generated lib/supabase.ts client.
+   *  TODO(byo-backend): once Track A's useScreenManagement merges and exposes
+   *  `projectBackend`, App.tsx will pass that value through here directly. */
+  byoSupabase?: { url: string; anonKey: string } | null
 }
 
 /** Inline Bolt-style preview: overlays the rendered Expo Snack web-player
@@ -51,6 +56,7 @@ export function InlineSnackPreview({
   deviceId,
   manualZoom = null,
   disabled = false,
+  byoSupabase = null,
 }: InlineSnackPreviewProps) {
   const [snackReady, setSnackReady] = useState(false)
   const [snackErrored, setSnackErrored] = useState(false)
@@ -81,8 +87,13 @@ export function InlineSnackPreview({
       .map(s => `${s.id}:${s.name}:${s.tree ? JSON.stringify(s.tree).length : 0}`)
       .join('|')
     const connKey = connections.map(c => `${c.fromScreenId}>${c.toScreenId}`).join(',')
-    return `${projectName}::${screensKey}::${connKey}`
-  }, [projectName, screens, connections])
+    // Include byoSupabase in the fingerprint so toggling/changing creds
+    // re-builds the Snack payload (which controls whether lib/supabase.ts is
+    // emitted). Without this, switching backend after first render would still
+    // serve the cached non-Supabase bundle.
+    const backendKey = byoSupabase ? `${byoSupabase.url}|${byoSupabase.anonKey.length}` : ''
+    return `${projectName}::${screensKey}::${connKey}::${backendKey}`
+  }, [projectName, screens, connections, byoSupabase])
 
   // Build the same files+dependencies payload the modal uses. Memoized on the
   // fingerprint so identity stays stable across re-renders when content is
@@ -90,7 +101,7 @@ export function InlineSnackPreview({
   const payload = useMemo(() => {
     if (!fingerprint) return null
     try {
-      return buildSnackPayload({ projectName, screens, connections })
+      return buildSnackPayload({ projectName, screens, connections, byoSupabase })
     } catch (err) {
       console.error('[InlineSnackPreview] failed to build snack payload', err)
       return null
