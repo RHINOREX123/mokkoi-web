@@ -4,12 +4,12 @@ export type VoiceState = 'idle' | 'recording' | 'transcribing'
 
 export interface UseVoiceRecordingResult {
   state: VoiceState
-  /** Normalized 0..1 audio level â€” use to drive UI animation. */
+  /** Normalized 0..1 audio level Ã¢â‚¬â€ use to drive UI animation. */
   audioLevel: number
   /** Last error (clears on next start). */
   error: string | null
   start: () => Promise<void>
-  /** Manual stop â€” auto-stop on silence is built in but UI can also force it. */
+  /** Manual stop Ã¢â‚¬â€ auto-stop on silence is built in but UI can also force it. */
   stop: () => void
 }
 
@@ -18,14 +18,14 @@ export interface UseVoiceRecordingOptions {
   onTranscribed: (text: string) => void
   /**
    * Authorization header(s) to send with the POST. Same shape Mokkoi uses
-   * elsewhere â€” the dashboard / chat panel pass through getAuthHeaders().
+   * elsewhere Ã¢â‚¬â€ the dashboard / chat panel pass through getAuthHeaders().
    */
   getAuthHeaders: () => Promise<Record<string, string>>
   /** Auth/server endpoint. Defaults to /api/transcribe. */
   endpoint?: string
   /** ms of continuous quiet before auto-stop. Default 2000. */
   silenceHoldMs?: number
-  /** Normalized [0,1] threshold below which the signal counts as silence. Default 0.025. */
+  /** Normalized [0,1] threshold below which the signal counts as silence. Default 0.012 - low enough to detect quiet speech without false-triggering on ambient noise. */
   silenceThreshold?: number
   /** Hard cap on recording duration. Default 60_000. */
   maxDurationMs?: number
@@ -53,13 +53,13 @@ function pickMimeType(): string {
  * 0..1 number can be wired to scale, glow intensity, ring opacity, etc.
  *
  * Failure modes (all surface via `error`):
- * - mic permission denied â†’ "permission_denied"
- * - MediaRecorder not supported â†’ "unsupported"
- * - transcribe upstream error â†’ "transcribe_failed"
- * - empty transcription (silence detected but nothing said) â†’ "no_speech"
- * - rate limited â†’ "rate_limited"
+ * - mic permission denied Ã¢â€ â€™ "permission_denied"
+ * - MediaRecorder not supported Ã¢â€ â€™ "unsupported"
+ * - transcribe upstream error Ã¢â€ â€™ "transcribe_failed"
+ * - empty transcription (silence detected but nothing said) Ã¢â€ â€™ "no_speech"
+ * - rate limited Ã¢â€ â€™ "rate_limited"
  *
- * The hook does NOT decide what to do with the transcribed text â€” the
+ * The hook does NOT decide what to do with the transcribed text Ã¢â‚¬â€ the
  * consumer's onTranscribed callback fires it down the prompt pipeline.
  */
 export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecordingResult {
@@ -68,7 +68,7 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
     getAuthHeaders,
     endpoint = '/api/transcribe',
     silenceHoldMs = 2000,
-    silenceThreshold = 0.025,
+    silenceThreshold = 0.012,
     maxDurationMs = 60_000,
   } = opts
 
@@ -83,12 +83,12 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
   const rafRef = useRef<number | null>(null)
   const silenceStartRef = useRef<number>(0)
   /** Flips true on the first frame above threshold. Auto-stop only fires
-   *  after this — otherwise a quiet room kills recording before speech. */
+   *  after this â€” otherwise a quiet room kills recording before speech. */
   const hasSpeechDetectedRef = useRef<boolean>(false)
   const startedAtRef = useRef<number>(0)
   const chunksRef = useRef<Blob[]>([])
   const mimeTypeRef = useRef<string>('')
-  // We reference these from event handlers â€” keep them in refs so the closure
+  // We reference these from event handlers Ã¢â‚¬â€ keep them in refs so the closure
   // sees the latest opts values without re-binding the recorder each render.
   const onTranscribedRef = useRef(onTranscribed)
   const getAuthHeadersRef = useRef(getAuthHeaders)
@@ -187,7 +187,7 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
       setState('transcribing')
       try {
         const headers = await getAuthHeadersRef.current()
-        // Don't let getAuthHeaders set a Content-Type â€” we need the audio mime.
+        // Don't let getAuthHeaders set a Content-Type Ã¢â‚¬â€ we need the audio mime.
         const cleanHeaders: Record<string, string> = {}
         for (const [k, v] of Object.entries(headers)) {
           if (k.toLowerCase() !== 'content-type') cleanHeaders[k] = v

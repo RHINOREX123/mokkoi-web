@@ -125,6 +125,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Plain-text response keeps the parse trivial. Mokkoi prompts are short
   // enough that we don't need timestamps or word-level data.
   form.append('response_format', 'text')
+  // Pin English to reduce mislabeling on near-silent audio. Without this,
+  // Whisper-family models occasionally mis-detect language on quiet inputs
+  // and substitute training-data filler ("ChatGPT", "Subscribe", etc.).
+  form.append('language', 'en')
+  // The `prompt` parameter biases the decoder toward the domain. Keeping
+  // it short — long prompts have their own quirks. The vocabulary cue
+  // ("app", "screens", "design") nudges Whisper toward correct word
+  // choices when audio is ambiguous.
+  form.append('prompt', 'A user describing a mobile app to build: screens, navigation, design, features.')
 
   let openaiResp: Response
   try {
@@ -149,5 +158,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (text.length === 0) {
     return res.status(200).json({ text: '', empty: true })
   }
+
+  // Whisper-family models hallucinate fixed phrases on near-silent or
+  // low-content audio — these come straight out of training data noise.
+  // Most common observed in the wild: "ChatGPT", "Thank you", "Thanks
+  // for watching", "Subscribe", "©", music notation. If the entire
+  // response collapses to one of these, the user almost certainly didn't
+  // get heard properly and we should surface that as no_speech rather
+  // than fire it down the build pipeline.
+  if (isLikelyHallucination(text)) {
+    console.warn('[transcribe] suspected hallucination, rejecting:', text)
+    return res.status(200).json({ text: '', empty: true, hallucinated: true })
+  }
   return res.status(200).json({ text })
+}
+
+const HALLUCINATION_PATTERNS: RegExp[] = [
+  /^chatgpt[\s,.!?\-]*chatgpt[\s,.!?\-]*$/i,
+  /^chatgpt[\s,.!?\-]*$/i,
+  /^thank(s| you)[\s,.!?\-]*(for watching)?[\s,.!?\-]*$/i,
+  /^subscribe[\s,.!?\-]*$/i,
+  /^bye[\s,.!?\-]*$/i,
+  /^(uh|um|ah|hmm|mm)[\s,.!?\-]*$/i,
+  /^[\s,.!?\-]*$/,
+  /^[♪♫\s]+$/,
+  /^©[\s\S]*$/,
+]
+
+function isLikelyHallucination(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 3) return true
+  for (const re of HALLUCINATION_PATTERNS) {
+    if (re.test(trimmed)) return true
+  }
+  return false
 }
