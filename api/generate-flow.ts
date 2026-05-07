@@ -1,5 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan, createUserSupabaseClient } from './_lib/auth-helper.js'
+import {
+  verifyProjectOwnership,
+  createGenerationRun,
+  updateRunProgress,
+  completeRun,
+  failRun,
+  abortRun,
+  setProjectState,
+} from './_lib/generation-runs.js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
 import { normalizeComponentTree } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
@@ -400,7 +410,12 @@ async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
 
 // ==================== APP HANDLER (mode: "app") ====================
 
-async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
+async function handleApp(
+  req: VercelRequest,
+  res: VercelResponse,
+  user: any,
+  userSupabase: SupabaseClient | null,
+) {
   if (!user.isMCP) {
     const tier = await getUserTier(user.id, user.email)
     if (tier === 'free') {
@@ -448,13 +463,65 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
   // designDirection brief.
   const images = normalizeImages(rawImages)
 
+  // Phase 2 Track 1: open a generation_run row before any SSE output so we
+  // can still return a clean JSON 409 if another run is already active for
+  // this project. Skip entirely for MCP / anonymous (no userSupabase) and
+  // for calls without a projectId — generation still works, we just lose the
+  // resumability benefit. The existing happy path is unaffected on failure.
+  let runId: string | null = null
+  if (userSupabase && typeof projectId === 'string' && projectId.length > 0) {
+    const ownership = await verifyProjectOwnership(userSupabase, projectId, user.id)
+    if (!ownership.ok) {
+      return res.status(ownership.status).json({ error: ownership.error })
+    }
+    const created = await createGenerationRun(userSupabase, projectId, 'app', null)
+    if (created.conflict) {
+      return res
+        .status(409)
+        .json({ error: 'generation_in_progress', run_id: created.conflict.existingRunId })
+    }
+    if (created.run) {
+      runId = created.run.id
+      await setProjectState(userSupabase, projectId, 'building')
+    }
+    // Soft errors (created.error set, no run) are logged inside the helper —
+    // we keep going so a transient DB hiccup doesn't kill generation.
+  }
+
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
 
+  // Abort detection: if the client disconnects mid-stream (navigation, tab
+  // close, page refresh), Node fires 'close' on the response. Mark the run
+  // 'aborted' so the project page can show a recoverable state instead of
+  // a perpetually-running spinner. Only fires before res.end() is called.
+  let runFinalized = false
+  if (runId && userSupabase) {
+    const supabaseRef = userSupabase
+    const runIdRef = runId
+    res.on('close', () => {
+      if (!runFinalized) {
+        runFinalized = true
+        // Fire-and-forget: the response is already gone, no one to await for.
+        abortRun(supabaseRef, runIdRef).catch(() => {})
+      }
+    })
+  }
+
   const userPlan = await getUserPlan(user.id, user.email)
+
+  // Helper: when an SSE error path bails early, mark the run failed so the
+  // close-handler doesn't override it with 'aborted', and so the next page
+  // load can show "last generation failed" instead of "still running".
+  const finalizeFailed = async (errorMessage: string) => {
+    runFinalized = true
+    if (runId && userSupabase) {
+      await failRun(userSupabase, runId, errorMessage)
+    }
+  }
 
   try {
     // ===== PHASE 1: Plan the app with Haiku =====
@@ -481,6 +548,7 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     if (!planResponse.ok) {
       console.error('Plan API error:', planResponse.status, await planResponse.text())
       sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
+      await finalizeFailed('plan_api_error')
       return res.end()
     }
 
@@ -510,11 +578,13 @@ async function handleApp(req: VercelRequest, res: VercelResponse, user: any) {
     if (!plan) {
       console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
       sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
+      await finalizeFailed('plan_parse_failed')
       return res.end()
     }
 
     if (!plan.screens || !Array.isArray(plan.screens) || plan.screens.length < 2) {
       sendSSE(res, { type: 'error', message: 'Invalid app plan. Try a more detailed description.' })
+      await finalizeFailed('plan_invalid')
       return res.end()
     }
     if (!plan.screens.some(s => s.isHome)) plan.screens[0].isHome = true
@@ -570,6 +640,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       console.error('Generation API error:', genResponse.status, await genResponse.text())
       logUsage({ userId: user.id, projectId, modelUsed: genModel, generationType: 'app', promptPreview: prompt, success: false })
       sendSSE(res, { type: 'error', message: 'Failed to generate screens. Try again.' })
+      await finalizeFailed('screen_gen_api_error')
       return res.end()
     }
 
@@ -601,6 +672,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     if (!screens) {
       console.error('[generate-flow] Phase 2 screen-gen parse failed (post-retry). Stop reason:', genData.stop_reason, 'Full raw body:\n', genText)
       sendSSE(res, { type: 'error', message: 'Failed to parse generated screens.' })
+      await finalizeFailed('screen_parse_failed')
       return res.end()
     }
     if (!Array.isArray(screens)) {
@@ -608,6 +680,7 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     }
     if (screens.length === 0) {
       sendSSE(res, { type: 'error', message: 'AI did not return valid screen array.' })
+      await finalizeFailed('screen_array_invalid')
       return res.end()
     }
 
@@ -635,7 +708,13 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
           .map(s => s.name)
           .filter((n): n is string => typeof n === 'string' && n.length > 0)
 
-    const normalizedScreens = screens.map((s: any, i: number) => {
+    // Sequential async loop (was screens.map) so we can persist each screen
+    // to the DB mid-stream. The LLM has already returned all screens by this
+    // point — we're iterating over an in-memory array, so awaiting per-screen
+    // INSERTs adds O(n × DB-roundtrip) which is negligible vs the LLM call.
+    const normalizedScreens: Array<{ id: string; planId: string; name: string; tree: unknown }> = []
+    for (let i = 0; i < screens.length; i++) {
+      const s = screens[i]
       const screenId = crypto.randomUUID()
       const tree = normalizeComponentTree(
         expandComponents(
@@ -653,10 +732,38 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
         name: s.name || plan.screens[i]?.name || `Screen ${i + 1}`,
         tree,
       }
+      normalizedScreens.push(normalized)
+
+      // Persist each screen as it's normalized so a refresh-during-flight
+      // sees partial state. Service-role bypass would also work here but
+      // userSupabase keeps RLS enforced. Best-effort: a write failure just
+      // means the client's debounced upsert at the end of the stream will
+      // catch up — the existing happy path is unaffected. Skip entirely
+      // when no projectId / no user-scoped client (back-compat).
+      if (userSupabase && typeof projectId === 'string') {
+        const { error: insertErr } = await userSupabase.from('screens').insert({
+          id: normalized.id,
+          project_id: projectId,
+          name: normalized.name,
+          component_tree: normalized.tree,
+          original_prompt: prompt,
+          order_index: i,
+          source: 'web',
+        })
+        if (insertErr) {
+          console.warn('[generate-flow] mid-stream screen insert failed:', normalized.name, insertErr.message)
+        }
+      }
+
       sendSSE(res, { type: 'screen', index: i, screen: { id: normalized.id, name: normalized.name, tree: normalized.tree } })
       sendSSE(res, { type: 'status', phase: 'generating', message: `Generated ${normalized.name} (${i + 1}/${screenCount})`, current: i + 1, total: screenCount })
-      return normalized
-    })
+
+      // Update generation_runs progress so the project page (or a second
+      // tab) can render an accurate "screen N of T" indicator via realtime.
+      if (runId && userSupabase) {
+        await updateRunProgress(userSupabase, runId, i + 1, screenCount)
+      }
+    }
 
     // Build connections from plan
     const planIdToScreenId = new Map<string, string>()
@@ -682,10 +789,19 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       connections, homeScreenId, appName: plan.appName,
       modelUsed: genModel.includes('sonnet') ? 'Sonnet' : 'Haiku',
     })
+    runFinalized = true
+    if (runId && userSupabase && typeof projectId === 'string') {
+      await completeRun(userSupabase, runId)
+      await setProjectState(userSupabase, projectId, 'built')
+    }
     res.end()
   } catch (err) {
     console.error('Generate app error:', err)
     sendSSE(res, { type: 'error', message: `Failed: ${err instanceof Error ? err.message : String(err)}` })
+    runFinalized = true
+    if (runId && userSupabase) {
+      await failRun(userSupabase, runId, err instanceof Error ? err.message : String(err))
+    }
     res.end()
   }
 }
@@ -698,19 +814,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await authenticateRequest(req, res)
   if (!user) return
 
-  // Phase 1: build a user-JWT-scoped Supabase client so the upcoming Phase 2
-  // mid-stream INSERTs into `screens` / `generation_runs` write under the
-  // signed-in user's identity (RLS enforced) instead of bypassing via
-  // service role. Null for MCP / anonymous callers — Phase 2 must guard.
-  // Intentionally unused in Phase 1; surface stays warm-typed for the next
-  // patch series.
+  // Per-request user-JWT-scoped Supabase client. Used by handleApp to write
+  // generation_runs and screens under the user's identity (RLS enforced)
+  // instead of via service-role bypass. Null for MCP / anonymous callers,
+  // in which case handleApp falls back to its pre-Phase-2 in-memory path.
   const userSupabase = createUserSupabaseClient(user.accessToken)
-  void userSupabase
 
   const { mode } = req.body ?? {}
 
   if (mode === 'app') {
-    return handleApp(req, res, user)
+    return handleApp(req, res, user, userSupabase)
   }
   return handleFlow(req, res, user)
 }

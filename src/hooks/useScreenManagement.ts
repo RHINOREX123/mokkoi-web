@@ -223,22 +223,27 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
         },
         (payload) => {
           const newScreen = payload.new as Record<string, unknown>
-          // Only process screens from MCP (avoid duplicating our own inserts)
-          if (newScreen.source !== 'mcp') return
+          // Accept both 'mcp' (external editor) and 'web' (this app's own
+          // mid-stream generation writes from /api/generate-flow). The
+          // dedupe by screen.id below prevents the SSE consumer's optimistic
+          // append from racing with the realtime echo of its own insert.
+          const source = newScreen.source
+          if (source !== 'mcp' && source !== 'web') return
 
           const screen: GeneratedScreen = {
             id: newScreen.id as string,
             name: newScreen.name as string,
             tree: newScreen.component_tree as ComponentNode,
             originalPrompt: (newScreen.original_prompt ?? newScreen.prompt ?? undefined) as string | undefined,
-            source: 'mcp',
+            source: source as 'mcp' | 'web',
             x: (newScreen.x_pos as number) ?? undefined,
             y: (newScreen.y_pos as number) ?? undefined,
             deviceId: (newScreen.device_id as DeviceId) || undefined,
           }
 
           setGeneratedScreens(prev => {
-            // Don't add if already exists
+            // Don't add if already exists (dedupe by id covers both the
+            // MCP path and the web path where SSE may have already added it)
             if (prev.some(s => s.id === screen.id)) return prev
             return [...prev, screen]
           })
@@ -254,7 +259,8 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
         },
         (payload) => {
           const updated = payload.new as Record<string, unknown>
-          if (updated.source !== 'mcp') return
+          const source = updated.source
+          if (source !== 'mcp' && source !== 'web') return
 
           setGeneratedScreens(prev =>
             prev.map(s =>
@@ -263,7 +269,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
                     ...s,
                     name: updated.name as string,
                     tree: updated.component_tree as ComponentNode,
-                    source: 'mcp',
+                    source: source as 'mcp' | 'web',
                   }
                 : s
             )

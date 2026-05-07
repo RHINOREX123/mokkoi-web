@@ -580,10 +580,16 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
           y: nextPos.y + Math.floor(i / cols) * (CANVAS_H + GAP + 50),
         }))
 
-        // Replace placeholder with actual screens
+        // Replace placeholder with actual screens. Phase 2: the realtime
+        // subscription may have already inserted same-id rows mid-stream
+        // (no x/y positions because the server-side INSERT doesn't set
+        // them). Drop those by id and use the positioned `appScreens`
+        // built above as canonical, so duplicates can't accumulate.
         setGeneratedScreens(prev => {
           const withoutPlaceholder = prev.filter(s => s.id !== placeholderId)
-          return [...withoutPlaceholder, ...appScreens]
+          const sseIds = new Set(appScreens.map(s => s.id))
+          const nonSse = withoutPlaceholder.filter(s => !sseIds.has(s.id))
+          return [...nonSse, ...appScreens]
         })
 
         // Delete the placeholder row from Supabase. The auto-save effect
