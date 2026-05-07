@@ -1,113 +1,76 @@
-# Voice prompt — mic next to Camera on prompt card
+# Voice prompt input (Whisper)
 
-**Status:** `idea`
-**Estimated effort:** 4–6 hours (Web Speech API path) OR 1 day (Whisper path)
-**Priority:** Low-medium (nice-to-have; differentiator if done well)
-**Owner:** unassigned
+Spec for adding voice-to-prompt to Mokkoi. Self-contained — anyone can pick this up.
 
-## Goal
+## Decisions locked
 
-Add a mic icon next to the Camera button on the dashboard PromptCard. User taps it → speaks → audio is transcribed → text fills the prompt textarea. They can edit before submitting.
+- **Transcription model:** `gpt-4o-mini-transcribe` (OpenAI). Fast, cheap (~$0.003/min), good quality.
+- **Auto-stop:** silence detection at ~2s pause threshold. No manual stop button required (but tapping the orb again should still stop early).
+- **Surface:** dashboard prompt input + project-page chat input. NOT edit-screen prompt (skip v1, revisit if usage demands).
+- **No live partial transcription** during speech (more complex, deferred).
+- **Auto-submit after transcription** — text bypasses the input field; goes straight to the pipeline.
 
-## Why
+## Open call (decide before building)
 
-- Some users prefer talking to typing (mobile, accessibility, fast iteration)
-- Differentiator: most AI builders are keyboard-only
-- Low friction add: live in the same row as Camera, no new screen
+Magic vs safety tradeoff for the transcribed text:
 
-## Two implementation paths
+- **A. Pure magic.** Whisper text never visible anywhere. Goes straight to `/api/generate-flow` or `/api/plan-conversation`. Best feel, worst recovery.
+- **B. Brief flash.** Text appears in input for ~1s then auto-submits.
+- **C. 2s undo.** Text appears + 2s countdown + cancel button. Premium AND safe.
 
-### Path 1: Web Speech API (cheap, fast to ship)
+Recommended: **C**. Same magic feel, recoverable on misheard prompts.
 
-```ts
-// In PromptCard.tsx
-const recognition = new (window as any).webkitSpeechRecognition()
-recognition.continuous = false
-recognition.interimResults = true
-recognition.lang = 'en-US'
-
-recognition.onresult = (event) => {
-  const transcript = Array.from(event.results)
-    .map(r => r[0].transcript)
-    .join('')
-  onChange(transcript)
-}
-
-recognition.start()
-```
-
-- 🟢 **Free** — runs in browser, no API cost
-- 🟢 **Fast to ship** — ~4-6 hrs work
-- 🟢 **Real-time partial results** — user sees text as they speak
-- 🔴 **Chrome / Edge only** — not Safari, not Firefox
-- 🔴 **English-only by default** (can pick other langs but quality varies)
-
-### Path 2: Whisper API (better quality, costs $)
-
-```ts
-// Record audio with MediaRecorder
-// POST audio to /api/transcribe
-// Server: Whisper API call → return transcript
-```
-
-- 🟢 **Cross-browser** — works on Safari, Firefox, etc.
-- 🟢 **Multilingual** — 99 languages supported
-- 🟢 **Better accent tolerance**
-- 🔴 **$0.006 per minute** — at scale, adds up
-- 🔴 **No real-time** — record full audio, then transcribe (~2-3s latency)
-- 🔴 **More backend work** — new endpoint, audio handling
-
-## Recommended path
-
-**Start with Path 1 (Web Speech API).** Ship it, see usage. Most users are on Chrome anyway. If we get Safari/Firefox feedback, upgrade to Path 2 with a fallback.
-
-## UI design
+## Architecture
 
 ```
-[ ── prompt textarea ── ]
-🎤  📷                         [Build|Plan]  [↑]
-└─ mic
-   Click → starts recording
-   Click again → stops
-   While recording: pulsing red dot, "Listening…" placeholder
-   Transcript fills textarea live (Path 1) or after stop (Path 2)
+Tap mic → MediaRecorder API → blob → POST /api/transcribe (multipart)
+       → server forwards to OpenAI gpt-4o-mini-transcribe
+       → text returned to client → fed into existing prompt pipeline
 ```
 
-## Files to touch (Path 1 — Web Speech API)
+No changes to `/api/generate-flow` or `/api/plan-conversation`. Voice is purely an input-method addition.
 
-```
-src/components/dashboard/PromptCard.tsx
-  - Add mic IconBtn next to Camera (line ~210 area in current code)
-  - useState for recording state
-  - useEffect to attach SpeechRecognition listeners
-  - onResult: call onChange(transcript)
-```
+## UI states
 
-That's it. No backend, no new dependencies.
+| State | Visual |
+|---|---|
+| Idle | Lucide `Mic` icon, same weight as Camera button |
+| Recording | Pulsing glow orb, audio-reactive subtle waveform ring, dim background tint |
+| Transcribing | Orb resolves to small spinner |
+| Done (option C) | Text in input + 2s "Cancel" countdown |
+| Error (mic denied / no audio / network fail) | Toast with retry |
 
-## Files to touch (Path 2 — Whisper)
+## Endpoint sketch
 
-```
-src/components/dashboard/PromptCard.tsx
-  - Mic button + MediaRecorder logic
-  - POST audio blob to /api/transcribe
-api/transcribe.ts                  — NEW
-  - Multipart audio handling
-  - Whisper API call
-  - Return { transcript: string }
-```
+`POST /api/transcribe`
+- Body: `multipart/form-data` with audio blob
+- Auth: same `authenticateRequest` helper
+- Forwards to OpenAI API with `OPENAI_API_KEY` env var
+- Returns `{ text: string }` on success
+- Rate-limit: ~30 transcriptions/hour per user (cheap but spammable otherwise)
+- Defensive: reject blobs > 25MB (OpenAI limit) and < 0.5s duration (junk)
 
-## Permissions
+## Files to touch
 
-Both paths require microphone permission. Browser handles the prompt natively. First-use should show a toast: "Mokkoi needs mic access to listen — your browser will ask."
+- New: `api/transcribe.ts`
+- New: `src/hooks/useVoiceRecording.ts` (MediaRecorder + silence detection state machine)
+- New: `src/components/VoiceMicButton.tsx` (the orb + waveform + transitions)
+- Modify: dashboard prompt input + ChatPanel input — drop the new button alongside `+` / Camera
+- Add: `OPENAI_API_KEY` to Vercel env
 
-## Out of scope
+## Edge cases to handle
 
-- Voice replies (Mokkoi speaking back)
-- Multi-language UI (English-only for now)
-- Voice commands beyond prompt input ("Mokkoi, build me an app" as a wake word — overkill)
+1. Mic permission denied — clear toast, link to browser settings
+2. No audio detected (user stays silent for full timeout) — silent abort, no API call
+3. Whisper returns empty text — toast "couldn't hear you, try again"
+4. Background noise / crosstalk — Whisper handles reasonably; no explicit dedupe
+5. User taps mic during in-flight generation — disable button while `isGenerating`
+6. User speaks too long (>60s) — hard cap, force stop, transcribe what we have
 
-## Dependencies
+## Cost ballpark
 
-- None hard. Path 1 ships standalone.
-- Path 2 needs an OpenAI API key with Whisper access in Vercel env vars.
+30s avg recording × $0.003/min = ~$0.0015 per transcription. 1000 free users × 5 prompts = $7.50/mo. Negligible.
+
+## Scope
+
+~4 hours focused work after the open call (A/B/C) is decided.
