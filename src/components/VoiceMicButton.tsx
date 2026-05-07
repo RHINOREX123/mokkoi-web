@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { Mic } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Mic, X } from 'lucide-react'
 import { useVoiceRecording, type VoiceState } from '../hooks/useVoiceRecording'
 
 interface VoiceMicButtonProps {
@@ -9,7 +10,7 @@ interface VoiceMicButtonProps {
   getAuthHeaders: () => Promise<Record<string, string>>
   /** Disable while another generation is in flight. */
   disabled?: boolean
-  /** Compact = 24px button (chat input); regular = 28px (dashboard prompt). */
+  /** Compact = 24px button (chat input); regular = 32px (dashboard prompt). */
   size?: 'compact' | 'regular'
   /** Surfaced toast text — consumer can show as it likes. */
   onError?: (message: string) => void
@@ -18,27 +19,23 @@ interface VoiceMicButtonProps {
 const ERROR_TEXT: Record<string, string> = {
   permission_denied: 'Microphone access denied. Allow it in your browser to use voice.',
   unsupported: "Your browser doesn't support voice input. Try Chrome or Safari.",
-  rate_limited: "Too many voice prompts in a short window. Wait a minute and try again.",
+  rate_limited: 'Too many voice prompts in a short window. Wait a minute and try again.',
   transcribe_failed: "Couldn't transcribe that — try again?",
   no_speech: "Didn't catch any speech. Try again.",
 }
 
 /**
- * The premium-feeling voice orb. Lives in the dashboard prompt strip and
- * the project chat input. Three render states drive a single button:
+ * Premium hero-style voice input. The trigger is small (sits inline with
+ * other input chrome) but tapping it opens a fullscreen, centered overlay
+ * with a large audio-reactive orb — Siri / ChatGPT voice-mode pattern.
  *
- * - idle: small Mic icon, neutral chrome — visually equivalent to other
- *   trailing icons in the input strip. No glow when not in use.
- * - recording: the icon explodes into a glowing orb with audio-reactive
- *   scale + concentric rings that expand on volume. Tap again to stop
- *   early; otherwise the hook auto-stops on 2s silence.
- * - transcribing: orb collapses, spinner ring sweeps, brief "..." beat
- *   before onTranscribed fires. Total perceived latency target ~1.5s.
+ * The overlay renders via React portal to document.body so it escapes
+ * any ancestor stacking context (the dashboard PromptCard has glassmorphic
+ * filters that would otherwise trap a position:fixed child).
  *
- * The recording state renders a fixed-position OVERLAY orb instead of
- * inflating in-place — the parent's flexbox would shift other inputs
- * around if we scaled the trigger. Overlay is centered above the trigger
- * via getBoundingClientRect.
+ * Status copy walks the user through the whole flow so they never wonder
+ * what's happening: "Tap to speak" → "Listening…" → "Heard you" →
+ * "Transcribing…" → "Sending to Mokkoi" → off.
  */
 export function VoiceMicButton({
   onTranscribed,
@@ -47,76 +44,68 @@ export function VoiceMicButton({
   size = 'compact',
   onError,
 }: VoiceMicButtonProps) {
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const [overlayPos, setOverlayPos] = useState<{ left: number; top: number } | null>(null)
+  // Defer the onTranscribed call by one tick after teardown so the overlay
+  // gets a chance to render its "Sending" frame before this component
+  // unmounts during navigation.
+  const [pendingSend, setPendingSend] = useState<string | null>(null)
+  const handleTranscribed = (text: string) => setPendingSend(text)
 
   const { state, audioLevel, error, start, stop } = useVoiceRecording({
-    onTranscribed,
+    onTranscribed: handleTranscribed,
     getAuthHeaders,
   })
 
-  // Surface errors via the consumer's toast handler. The hook clears errors
-  // on every fresh start, so this only fires on real failures.
+  useEffect(() => {
+    if (!pendingSend) return
+    const t = setTimeout(() => {
+      onTranscribed(pendingSend)
+      setPendingSend(null)
+    }, 500)
+    return () => clearTimeout(t)
+  }, [pendingSend, onTranscribed])
+
+  // Surface errors via the consumer's toast handler.
   useEffect(() => {
     if (!error) return
     const msg = ERROR_TEXT[error] || 'Voice input error.'
     onError?.(msg)
   }, [error, onError])
 
-  // When entering recording, capture the trigger's screen position so the
-  // overlay orb can center on it. Recompute on resize.
-  useEffect(() => {
-    if (state !== 'recording' && state !== 'transcribing') {
-      setOverlayPos(null)
-      return
-    }
-    const recompute = () => {
-      const rect = triggerRef.current?.getBoundingClientRect()
-      if (!rect) return
-      setOverlayPos({ left: rect.left + rect.width / 2, top: rect.top + rect.height / 2 })
-    }
-    recompute()
-    window.addEventListener('resize', recompute)
-    window.addEventListener('scroll', recompute, true)
-    return () => {
-      window.removeEventListener('resize', recompute)
-      window.removeEventListener('scroll', recompute, true)
-    }
-  }, [state])
-
   const handleClick = () => {
     if (disabled) return
     if (state === 'recording') {
       stop()
-    } else if (state === 'idle') {
+    } else if (state === 'idle' && !pendingSend) {
       void start()
     }
-    // 'transcribing' is a transient intermediate — clicks are no-ops.
   }
 
   const triggerSize = size === 'regular' ? 32 : 28
   const iconSize = size === 'regular' ? 18 : 16
 
+  // The overlay shows for any non-idle state, plus the "Sending" beat after
+  // the hook returns to idle but before the parent's send fires.
+  const overlayActive = state !== 'idle' || pendingSend !== null
+
   return (
     <>
       <button
-        ref={triggerRef}
         type="button"
         onClick={handleClick}
-        disabled={disabled || state === 'transcribing'}
+        disabled={disabled || state === 'transcribing' || pendingSend !== null}
         aria-label={state === 'recording' ? 'Stop voice recording' : 'Start voice recording'}
         title={state === 'recording' ? 'Stop recording' : 'Speak to Mokkoi'}
         style={{
           width: triggerSize,
           height: triggerSize,
           borderRadius: 8,
-          background: state === 'idle'
+          background: state === 'idle' && !pendingSend
             ? 'rgba(255,255,255,0.04)'
             : 'rgba(45, 212, 191, 0.18)',
-          border: state === 'idle'
+          border: state === 'idle' && !pendingSend
             ? '1px solid rgba(255,255,255,0.08)'
             : '1px solid rgba(45, 212, 191, 0.35)',
-          color: state === 'idle' ? '#94a3b8' : '#6ee7d4',
+          color: state === 'idle' && !pendingSend ? '#94a3b8' : '#6ee7d4',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.4 : 1,
           display: 'flex',
@@ -130,146 +119,210 @@ export function VoiceMicButton({
         <Mic size={iconSize} strokeWidth={1.8} />
       </button>
 
-      {/* Overlay orb only renders during recording / transcribing */}
-      {overlayPos && (
-        <VoiceOrbOverlay
+      {overlayActive && createPortal(
+        <VoiceOverlay
           state={state}
           audioLevel={audioLevel}
-          left={overlayPos.left}
-          top={overlayPos.top}
-        />
+          sending={pendingSend !== null}
+          onCancel={() => stop()}
+        />,
+        document.body,
       )}
     </>
   )
 }
 
 /**
- * The big audio-reactive orb that floats above the trigger button while
- * recording. Rendered as a fixed-position element so it can scale beyond
- * the input row without disturbing layout. CSS-only animation for the
- * breathing pulse; JS-driven inline styles for the audio reactivity so
- * we get sub-frame responsiveness from the hook's audioLevel value.
+ * Fullscreen Siri-style overlay. Renders into a portal at document.body
+ * so it sits above every other layer regardless of where the trigger
+ * was mounted. Tapping the dim backdrop cancels the recording.
  */
-function VoiceOrbOverlay({
+function VoiceOverlay({
   state,
   audioLevel,
-  left,
-  top,
+  sending,
+  onCancel,
 }: {
   state: VoiceState
   audioLevel: number
-  left: number
-  top: number
+  sending: boolean
+  onCancel: () => void
 }) {
   const isRecording = state === 'recording'
   const isTranscribing = state === 'transcribing'
 
-  // Scale + glow drive off audioLevel during recording. During transcribing
-  // we lock to a calm baseline.
-  const orbScale = isRecording ? 1 + audioLevel * 0.35 : 1
-  const ringStrength = Math.min(audioLevel * 3, 1)
+  // Status walk: idle UI never reaches the overlay (gated above).
+  // recording with no speech yet → "Tap and speak"
+  // recording with speech → "Listening…"
+  // transcribing → "Heard you · transcribing…"
+  // sending (post-hook idle, pre-parent send) → "Sending to Mokkoi"
+  const showHeardYet = isRecording && audioLevel >= 0.025
+  const status = sending
+    ? 'Sending to Mokkoi'
+    : isTranscribing
+      ? 'Heard you · transcribing…'
+      : showHeardYet
+        ? 'Listening…'
+        : 'Speak now'
 
-  const orbSize = isRecording ? 132 : 88
+  const orbScale = isRecording ? 1 + audioLevel * 0.45 : 1
+  const ringStrength = Math.min(audioLevel * 3, 1)
+  const orbSize = isRecording ? 200 : 140
 
   return (
     <div
-      aria-hidden
+      role="dialog"
+      aria-label="Voice input"
+      onClick={isRecording ? onCancel : undefined}
       style={{
         position: 'fixed',
-        left,
-        top: top - 80, // float above the trigger so it doesn't cover the input
-        transform: 'translate(-50%, -50%)',
-        pointerEvents: 'none',
-        zIndex: 9999,
+        inset: 0,
+        zIndex: 2147483647,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 36,
+        background: 'rgba(5, 8, 14, 0.78)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        animation: 'mokkoi-voice-fade-in 0.25s ease-out',
       }}
     >
-      {/* Concentric rings — audio-reactive opacity + scale. */}
-      {[0, 1, 2].map(i => (
+      {/* Orb stack — clicking the orb itself stops, clicking backdrop also stops */}
+      <div
+        style={{ position: 'relative', width: 360, height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Concentric rings — audio-reactive */}
+        {[0, 1, 2, 3].map(i => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              width: orbSize * 2.4,
+              height: orbSize * 2.4,
+              borderRadius: '50%',
+              border: '1px solid rgba(110, 231, 212, 0.5)',
+              opacity: isRecording ? Math.max(ringStrength * (0.7 - i * 0.15), 0) : 0,
+              transform: `scale(${(0.4 + ringStrength * 0.55 * ((i + 1) / 4) + i * 0.07).toFixed(3)})`,
+              transition: 'opacity 0.2s ease, transform 0.2s ease',
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
+
+        {/* Spinner ring during transcribing/sending */}
         <div
-          key={i}
           style={{
             position: 'absolute',
-            left: '50%',
-            top: '50%',
-            width: orbSize * 2,
-            height: orbSize * 2,
-            marginLeft: -(orbSize),
-            marginTop: -(orbSize),
+            width: orbSize + 28,
+            height: orbSize + 28,
             borderRadius: '50%',
-            border: '1px solid rgba(45, 212, 191, 0.45)',
-            opacity: isRecording ? Math.max(ringStrength * (0.7 - i * 0.18), 0) : 0,
-            transform: `scale(${(0.55 + ringStrength * 0.55 * ((i + 1) / 3) + i * 0.05).toFixed(3)})`,
-            transition: 'opacity 0.2s ease, transform 0.2s ease',
+            border: '2px solid transparent',
+            borderTopColor: 'rgba(110, 231, 212, 0.95)',
+            borderRightColor: 'rgba(110, 231, 212, 0.45)',
+            opacity: isTranscribing || sending ? 1 : 0,
+            animation: (isTranscribing || sending) ? 'mokkoi-voice-spin 0.9s linear infinite' : 'none',
+            transition: 'opacity 0.3s ease',
+            pointerEvents: 'none',
           }}
         />
-      ))}
 
-      {/* Spinner ring during transcribing. */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          width: orbSize + 20,
-          height: orbSize + 20,
-          marginLeft: -(orbSize / 2 + 10),
-          marginTop: -(orbSize / 2 + 10),
-          borderRadius: '50%',
-          border: '2px solid transparent',
-          borderTopColor: 'rgba(110, 231, 212, 0.95)',
-          borderRightColor: 'rgba(110, 231, 212, 0.45)',
-          opacity: isTranscribing ? 1 : 0,
-          animation: isTranscribing ? 'mokkoi-voice-spin 0.9s linear infinite' : 'none',
-          transition: 'opacity 0.3s ease',
-        }}
-      />
-
-      {/* Core orb */}
-      <div
-        style={{
-          width: orbSize,
-          height: orbSize,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle at 35% 35%, rgba(110, 231, 212, 0.95), rgba(6, 182, 212, 0.85) 60%, rgba(8, 145, 178, 0.95) 100%)',
-          boxShadow: isRecording
-            ? '0 0 0 1px rgba(110, 231, 212, 0.7), 0 0 60px rgba(45, 212, 191, 0.55), 0 0 120px rgba(6, 182, 212, 0.35)'
-            : '0 0 0 1px rgba(110, 231, 212, 0.35), 0 0 30px rgba(45, 212, 191, 0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transform: `scale(${orbScale.toFixed(3)})`,
-          transition: 'width 0.4s cubic-bezier(0.16, 1, 0.3, 1), height 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease',
-          animation: isRecording ? 'mokkoi-voice-breathe 1.4s ease-in-out infinite' : 'mokkoi-voice-breathe 2.6s ease-in-out infinite',
-        }}
-      >
-        <Mic size={isRecording ? 36 : 28} color="white" strokeWidth={1.8} />
+        {/* Core orb */}
+        <button
+          type="button"
+          onClick={isRecording ? onCancel : undefined}
+          aria-label={isRecording ? 'Stop' : status}
+          style={{
+            width: orbSize,
+            height: orbSize,
+            borderRadius: '50%',
+            border: 'none',
+            padding: 0,
+            background: 'radial-gradient(circle at 35% 35%, rgba(110, 231, 212, 0.95), rgba(6, 182, 212, 0.85) 60%, rgba(8, 145, 178, 0.95) 100%)',
+            boxShadow: isRecording
+              ? '0 0 0 1px rgba(110, 231, 212, 0.7), 0 0 100px rgba(45, 212, 191, 0.7), 0 0 200px rgba(6, 182, 212, 0.4)'
+              : '0 0 0 1px rgba(110, 231, 212, 0.5), 0 0 60px rgba(45, 212, 191, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: `scale(${orbScale.toFixed(3)})`,
+            transition: 'width 0.4s cubic-bezier(0.16, 1, 0.3, 1), height 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease',
+            animation: isRecording
+              ? 'mokkoi-voice-breathe 1.4s ease-in-out infinite'
+              : 'mokkoi-voice-breathe 2.6s ease-in-out infinite',
+            cursor: isRecording ? 'pointer' : 'default',
+            color: 'white',
+          }}
+        >
+          <Mic size={isRecording ? 56 : 44} strokeWidth={1.8} />
+        </button>
       </div>
 
-      {/* Status label */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '100%',
-          marginTop: 16,
-          transform: 'translateX(-50%)',
-          fontSize: 12,
-          letterSpacing: 0.3,
-          color: '#6ee7d4',
-          whiteSpace: 'nowrap',
-          opacity: 0.9,
-        }}
-      >
-        {isRecording ? 'Listening…' : isTranscribing ? 'Transcribing…' : ''}
+      {/* Status text */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div
+          style={{
+            fontSize: 18,
+            fontWeight: 500,
+            letterSpacing: 0.2,
+            color: '#e2e8f0',
+            textAlign: 'center',
+          }}
+        >
+          {status}
+        </div>
+        {isRecording && (
+          <div
+            style={{
+              fontSize: 12,
+              color: '#64748b',
+              letterSpacing: 0.4,
+              opacity: 0.8,
+            }}
+          >
+            Pause to send · tap orb or backdrop to cancel
+          </div>
+        )}
       </div>
 
-      {/* Inject keyframes once globally — cheaper than a styled-components dep
-          and keeps this component self-contained. */}
+      {/* Cancel button — top-right, simple and discoverable */}
+      {isRecording && (
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Cancel voice input"
+          style={{
+            position: 'fixed',
+            top: 24,
+            right: 24,
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            color: '#cbd5e1',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <X size={18} />
+        </button>
+      )}
+
+      {/* Inject keyframes once. */}
       <style>{`
         @keyframes mokkoi-voice-spin { to { transform: rotate(360deg); } }
         @keyframes mokkoi-voice-breathe {
           0%, 100% { filter: brightness(1); }
-          50%      { filter: brightness(1.15); }
+          50%      { filter: brightness(1.2); }
+        }
+        @keyframes mokkoi-voice-fade-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       `}</style>
     </div>

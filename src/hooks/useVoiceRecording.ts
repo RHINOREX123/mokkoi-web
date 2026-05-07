@@ -4,12 +4,12 @@ export type VoiceState = 'idle' | 'recording' | 'transcribing'
 
 export interface UseVoiceRecordingResult {
   state: VoiceState
-  /** Normalized 0..1 audio level — use to drive UI animation. */
+  /** Normalized 0..1 audio level â€” use to drive UI animation. */
   audioLevel: number
   /** Last error (clears on next start). */
   error: string | null
   start: () => Promise<void>
-  /** Manual stop — auto-stop on silence is built in but UI can also force it. */
+  /** Manual stop â€” auto-stop on silence is built in but UI can also force it. */
   stop: () => void
 }
 
@@ -18,7 +18,7 @@ export interface UseVoiceRecordingOptions {
   onTranscribed: (text: string) => void
   /**
    * Authorization header(s) to send with the POST. Same shape Mokkoi uses
-   * elsewhere — the dashboard / chat panel pass through getAuthHeaders().
+   * elsewhere â€” the dashboard / chat panel pass through getAuthHeaders().
    */
   getAuthHeaders: () => Promise<Record<string, string>>
   /** Auth/server endpoint. Defaults to /api/transcribe. */
@@ -53,13 +53,13 @@ function pickMimeType(): string {
  * 0..1 number can be wired to scale, glow intensity, ring opacity, etc.
  *
  * Failure modes (all surface via `error`):
- * - mic permission denied → "permission_denied"
- * - MediaRecorder not supported → "unsupported"
- * - transcribe upstream error → "transcribe_failed"
- * - empty transcription (silence detected but nothing said) → "no_speech"
- * - rate limited → "rate_limited"
+ * - mic permission denied â†’ "permission_denied"
+ * - MediaRecorder not supported â†’ "unsupported"
+ * - transcribe upstream error â†’ "transcribe_failed"
+ * - empty transcription (silence detected but nothing said) â†’ "no_speech"
+ * - rate limited â†’ "rate_limited"
  *
- * The hook does NOT decide what to do with the transcribed text — the
+ * The hook does NOT decide what to do with the transcribed text â€” the
  * consumer's onTranscribed callback fires it down the prompt pipeline.
  */
 export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecordingResult {
@@ -82,10 +82,13 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
   const analyserRef = useRef<AnalyserNode | null>(null)
   const rafRef = useRef<number | null>(null)
   const silenceStartRef = useRef<number>(0)
+  /** Flips true on the first frame above threshold. Auto-stop only fires
+   *  after this — otherwise a quiet room kills recording before speech. */
+  const hasSpeechDetectedRef = useRef<boolean>(false)
   const startedAtRef = useRef<number>(0)
   const chunksRef = useRef<Blob[]>([])
   const mimeTypeRef = useRef<string>('')
-  // We reference these from event handlers — keep them in refs so the closure
+  // We reference these from event handlers â€” keep them in refs so the closure
   // sees the latest opts values without re-binding the recorder each render.
   const onTranscribedRef = useRef(onTranscribed)
   const getAuthHeadersRef = useRef(getAuthHeaders)
@@ -184,7 +187,7 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
       setState('transcribing')
       try {
         const headers = await getAuthHeadersRef.current()
-        // Don't let getAuthHeaders set a Content-Type — we need the audio mime.
+        // Don't let getAuthHeaders set a Content-Type â€” we need the audio mime.
         const cleanHeaders: Record<string, string> = {}
         for (const [k, v] of Object.entries(headers)) {
           if (k.toLowerCase() !== 'content-type') cleanHeaders[k] = v
@@ -235,6 +238,7 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
     const data = new Uint8Array(analyser.frequencyBinCount)
 
     silenceStartRef.current = 0
+    hasSpeechDetectedRef.current = false
     startedAtRef.current = performance.now()
     setState('recording')
     recorder.start()
@@ -256,14 +260,15 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
         return
       }
 
-      if (avg < silenceThreshold) {
+      if (avg >= silenceThreshold) {
+        hasSpeechDetectedRef.current = true
+        silenceStartRef.current = 0
+      } else if (hasSpeechDetectedRef.current) {
         if (silenceStartRef.current === 0) silenceStartRef.current = now
         if (now - silenceStartRef.current > silenceHoldMs) {
           stop()
           return
         }
-      } else {
-        silenceStartRef.current = 0
       }
       rafRef.current = requestAnimationFrame(tick)
     }
