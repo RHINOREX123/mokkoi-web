@@ -59,7 +59,7 @@ export function authenticateMCPRequest(
 export async function authenticateRequest(
   req: VercelRequest,
   res: VercelResponse
-): Promise<{ id: string; email?: string; isMCP?: boolean } | null> {
+): Promise<{ id: string; email?: string; isMCP?: boolean; accessToken?: string } | null> {
   // --- MCP auth: check X-Mokkoi-Source header first ---
   const mcpAuth = authenticateMCPRequest(req)
   if (mcpAuth) return mcpAuth
@@ -95,12 +95,28 @@ export async function authenticateRequest(
       return null
     }
 
-    return { id: data.user.id, email: data.user.email }
+    return { id: data.user.id, email: data.user.email, accessToken: bearerToken }
   } catch (err) {
     console.error('Auth error (Supabase call failed):', err)
     res.status(500).json({ error: 'Authentication service error. Please try again.' })
     return null
   }
+}
+
+/**
+ * Build a Supabase client scoped to the authenticated user's JWT. Reads and
+ * writes through this client are subject to Row-Level Security as that user
+ * (no service-role bypass). Returns null when no user JWT is available
+ * (MCP / anonymous calls), and callers must handle that case.
+ */
+export function createUserSupabaseClient(accessToken: string | undefined) {
+  if (!accessToken) return null
+  const { url, key } = getSupabaseConfig()
+  if (!url || !key) return null
+  return createClient(url, key, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  })
 }
 
 export async function checkRateLimit(

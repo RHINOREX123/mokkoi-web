@@ -293,8 +293,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     planInflightRef.current = controller
     const timeoutId = setTimeout(() => controller.abort(), 30_000)
 
-    // Optimistic append. Save user message to DB so write-then-call ordering
-    // means refresh-during-flight resumes correctly.
+    // Optimistic append for UI responsiveness; server reads history from
+    // the DB so the user-message insert MUST land before the call.
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -302,20 +302,16 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       timestamp: Date.now(),
     }
     setProjectMessages(prev => [...prev, userMsg])
-    saveMessage(userMsg)
-
-    // Build conversation history from CURRENT messages (BEFORE the optimistic
-    // append above). Endpoint also reads the user turn from the request body.
-    const history = projectMessages
-      .filter(m => !m.imageData && !(m.role === 'assistant' && m.content.startsWith('Error:')))
-      .map(m => ({ role: m.role, content: m.content }))
+    await saveMessage(userMsg)
 
     try {
       const authHeaders = await getAuthHeaders()
       const res = await fetch('/api/plan-conversation', {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ projectId, userMessage, conversationHistory: history }),
+        // No `conversationHistory` — server reloads from `messages` table to
+        // avoid optimistic state silently diverging from durable history.
+        body: JSON.stringify({ projectId, userMessage }),
         signal: controller.signal,
       })
 
@@ -386,7 +382,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       clearTimeout(timeoutId)
       if (planInflightRef.current === controller) planInflightRef.current = null
     }
-  }, [projectId, projectMessages, setProjectMessages, saveMessage, onPaywall, setToastMessage])
+  }, [projectId, setProjectMessages, saveMessage, onPaywall, setToastMessage])
 
   const handleSend = useCallback(async (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode, opts?: HandleSendOpts) => {
     const forceAppMode = opts?.forceAppMode === true

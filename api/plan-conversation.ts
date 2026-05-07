@@ -190,16 +190,20 @@ function tryParse(text: string): unknown {
 }
 
 /**
- * Save the assistant reply to messages with planner metadata. Fire-and-forget
- * so a save failure never breaks the response to the user. The client also
- * has the data in-memory and will save user messages on its own per spec.
+ * Save the assistant reply to messages with planner metadata. Awaited and
+ * surfaces errors — the next turn loads conversation history from this same
+ * table, so a silent drop here would corrupt the planner's memory. Returns
+ * true on success, false on failure (caller should 500).
  */
-function saveAssistantMessage(projectId: string, response: PlanResponse): void {
+async function saveAssistantMessage(projectId: string, response: PlanResponse): Promise<boolean> {
   const { url } = getSupabaseConfig()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return
+  if (!url || !serviceKey) {
+    console.error('[plan-conversation] cannot persist assistant message: Supabase service-role key not configured')
+    return false
+  }
   const supabase = createClient(url, serviceKey)
-  supabase
+  const { error } = await supabase
     .from('messages')
     .insert({
       project_id: projectId,
@@ -212,9 +216,47 @@ function saveAssistantMessage(projectId: string, response: PlanResponse): void {
         summary: response.summary,
       },
     })
-    .then(({ error }) => {
-      if (error) console.warn('[plan-conversation] save assistant message failed:', error.message)
-    })
+  if (error) {
+    console.error('[plan-conversation] save assistant message failed:', error.message)
+    return false
+  }
+  return true
+}
+
+/**
+ * Load conversation history for a project from the messages table. The DB is
+ * the single source of truth for prior turns — the client used to send
+ * `conversationHistory` in the request body, but that was optimistic state
+ * which silently diverged when an earlier assistant save failed (the old
+ * fire-and-forget path) leaving Haiku to reason against half-truths. Reads
+ * with the service-role key so RLS doesn't block; the projectId has already
+ * been validated as a UUID owned by an authenticated caller upstream of this
+ * helper (per the plan-mode rate / paywall checks).
+ */
+async function loadConversationHistory(projectId: string): Promise<HistoryMsg[]> {
+  const { url } = getSupabaseConfig()
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) return []
+  const supabase = createClient(url, serviceKey)
+  const { data, error } = await supabase
+    .from('messages')
+    .select('role, content')
+    .eq('project_id', projectId)
+    .in('role', ['user', 'assistant'])
+    .order('created_at', { ascending: true })
+  if (error) {
+    console.warn('[plan-conversation] load history failed:', error.message)
+    return []
+  }
+  const out: HistoryMsg[] = []
+  for (const row of data ?? []) {
+    const role = row.role
+    const content = row.content
+    if (typeof content !== 'string') continue
+    if (role !== 'user' && role !== 'assistant') continue
+    out.push({ role, content })
+  }
+  return out
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -248,7 +290,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const trimmedUserMessage = userMessage.trim().slice(0, USER_MESSAGE_MAX_LEN)
 
-  const history = normalizeHistory(body.conversationHistory)
+  // Load history from DB — the canonical source. Client-sent
+  // `conversationHistory` is intentionally ignored even if present; trusting
+  // it was the bug that let an unsaved assistant turn silently disappear from
+  // the planner's memory.
+  void normalizeHistory(body.conversationHistory)
+  const dbHistory = await loadConversationHistory(projectId)
+  // The client awaits the user-message insert before calling this endpoint,
+  // so the just-sent user turn is already in `dbHistory` as the last row.
+  // callHaiku appends `userMessage` separately, so drop the duplicate tail.
+  const history =
+    dbHistory.length > 0 &&
+    dbHistory[dbHistory.length - 1].role === 'user' &&
+    dbHistory[dbHistory.length - 1].content === trimmedUserMessage
+      ? dbHistory.slice(0, -1)
+      : dbHistory
   // Server-derived. Client `turnCount` is NOT in the schema and is ignored
   // even if sent — prevents a malicious client from pinning turnCount=0 to
   // bypass trim or the ≥2-turn ready_to_build guard.
@@ -312,8 +368,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Best-effort persist. Don't await — fire-and-forget like logUsage.
-  saveAssistantMessage(projectId, response)
+  // Persist before responding. The next turn re-reads `messages` to rebuild
+  // history; if this insert is dropped, the planner forgets its own reply.
+  const saved = await saveAssistantMessage(projectId, response)
+  if (!saved) {
+    return jsonError(res, 500, { error: 'persist_failed' })
+  }
 
   if (parsed.usage) {
     logUsage({

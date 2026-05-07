@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan } from './_lib/auth-helper.js'
+import { authenticateRequest, checkCredits, logUsage, deductCredits, getUserPlan, createUserSupabaseClient } from './_lib/auth-helper.js'
 import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
 import { normalizeComponentTree } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
@@ -697,6 +697,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const user = await authenticateRequest(req, res)
   if (!user) return
+
+  // Phase 1: build a user-JWT-scoped Supabase client so the upcoming Phase 2
+  // mid-stream INSERTs into `screens` / `generation_runs` write under the
+  // signed-in user's identity (RLS enforced) instead of bypassing via
+  // service role. Null for MCP / anonymous callers — Phase 2 must guard.
+  // Intentionally unused in Phase 1; surface stays warm-typed for the next
+  // patch series.
+  const userSupabase = createUserSupabaseClient(user.accessToken)
+  void userSupabase
 
   const { mode } = req.body ?? {}
 
