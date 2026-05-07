@@ -173,13 +173,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({ text })
 }
 
-const HALLUCINATION_PATTERNS: RegExp[] = [
+export const HALLUCINATION_PATTERNS: RegExp[] = [
   /^chatgpt[\s,.!?\-]*chatgpt[\s,.!?\-]*$/i,
   /^chatgpt[\s,.!?\-]*$/i,
-  /^thank(s| you)[\s,.!?\-]*(for watching)?[\s,.!?\-]*$/i,
-  /^subscribe[\s,.!?\-]*$/i,
-  /^bye[\s,.!?\-]*$/i,
-  /^(uh|um|ah|hmm|mm)[\s,.!?\-]*$/i,
+  // Require both "thank you" together OR a "...for watching" suffix.
+  // Bare "thanks" is a legitimate one-word reply in Plan/chat mode.
+  /^thank(s for watching| you( for watching)?)[\s,.!?\-]*$/i,
+  // Broadened from bare-word to prefix: Whisper's YouTube-training-data
+  // hallucination is "Subscribe to my channel"-style, never a real reply.
+  /^subscribe\b/i,
   /^[\s,.!?\-]*$/,
   /^[♪♫\s]+$/,
   /^©[\s\S]*$/,
@@ -191,9 +193,17 @@ const HALLUCINATION_PATTERNS: RegExp[] = [
   /^(mobile )?app to build:?/i,
 ]
 
-function isLikelyHallucination(text: string): boolean {
+// Filler-only utterance ("uh", "hmm.", "um!"). Genuine Whisper hallucinations
+// on silent audio, but a user can legitimately start a sentence with "um, ..."
+// — so only reject when the entire trimmed text is filler AND short enough
+// that there is no real content following.
+const FILLER_ONLY = /^(uh|um|ah|hmm|mm)[\s,.!?\-]*$/i
+const FILLER_MAX_LEN = 8
+
+export function isLikelyHallucination(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed.length < 3) return true
+  if (trimmed.length < FILLER_MAX_LEN && FILLER_ONLY.test(trimmed)) return true
   for (const re of HALLUCINATION_PATTERNS) {
     if (re.test(trimmed)) return true
   }
