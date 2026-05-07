@@ -6,7 +6,6 @@ import {
   updateRunProgress,
   completeRun,
   failRun,
-  abortRun,
   setProjectState,
 } from './_lib/generation-runs.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -314,7 +313,16 @@ export function buildConnections(
 }
 
 function sendSSE(res: VercelResponse, data: Record<string, unknown>) {
-  res.write(`data: ${JSON.stringify(data)}\n\n`)
+  // Tolerate writes after the client has disconnected. Track D's design
+  // keeps the function running to completion so screens land in the DB
+  // even when the user navigated away — but the SSE channel is gone, so
+  // res.write throws EPIPE / "write after end". Swallow it; the DB-write
+  // path is the source of truth, this is just the live progress mirror.
+  try {
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+  } catch {
+    // intentional no-op
+  }
 }
 
 // ==================== FLOW HANDLER (mode: default) ====================
@@ -494,30 +502,34 @@ async function handleApp(
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
 
-  // Abort detection: if the client disconnects mid-stream (navigation, tab
-  // close, page refresh), Node fires 'close' on the response. Mark the run
-  // 'aborted' so the project page can show a recoverable state instead of
-  // a perpetually-running spinner. Only fires before res.end() is called.
-  let runFinalized = false
-  if (runId && userSupabase) {
-    const supabaseRef = userSupabase
-    const runIdRef = runId
+  // Track D — generation continuation: Vercel Node functions keep running
+  // until exit or maxDuration even after the client closes the connection.
+  // The previous draft of this code aborted the run on 'close', which
+  // caused the (correct) screens to land in the DB while the run row
+  // (incorrectly) said 'aborted'. We now just track the disconnect so
+  // sendSSE can no-op silently; the main handler runs to completion and
+  // finalizes the run via complete/fail naturally.
+  //
+  // Edge case: if the function dies mid-generation (maxDuration hit before
+  // the LLM responds), the run stays 'running' indefinitely. The client
+  // applies a stale-detection threshold in useGenerationRun so the UI
+  // doesn't show a perpetual "Resuming…" — see that hook.
+  if (runId) {
     res.on('close', () => {
-      if (!runFinalized) {
-        runFinalized = true
-        // Fire-and-forget: the response is already gone, no one to await for.
-        abortRun(supabaseRef, runIdRef).catch(() => {})
-      }
+      // Intentionally NOT calling abortRun here. The function keeps going.
+      // Logged so server-side log scraping can correlate disconnect events
+      // with the run row's eventual status.
+      console.log(`[generate-flow] client disconnected mid-stream; run ${runId} continues server-side`)
     })
   }
 
   const userPlan = await getUserPlan(user.id, user.email)
 
   // Helper: when an SSE error path bails early, mark the run failed so the
-  // close-handler doesn't override it with 'aborted', and so the next page
-  // load can show "last generation failed" instead of "still running".
+  // next page load can show "last generation failed" instead of "still
+  // running". Sets status='failed' atomically (the helper's filter on
+  // status='running' makes double-finalization a no-op).
   const finalizeFailed = async (errorMessage: string) => {
-    runFinalized = true
     if (runId && userSupabase) {
       await failRun(userSupabase, runId, errorMessage)
     }
@@ -789,7 +801,6 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       connections, homeScreenId, appName: plan.appName,
       modelUsed: genModel.includes('sonnet') ? 'Sonnet' : 'Haiku',
     })
-    runFinalized = true
     if (runId && userSupabase && typeof projectId === 'string') {
       await completeRun(userSupabase, runId)
       await setProjectState(userSupabase, projectId, 'built')
@@ -798,7 +809,6 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
   } catch (err) {
     console.error('Generate app error:', err)
     sendSSE(res, { type: 'error', message: `Failed: ${err instanceof Error ? err.message : String(err)}` })
-    runFinalized = true
     if (runId && userSupabase) {
       await failRun(userSupabase, runId, err instanceof Error ? err.message : String(err))
     }

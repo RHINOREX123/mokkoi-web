@@ -18,10 +18,22 @@ export interface GenerationRun {
 
 export interface UseGenerationRun {
   run: GenerationRun | null
+  /** True only when the run is genuinely active. A row stuck on 'running'
+   *  past STALE_THRESHOLD_MS (e.g., the serverless function was killed by
+   *  maxDuration before it could finalize) is treated as not-running so
+   *  the UI doesn't show a perpetual "Resuming…". */
   isRunning: boolean
+  /** True when status='running' but started_at is older than the stale
+   *  threshold. Consumers can show a "last run stalled — try again" notice. */
+  isStale: boolean
   progress: { current: number; total: number } | null
   loaded: boolean
 }
+
+// Vercel maxDuration is 300s (vercel.json). Allow 2× headroom for the LLM
+// + DB roundtrips before declaring a 'running' row stale. Anything older
+// than this almost certainly means the function died without finalizing.
+const STALE_THRESHOLD_MS = 10 * 60 * 1000
 
 /**
  * Subscribe to the latest generation_run for a project. Loads once on mount,
@@ -111,11 +123,14 @@ export function useGenerationRun(projectId: string | null): UseGenerationRun {
     }
   }, [projectId])
 
-  const isRunning = run?.status === 'running'
+  const rawRunning = run?.status === 'running'
+  const startedAtMs = run?.started_at ? new Date(run.started_at).getTime() : 0
+  const isStale = rawRunning && startedAtMs > 0 && Date.now() - startedAtMs > STALE_THRESHOLD_MS
+  const isRunning = rawRunning && !isStale
   const progress: UseGenerationRun['progress'] =
     run && typeof run.total_screens === 'number' && run.total_screens > 0
       ? { current: run.current_screen_index ?? 0, total: run.total_screens }
       : null
 
-  return { run, isRunning, progress, loaded }
+  return { run, isRunning, isStale, progress, loaded }
 }
