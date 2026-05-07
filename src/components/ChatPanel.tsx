@@ -99,6 +99,10 @@ interface ChatPanelProps {
    *  a second tab observing live progress. Drives the "Resuming generationÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦"
    *  indicator above the regular generating UI. */
   resumingRun?: boolean
+  /** Surfaces voice-flow errors (no_speech, mic denied, transcription failed)
+   *  to the parent's toast system. Without this wired, the orb tears down
+   *  silently when the user says nothing. */
+  onVoiceError?: (message: string) => void
 }
 
 const PLACEHOLDERS = [
@@ -144,7 +148,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight, resumingRun }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight, resumingRun, onVoiceError }: ChatPanelProps) {
   // Plan-mode banner ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â dismissible, local state only. App.tsx strips the
   // ?mode=plan param on mount, so a refresh does NOT re-show the banner;
   // dismiss is effectively per-page-load. That's intentional: the banner is
@@ -281,7 +285,11 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
   // the same pipeline handleSend uses. Mirrors handleSend's mode-routing
   // (plan vs build) so voice has identical semantics to typed prompts.
   const handleVoiceTranscribed = (text: string) => {
-    if (!text.trim() || isGenerating) return
+    if (!text.trim()) {
+      onVoiceError?.("We didn't hear that — try again")
+      return
+    }
+    if (isGenerating) return
     const hasAttached = attachedImages.length > 0
     if (planMode && onPlanSend && !hasAttached) {
       onPlanSend(text.trim())
@@ -1258,6 +1266,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               disabled={isGenerating}
               getAuthHeaders={getAuthHeaders}
               onTranscribed={handleVoiceTranscribed}
+              onError={onVoiceError}
             />
 
             <div className="flex-1 relative">

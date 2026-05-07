@@ -258,7 +258,11 @@ export default function Dashboard() {
   // the user never sees their words flash on screen.
   const handleVoiceSubmit = (text: string) => {
     const trimmed = text.trim()
-    if (!trimmed || isSubmitting) return
+    if (!trimmed) {
+      setToastMessage("We didn't hear that — try again")
+      return
+    }
+    if (isSubmitting) return
     if (submitMode === 'plan' && userPlanState.plan === 'free') {
       try {
         sessionStorage.setItem(
@@ -925,6 +929,7 @@ export default function Dashboard() {
             onChange={setPrompt}
             onSubmit={handleSubmitPrompt}
             onVoiceSubmit={handleVoiceSubmit}
+            onError={setToastMessage}
             mode={submitMode}
             onModeChange={handleModeChange}
             disabled={isSubmitting}

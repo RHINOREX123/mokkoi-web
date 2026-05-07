@@ -40,6 +40,10 @@ export interface PromptCardProps {
   /** Voice flow: receives the transcribed text and submits directly,
    *  bypassing the textarea. Keeps the magic flow (no flash of words). */
   onVoiceSubmit?: (text: string) => void
+  /** Surfaces voice-flow errors (no_speech, mic denied, transcription failed)
+   *  to the parent's toast system. Without this wired, the orb tears down
+   *  silently when the user says nothing. */
+  onError?: (message: string) => void
 }
 
 /**
@@ -69,6 +73,7 @@ export function PromptCard({
   attachedImages = [],
   onAttachImagesChange,
   onVoiceSubmit,
+  onError,
 }: PromptCardProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -287,6 +292,7 @@ export function PromptCard({
             disabled={disabled}
             getAuthHeaders={getAuthHeaders}
             onTranscribed={onVoiceSubmit}
+            onError={onError}
           />
         )}
       </div>
