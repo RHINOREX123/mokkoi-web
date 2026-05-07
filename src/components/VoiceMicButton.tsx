@@ -156,7 +156,7 @@ function VoiceOverlay({
   // recording with speech → "Listening…"
   // transcribing → "Heard you · transcribing…"
   // sending (post-hook idle, pre-parent send) → "Sending to Mokkoi"
-  const showHeardYet = isRecording && audioLevel >= 0.012
+  const showHeardYet = isRecording && audioLevel >= 0.008
   const status = sending
     ? 'Sending to Mokkoi'
     : isTranscribing

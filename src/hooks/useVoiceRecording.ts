@@ -68,7 +68,7 @@ export function useVoiceRecording(opts: UseVoiceRecordingOptions): UseVoiceRecor
     getAuthHeaders,
     endpoint = '/api/transcribe',
     silenceHoldMs = 2000,
-    silenceThreshold = 0.012,
+    silenceThreshold = 0.008,
     maxDurationMs = 60_000,
   } = opts
 

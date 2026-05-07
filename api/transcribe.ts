@@ -129,11 +129,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Whisper-family models occasionally mis-detect language on quiet inputs
   // and substitute training-data filler ("ChatGPT", "Subscribe", etc.).
   form.append('language', 'en')
-  // The `prompt` parameter biases the decoder toward the domain. Keeping
-  // it short — long prompts have their own quirks. The vocabulary cue
-  // ("app", "screens", "design") nudges Whisper toward correct word
-  // choices when audio is ambiguous.
-  form.append('prompt', 'A user describing a mobile app to build: screens, navigation, design, features.')
+  // NOTE: the `prompt` parameter is intentionally OMITTED. We tried using it
+  // as a domain-bias hint, but on near-silent audio Whisper echoes the
+  // prompt back verbatim as the transcription — turning the bias hint into
+  // the worst possible failure mode (a confident-but-wrong build prompt).
+  // Better to fail loud (no_speech) than fail silent (mirrored prompt).
 
   let openaiResp: Response
   try {
@@ -183,6 +183,12 @@ const HALLUCINATION_PATTERNS: RegExp[] = [
   /^[\s,.!?\-]*$/,
   /^[♪♫\s]+$/,
   /^©[\s\S]*$/,
+  // Backstop in case we ever re-add a domain prompt — Whisper sometimes
+  // mirrors the prompt verbatim on near-silent audio. Match loose phrasings
+  // around "user describing a mobile app" so any future prompt-echo bug
+  // gets caught before it pollutes the build pipeline.
+  /^a user describing a mobile app/i,
+  /^(mobile )?app to build:?/i,
 ]
 
 function isLikelyHallucination(text: string): boolean {
