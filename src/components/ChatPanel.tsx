@@ -567,7 +567,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               display: 'flex',
               flexDirection: 'column',
               alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              animation: planMode ? 'mokkoi-msg-in 280ms ease-out' : undefined,
+              animation: 'mokkoi-msg-in 280ms ease-out',
             }}>
               {/* Label row ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â for plan mode, add timestamp; assistant gets
                   pulse glow on the avatar and gradient-shift on the name. */}
@@ -577,22 +577,20 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               }}>
                 {msg.role === 'assistant' && (
                   <div style={{
-                    width: planMode ? 22 : 18,
-                    height: planMode ? 22 : 18,
-                    borderRadius: planMode ? 7 : 5,
+                    width: 22,
+                    height: 22,
+                    borderRadius: 7,
                     flexShrink: 0,
                     background: 'linear-gradient(135deg, #2dd4bf, #a78bfa)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: planMode ? 10 : 8,
+                    fontSize: 10,
                     fontWeight: 800, color: '#fff',
-                    animation: planMode
-                      ? 'mokkoi-avatar-glow 3.2s ease-in-out infinite'
-                      : undefined,
+                    animation: 'mokkoi-avatar-glow 3.2s ease-in-out infinite',
                   }}>
                     M
                   </div>
                 )}
-                {planMode && msg.role === 'assistant' ? (
+                {msg.role === 'assistant' ? (
                   <span style={{
                     fontSize: 11,
                     fontWeight: 700,
@@ -608,29 +606,27 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   </span>
                 ) : (
                   <span style={{ fontSize: 11, color: '#555', fontWeight: 500 }}>
-                    {msg.role === 'user' ? 'You' : 'Mokkoi'}
+                    You
                   </span>
                 )}
-                {planMode && (
-                  <span style={{
-                    fontSize: 10,
-                    color: 'rgba(148,163,184,0.5)',
-                    fontWeight: 400,
-                    marginLeft: 4,
-                  }}>
-                    {formatTimestamp(msg.timestamp)}
-                  </span>
-                )}
+                <span style={{
+                  fontSize: 10,
+                  color: 'rgba(148,163,184,0.5)',
+                  fontWeight: 400,
+                  marginLeft: 4,
+                }}>
+                  {formatTimestamp(msg.timestamp)}
+                </span>
               </div>
 
               {/* Message content ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gradient bubble in plan mode, plain in build. */}
               <div style={{
-                maxWidth: planMode ? '92%' : '90%',
+                maxWidth: '92%',
                 fontSize: 13,
                 lineHeight: 1.6,
                 color: msg.content.startsWith('Error:') ? '#f87171' : '#e2e8f0',
-                ...(planMode && msg.role === 'assistant' && !msg.content.startsWith('Error:') ? {
-                  // Gradient-bordered bubble for Mokkoi in plan mode
+                ...(msg.role === 'assistant' && !msg.content.startsWith('Error:') ? {
+                  // Gradient-bordered bubble for Mokkoi (used in both plan and build now)
                   padding: '12px 14px',
                   borderRadius: '16px 16px 16px 4px',
                   background:
@@ -640,8 +636,8 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   position: 'relative' as const,
                   overflow: 'hidden' as const,
                 } : {}),
-                ...(planMode && msg.role === 'user' ? {
-                  // Tinted right-leaning bubble for user in plan mode
+                ...(msg.role === 'user' ? {
+                  // Tinted right-leaning bubble for user (used in both plan and build now)
                   padding: '10px 14px',
                   borderRadius: '16px 16px 4px 16px',
                   background: 'rgba(255,255,255,0.04)',
@@ -650,7 +646,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               }}>
                 {/* Subtle shimmer sweep across Mokkoi bubbles in plan mode.
                     7s loop ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â slow enough to feel premium, not jittery. */}
-                {planMode && msg.role === 'assistant' && !msg.content.startsWith('Error:') && (
+                {msg.role === 'assistant' && !msg.content.startsWith('Error:') && (
                   <div
                     aria-hidden
                     style={{
