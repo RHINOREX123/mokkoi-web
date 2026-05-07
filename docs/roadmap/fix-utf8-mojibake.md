@@ -1,49 +1,56 @@
 # Fix UTF-8 mojibake in dashboard / chat panel strings
 
-Several source files have multi-layer mojibake on fancy chars (em-dash,
-ellipsis, arrow, section sign, smart quotes). Visible to the user as
-garbled placeholder text on the dashboard:
+## Status: user-visible strings fixed (claude/fix-mojibake-user-visible). Comment-only mojibake still deferred.
 
-> "Let's build Ã¢ã,Â¬â€š describe your app, paste a screenshot, or import a Figma fileÃ¢ã,Â¬Â¦"
+## Background
 
-Should be:
+Multi-byte chars (em-dash —, ellipsis …, arrow →, middle dot ·, ✅, ❌)
+were encoded as Windows-1252 then re-saved as UTF-8 multiple times, producing
+nested mojibake byte sequences of 18 / 32 / 67 bytes per original char.
 
-> "Let's build — describe your app, paste a screenshot, or import a Figma file…"
+Damage was introduced in commit 47330f9 (single/double-encoded) and
+compounded in 2907a1e (some files re-saved at deeper layers).
 
-## Affected files (run `git grep "Ã¢"` to find more):
+## What's fixed
 
-- `src/components/ChatPanel.tsx`
-- `src/components/dashboard/PromptCard.tsx`
+User-visible strings across 4 files (`src/App.tsx`,
+`src/pages/Dashboard.tsx`, `src/components/dashboard/PromptCard.tsx`,
+`src/components/ChatPanel.tsx`):
+
+- Textarea / input placeholders
+- Toast messages (`✅ Saved...`, `❌ Save failed...`)
+- JSX label text and aria-labels
+- Date format separators (`May 7 · 2:13 PM`)
+- The `startsWith` comparison in `App.tsx` toast-duration logic was
+  updated to match the new emoji prefixes.
+
+Approach: byte-precise replacement via PowerShell, scoped per-line, with
+mojibake byte sequences forward-computed by re-running the cp1252→UTF-8
+mojibake pipeline N layers (verified 2-, 3-, and 4-layer variants).
+A naive global regex replacement was rejected because the same
+intended character appears at different nesting depths across files.
+
+## What's still deferred
+
+Comment-only mojibake (~159 instances inside `//` and `/* */`):
+
+- `src/App.tsx` (heaviest — JSDoc + inline)
 - `src/pages/Dashboard.tsx`
-- `src/hooks/useAIGeneration.ts` (likely)
-- Possibly more
+- `src/components/dashboard/PromptCard.tsx`
+- `src/components/ChatPanel.tsx`
+- `src/hooks/useVoiceRecording.ts` (comments only — entire file deferred)
 
-## Root cause
+Comments are invisible at runtime so user impact is zero. Worth a follow-up
+pass with `ftfy` per-file with diff review when there's quiet time.
 
-UTF-8 bytes were interpreted as Windows-1252 and re-encoded as UTF-8 at
-some point in the file's history — likely a save in an editor with the
-wrong default encoding. The damage is multi-layered (em-dash byte E2 80
-94 is now ~10 bytes of garbage) so a simple find-and-replace risks
-making things worse, especially because partial patterns overlap (the
-em-dash mojibake and the close-quote mojibake share a prefix).
+## Prevention
 
-## Suggested fix approach
-
-1. For each affected file, do a one-time manual review:
-   - Check `git log` for when the chars were last clean
-   - Either revert to that revision OR rewrite the affected lines by hand
-2. Add a CI check that fails the build if any source file contains the
-   sequence `Ã¢` (a near-perfect mojibake fingerprint)
-3. Configure project editor settings (`.editorconfig` or VSCode
-   `settings.json`) to force UTF-8 without BOM on every save
-
-## Why deferred
-
-Fixing this is mechanical but risky — I attempted a scripted fix and
-made one file worse before reverting. Wants a careful manual pass per
-file rather than a regex bulk-replace.
+- `.editorconfig` at repo root pins `charset = utf-8`, `end_of_line = lf`.
+- `npm run check:encoding` (script `scripts/check-encoding.mjs`) walks
+  `src/` and `api/`, fails on the canonical mojibake fingerprints
+  `Ã[¢‚Æ‚]` and `Â[§¦]`. Wire into CI when a general workflow exists.
 
 ## Priority
 
-Cosmetic-but-visible bug. Doesn't block any feature. Annoying to read
-in user-facing copy. Pick up when there's a quiet hour.
+Comment-only cleanup: low. Wait until someone finds time and can
+review the `ftfy` output line-by-line.

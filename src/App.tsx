@@ -474,7 +474,7 @@ function App() {
   // Auto-hide toast (and detect credit errors)
   useEffect(() => {
     if (!toastMessage) return
-    const duration = toastMessage.startsWith('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦') || toastMessage.startsWith('ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢') ? 5000 : 2000
+    const duration = toastMessage.startsWith('✅') || toastMessage.startsWith('❌') ? 5000 : 2000
     const t = setTimeout(() => setToastMessage(''), duration)
     return () => clearTimeout(t)
   }, [toastMessage])
@@ -1072,7 +1072,7 @@ function App() {
             {directEdit.directEditMode && (
               <div style={{ position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: 'rgba(59,130,246,0.12)', borderRadius: 10, border: '1px solid rgba(59,130,246,0.3)', zIndex: 60, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
                 <PenTool size={14} color="#3B82F6" />
-                <span style={{ fontSize: 12, fontWeight: 500, color: '#93C5FD' }}>Direct Edit Mode ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Click any element to edit</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#93C5FD' }}>Direct Edit Mode — Click any element to edit</span>
                 <button onClick={() => directEdit.exitDirectEdit(false)} style={{ padding: '4px 12px', borderRadius: 6, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0', fontSize: 11, fontWeight: 600, cursor: 'pointer', marginLeft: 4 }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
                 >Exit</button>
@@ -1171,14 +1171,14 @@ function App() {
               const result = await resp.json()
               if (!resp.ok || !result.success) {
                 console.error('[import] server save failed:', result)
-                setToastMessage(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Save failed: ${result.error || 'unknown'}`)
+                setToastMessage(`❌ Save failed: ${result.error || 'unknown'}`)
               } else {
                 console.log('[import] screen saved via server:', newScreen.id, newScreen.name)
-                setToastMessage(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Saved: ${screen.name}${modelLabel}`)
+                setToastMessage(`✅ Saved: ${screen.name}${modelLabel}`)
               }
             } catch (err) {
               console.error('[import] server save error:', err)
-              setToastMessage(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Save failed: ${(err as Error).message}`)
+              setToastMessage(`❌ Save failed: ${(err as Error).message}`)
             }
           } else {
             setToastMessage(`Imported: ${screen.name}${modelLabel}`)

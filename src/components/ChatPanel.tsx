@@ -106,7 +106,7 @@ interface ChatPanelProps {
 }
 
 const PLACEHOLDERS = [
-  'Ask MokkoiÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',
+  'Ask Mokkoiâ€¦',
 ]
 
 /** Human-readable timestamp under message labels in plan mode.
@@ -124,7 +124,7 @@ function formatTimestamp(ts: number): string {
   const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   if (diffMs < 24 * 60 * 60_000) return time
   const monthDay = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-  return `${monthDay} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${time}`
+  return `${monthDay} Â· ${time}`
 }
 
 // (V1's EXAMPLE_CARDS \u2014 Fitness Dashboard / Login Screen / Chat Interface /
@@ -473,7 +473,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 flexShrink: 0,
               }}
             >
-              ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
+              ƒƒÆ’ƒ†â€™ƒƒÂ¢ƒ¢â€šÂ¬ƒ¢â‚¬Â
             </button>
           </div>
         )}
@@ -516,7 +516,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               e.currentTarget.style.color = 'rgba(255,255,255,0.55)'
             }}
           >
-            Build now ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢
+            Build now ƒƒÆ’ƒ‚Â¢ƒƒÂ¢ƒ¢†€šÂ¬ƒ‚Â ƒƒÂ¢ƒ¢†€šÂ¬ƒ¢†€Â¢
           </button>
         )}
 
@@ -550,7 +550,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               lineHeight: 1.55,
               maxWidth: 320,
             }}>
-              Describe your app below ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â the more specific you are about screens
+              Describe your app below ƒƒÆ’ƒ‚Â¢ƒƒÂ¢ƒ¢€‚¬Å¡ƒ‚Â¬ƒƒÂ¢ƒ¢€€šÂ¬ƒ‚Â the more specific you are about screens
               and the user, the better Mokkoi can shape the first build.
             </div>
           </div>
@@ -840,7 +840,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 color: 'rgba(94,234,212,0.85)',
               }}
             >
-              ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“Ãƒâ€šÃ‚Â¨ Suggested next step
+              ƒƒÆ’ƒ‚Â¢ƒƒœ€¦ƒ¢œ‚¬Å“ƒƒœ€šƒ‚Â¨ Suggested next step
             </div>
             <div style={{ fontSize: 13, lineHeight: 1.5, color: '#e2e8f0' }}>
               I have everything I need to start building. Want to ship it?
@@ -875,7 +875,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 e.currentTarget.style.boxShadow = '0 4px 16px -4px rgba(45,212,191,0.55)'
               }}
             >
-              Build my app ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€Â¢
+              Build my app ƒƒÆ’ƒ‚Â¢ƒƒÂ¢ƒ¢†€šÂ¬ƒ‚Â ƒƒÂ¢ƒ¢†€šÂ¬ƒ¢†€Â¢
             </button>
           </div>
         )}
@@ -1195,7 +1195,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                     placeItems: 'center',
                   }}
                 >
-                  ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
+                  ƒƒÆ’ƒ†â€™ƒƒÂ¢ƒ¢â€šÂ¬ƒ¢â‚¬Â
                 </button>
               </div>
             ))}
@@ -1207,7 +1207,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               padding: '0 4px',
             }}>
               {attachedImages.length} of {MAX_IMAGES} attached
-              {planMode && ' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· used as visual reference at build'}
+              {planMode && ' ƒƒÆ’ƒ¢â‚¬Å¡ƒƒâ€šƒ‚·· used as visual reference at build'}
             </div>
           </div>
         )}
