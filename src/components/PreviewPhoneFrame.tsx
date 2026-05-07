@@ -61,7 +61,7 @@ export function PreviewPhoneFrame({
   manualZoom = null,
   onScaleChange,
 }: PreviewPhoneFrameProps) {
-  const nav = usePreviewNavigation(activeScreenId, onActiveScreenChange, connections)
+  const nav = usePreviewNavigation(activeScreenId, onActiveScreenChange, connections, screens)
   const observerRef = useRef<ResizeObserver | null>(null)
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
 

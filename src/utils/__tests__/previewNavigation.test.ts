@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findNavigationTarget, normalizeTrigger } from '../previewNavigation'
+import { findNavigationTarget, normalizeTrigger, resolveNavTarget } from '../previewNavigation'
 import type { FlowConnection } from '../../components/FlowConnectors'
 
 describe('normalizeTrigger', () => {
@@ -64,5 +64,74 @@ describe('findNavigationTarget', () => {
       { fromScreenId: 'a', toScreenId: 'b' },
     ]
     expect(findNavigationTarget(noTrigger, 'a', 'anything')).toBeNull()
+  })
+})
+
+describe('resolveNavTarget', () => {
+  const screens = [
+    { id: 'home', name: 'Home' },
+    { id: 'profile', name: 'ProfileScreen' },
+    { id: 'settings', name: 'Settings' },
+    { id: 'cart', name: 'Cart' },
+  ]
+
+  it('prefers strict FlowConnection match', () => {
+    const connections: FlowConnection[] = [
+      { fromScreenId: 'home', toScreenId: 'cart', trigger: 'Cart' },
+    ]
+    expect(
+      resolveNavTarget('Cart', { connections, currentScreenId: 'home', screens }),
+    ).toBe('cart')
+  })
+
+  it('falls back to fuzzy screen-name match when no connection matches', () => {
+    // Wirer emitted no connection for "Profile" tab; fuzzy match resolves
+    // "Profile" → "ProfileScreen".
+    expect(
+      resolveNavTarget('Profile', { connections: [], currentScreenId: 'home', screens }),
+    ).toBe('profile')
+  })
+
+  it('falls back to single outgoing connection when label has no other match', () => {
+    const connections: FlowConnection[] = [
+      { fromScreenId: 'home', toScreenId: 'settings', trigger: 'open_settings' },
+    ]
+    expect(
+      resolveNavTarget('Mystery', { connections, currentScreenId: 'home', screens }),
+    ).toBe('settings')
+  })
+
+  it('singleTarget skips back triggers', () => {
+    const connections: FlowConnection[] = [
+      { fromScreenId: 'profile', toScreenId: 'home', trigger: 'nav_back' },
+    ]
+    expect(
+      resolveNavTarget('Mystery', { connections, currentScreenId: 'profile', screens }),
+    ).toBeNull()
+  })
+
+  it('returns null when nothing matches and multiple outgoing exist', () => {
+    const connections: FlowConnection[] = [
+      { fromScreenId: 'home', toScreenId: 'settings', trigger: 'foo' },
+      { fromScreenId: 'home', toScreenId: 'cart', trigger: 'bar' },
+    ]
+    expect(
+      resolveNavTarget('Unknown', { connections, currentScreenId: 'home', screens }),
+    ).toBeNull()
+  })
+
+  it('does not return current screen as a fuzzy target (would be a noop nav)', () => {
+    expect(
+      resolveNavTarget('Home', { connections: [], currentScreenId: 'home', screens }),
+    ).toBeNull()
+  })
+
+  it('returns null for empty label with no singleTarget', () => {
+    expect(
+      resolveNavTarget('', { connections: [], currentScreenId: 'home', screens }),
+    ).toBeNull()
+    expect(
+      resolveNavTarget(undefined, { connections: [], currentScreenId: 'home', screens }),
+    ).toBeNull()
   })
 })

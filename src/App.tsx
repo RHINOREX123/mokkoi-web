@@ -29,6 +29,8 @@ import { InlineSnackPreview } from './components/InlineSnackPreview'
 import { RuntimeIframePreview } from './components/RuntimeIframePreview'
 import { useScreenExport } from './hooks/useScreenExport'
 import { getEntryPointScreens } from './utils/entryPointScreens'
+import { resolveNavTarget } from './utils/previewNavigation'
+import { findBottomNavTabFromTarget } from './utils/canvasNavClick'
 
 import { supabase } from './lib/supabase'
 import { resetAnalytics } from './lib/analytics'
@@ -612,6 +614,29 @@ function App() {
     if (canvas.activeTool === 'pan' || canvas.isSpaceHeld.current) return
     if (didDragScreen.current || canvas.didPan.current) return
     if (directEdit.directEditMode) { directEdit.handleDirectEditClick(e, screenId); return }
+
+    // Bottom-nav tab interception: if the click landed inside a BottomNav row
+    // on the rendered screen, route via project connections instead of just
+    // selecting this card. Same FlowConnection → fuzzy → singleTarget cascade
+    // RuntimeIframePreview uses, so canvas behaviour matches the live runtime.
+    // Click → findBottomNavTabFromTarget → resolveNavTarget → setActiveGeneratedId
+    // + scrollIntoView on the destination card. The active boxShadow glow at
+    // line ~970 follows activeGeneratedId, so the user sees the highlight move.
+    const tab = findBottomNavTabFromTarget(e.target)
+    if (tab) {
+      const target = resolveNavTarget(tab.label, {
+        connections: screens.connections,
+        currentScreenId: screenId,
+        screens: screens.generatedScreens,
+      })
+      if (target && target !== screenId) {
+        screens.setActiveGeneratedId(target)
+        const el = phoneFrameRefs.current.get(target)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+        return
+      }
+    }
+
     screens.setActiveGeneratedId(screenId)
   }
 
