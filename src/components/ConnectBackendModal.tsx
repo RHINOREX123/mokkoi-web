@@ -152,7 +152,15 @@ export function ConnectBackendModal({ projectId: _projectId, isOpen, onClose, on
                 Supabase URL
               </label>
               <input
-                type="text"
+                type="url"
+                name="supabase-project-url"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore="true"
                 value={url}
                 onChange={e => { setUrl(e.target.value); setError(null) }}
                 placeholder="https://your-project-ref.supabase.co"
@@ -166,11 +174,19 @@ export function ConnectBackendModal({ projectId: _projectId, isOpen, onClose, on
                 Anon key (public)
               </label>
               <input
-                type="password"
+                type="text"
+                name="supabase-anon-key"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore
+                data-lpignore="true"
+                data-bwignore="true"
                 value={anonKey}
                 onChange={e => { setAnonKey(e.target.value); setError(null) }}
                 placeholder="eyJhbGciOi..."
-                style={inputStyle(error?.ok === false && error.code === 'invalid_key_format')}
+                style={{ ...inputStyle(error?.ok === false && error.code === 'invalid_key_format'), fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
               />
               {error?.ok === false && error.code === 'invalid_key_format' && (
                 <div style={inlineErrorStyle}>{error.message}</div>
