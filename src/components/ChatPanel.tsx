@@ -473,7 +473,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 flexShrink: 0,
               }}
             >
-              ƒƒÆ’ƒ†â€™ƒƒÂ¢ƒ¢â€šÂ¬ƒ¢â‚¬Â
+              Ã—
             </button>
           </div>
         )}
@@ -516,7 +516,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               e.currentTarget.style.color = 'rgba(255,255,255,0.55)'
             }}
           >
-            Build now ƒƒÆ’ƒ‚Â¢ƒƒÂ¢ƒ¢†€šÂ¬ƒ‚Â ƒƒÂ¢ƒ¢†€šÂ¬ƒ¢†€Â¢
+            Build now â†’
           </button>
         )}
 
@@ -550,7 +550,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               lineHeight: 1.55,
               maxWidth: 320,
             }}>
-              Describe your app below ƒƒÆ’ƒ‚Â¢ƒƒÂ¢ƒ¢€‚¬Å¡ƒ‚Â¬ƒƒÂ¢ƒ¢€€šÂ¬ƒ‚Â the more specific you are about screens
+              Describe your app below â€” the more specific you are about screens
               and the user, the better Mokkoi can shape the first build.
             </div>
           </div>
@@ -840,7 +840,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 color: 'rgba(94,234,212,0.85)',
               }}
             >
-              ƒƒÆ’ƒ‚Â¢ƒƒœ€¦ƒ¢œ‚¬Å“ƒƒœ€šƒ‚Â¨ Suggested next step
+              âœ¨ Suggested next step
             </div>
             <div style={{ fontSize: 13, lineHeight: 1.5, color: '#e2e8f0' }}>
               I have everything I need to start building. Want to ship it?
@@ -875,7 +875,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                 e.currentTarget.style.boxShadow = '0 4px 16px -4px rgba(45,212,191,0.55)'
               }}
             >
-              Build my app ƒƒÆ’ƒ‚Â¢ƒƒÂ¢ƒ¢†€šÂ¬ƒ‚Â ƒƒÂ¢ƒ¢†€šÂ¬ƒ¢†€Â¢
+              Build my app â†’
             </button>
           </div>
         )}
@@ -1195,7 +1195,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                     placeItems: 'center',
                   }}
                 >
-                  ƒƒÆ’ƒ†â€™ƒƒÂ¢ƒ¢â€šÂ¬ƒ¢â‚¬Â
+                  Ã—
                 </button>
               </div>
             ))}
@@ -1207,7 +1207,7 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
               padding: '0 4px',
             }}>
               {attachedImages.length} of {MAX_IMAGES} attached
-              {planMode && ' ƒƒÆ’ƒ¢â‚¬Å¡ƒƒâ€šƒ‚·· used as visual reference at build'}
+              {planMode && ' Â· used as visual reference at build'}
             </div>
           </div>
         )}
