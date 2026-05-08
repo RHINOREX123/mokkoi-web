@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Share2, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Smartphone, Layers, Zap } from 'lucide-react'
+import { Download, Share2, Pencil, LogOut, Menu, ArrowLeft, Copy, Trash2, Settings, User as UserIcon, Undo2, Redo2, Clipboard, ClipboardCopy, Command, ChevronRight, Smartphone, Layers, Zap, Database } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { resetAnalytics } from '../lib/analytics'
 import { convertTreeToJSX } from './CodeExportModal'
@@ -8,6 +8,8 @@ import type { User } from '@supabase/supabase-js'
 import type { ComponentNode } from '../types/mokkoi'
 import type { UserPlan } from '../hooks/useUserPlan'
 import { PlanChip } from './PlanChip'
+import { ConnectBackendModal } from './ConnectBackendModal'
+import type { ValidatedSupabaseCreds } from '../lib/byoSupabaseValidation'
 
 const hamburgerItemStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
@@ -50,6 +52,10 @@ interface TopNavbarProps {
   plan: UserPlan
   freeAppCount: number
   onOpenPaywall: () => void
+  // BYO-Backend
+  projectId?: string
+  projectBackend: { url: string; anonKey: string } | null
+  setProjectBackend: (creds: ValidatedSupabaseCreds | null) => Promise<void>
 }
 
 export function TopNavbar({
@@ -61,6 +67,7 @@ export function TopNavbar({
   viewMode, onToggleViewMode,
   entryPointScreens, activeScreenId, onSelectScreen,
   plan, freeAppCount, onOpenPaywall,
+  projectId, projectBackend, setProjectBackend,
 }: TopNavbarProps) {
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
@@ -68,6 +75,7 @@ export function TopNavbar({
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false)
   const [showEditSubmenu, setShowEditSubmenu] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
+  const [showConnectBackend, setShowConnectBackend] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const hamburgerMenuRef = useRef<HTMLDivElement>(null)
   const editSubmenuTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -113,6 +121,7 @@ export function TopNavbar({
   }
 
   return (
+    <>
     <nav style={{
       height: 48, flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)',
       display: 'flex', alignItems: 'center', padding: '0 16px',
@@ -381,6 +390,31 @@ export function TopNavbar({
           Canvas Editor
         </button>
 
+        {projectId && (
+          <button onClick={() => setShowConnectBackend(true)} style={{
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+            color: projectBackend ? 'rgba(45, 212, 191, 0.95)' : '#94a3b8',
+            background: 'transparent', border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+          }}
+            onMouseEnter={e => { if (!projectBackend) e.currentTarget.style.color = '#e2e8f0' }}
+            onMouseLeave={e => { if (!projectBackend) e.currentTarget.style.color = '#94a3b8' }}
+            title={projectBackend ? `Connected to ${projectBackend.url}` : 'Connect a Supabase backend'}
+          >
+            {projectBackend ? (
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: 'rgba(45, 212, 191, 0.95)',
+                boxShadow: '0 0 6px rgba(45, 212, 191, 0.6)',
+                display: 'inline-block',
+              }} />
+            ) : (
+              <Database size={14} />
+            )}
+            {projectBackend ? 'Backend connected' : 'Connect Backend'}
+          </button>
+        )}
+
         <button onClick={() => setShowShareModal(true)} style={{
           flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
           padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
@@ -447,5 +481,14 @@ export function TopNavbar({
         </div>
       </div>
     </nav>
+    {projectId && (
+      <ConnectBackendModal
+        projectId={projectId}
+        isOpen={showConnectBackend}
+        onClose={() => setShowConnectBackend(false)}
+        onConnected={creds => { setProjectBackend(creds) }}
+      />
+    )}
+    </>
   )
 }

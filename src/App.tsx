@@ -698,6 +698,9 @@ function App() {
         plan={userPlan.plan}
         freeAppCount={userPlan.freeAppCount}
         onOpenPaywall={() => setShowPaywallModal(true)}
+        projectId={projectId}
+        projectBackend={screens.projectBackend}
+        setProjectBackend={screens.setProjectBackend}
       />
 
       {/* Toast */}
@@ -930,6 +933,10 @@ function App() {
                           // tags PostHog events with project_id. InlineSnackPreview
                           // ignores the extra prop (extra props pass through harmlessly).
                           projectId,
+                          // BYO-Backend (Track A→C wiring): when set, the snack
+                          // payload emits @supabase/supabase-js + lib/supabase.ts
+                          // so the running app talks to the user's Supabase.
+                          byoSupabase: screens.projectBackend,
                         }
                         // Sibling keys are namespaced ("static-" on PreviewPhoneFrame
                         // above, "live-" here) so they never collide while still
