@@ -368,7 +368,7 @@ export default function Dashboard() {
       trackEvent('dashboard_mode_card', { mode })
       navigate(`/app/${data.id}?openModal=${mode}`)
     } else {
-      setToastMessage('Could not start a new project ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â try again')
+      setToastMessage('Could not start a new project — try again')
     }
   }
 
@@ -411,7 +411,7 @@ export default function Dashboard() {
       setToastMessage(
         error
           ? `Failed to delete: ${error.message}`
-          : `Couldn't delete this project ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â you may not have permission. Please refresh and try again.`,
+          : `Couldn't delete this project — you may not have permission. Please refresh and try again.`,
       )
     }
   }
@@ -1048,14 +1048,14 @@ export default function Dashboard() {
                 marginBottom: 8,
               }}
             >
-              ÃƒÂ¢Ã¢â‚¬Â Ã‚Â³ PROMPT CLARITY {promptScore?.clarity ?? 0}
+              ↳ PROMPT CLARITY {promptScore?.clarity ?? 0}
             </div>
             <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: 'var(--dash-text)' }}>
-              Your prompt is broad ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â want to plan it together first?
+              Your prompt is broad — want to plan it together first?
             </h3>
             <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--dash-text-2)', lineHeight: 1.5 }}>
               In Plan mode, Mokkoi asks a few clarifying questions before
-              generating ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â usually leads to a better first build. You can also
+              generating — usually leads to a better first build. You can also
               just build now and refine after.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -1080,7 +1080,7 @@ export default function Dashboard() {
                   fontSize: 13, fontWeight: 700, cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}
-              >Plan together ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢</button>
+              >Plan together →</button>
             </div>
           </div>
         </div>

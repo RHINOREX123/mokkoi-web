@@ -241,11 +241,11 @@ export function PromptCard({
         placeholder={
           hasImages
             ? mode === 'plan'
-              ? "Tell me about your idea + these images Ã¢â‚¬â€ we'll plan it togetherÃ¢â‚¬Â¦"
-              : "Describe what to build with these imagesÃ¢â‚¬Â¦"
+              ? "Tell me about your idea + these images — we'll plan it together…"
+              : "Describe what to build with these images…"
             : mode === 'plan'
-              ? "Tell me about your idea Ã¢â‚¬â€ we'll plan it together. I'll ask clarifying questions before buildingÃ¢â‚¬Â¦"
-              : "Let's build Ã¢â‚¬â€ describe your app, paste a screenshot, or import a Figma fileÃ¢â‚¬Â¦"
+              ? "Tell me about your idea — we'll plan it together. I'll ask clarifying questions before building…"
+              : "Let's build — describe your app, paste a screenshot, or import a Figma file…"
         }
         aria-label="App prompt"
         style={{
@@ -313,7 +313,7 @@ export function PromptCard({
           type="button"
           onClick={() => canSubmit && onSubmit(mode)}
           disabled={!canSubmit}
-          aria-label={`Submit prompt Ã¢â‚¬â€ ${mode} mode`}
+          aria-label={`Submit prompt — ${mode} mode`}
           style={{
             width: 36,
             height: 36,
