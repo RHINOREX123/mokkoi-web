@@ -72,7 +72,25 @@ export interface TSXExportOpts {
    * file. Mirrors the server-side path in api/export.ts.
    */
   addWatermark?: boolean
+  /**
+   * BYO-Backend Track B: when set, the exporter wires the first <Button>/
+   * TouchableOpacity matching AUTH_BUTTON_TEXT_REGEX to a Supabase auth call
+   * and emits the supporting useState/imports. `redirectScreenName` is the
+   * PascalCase screen name to navigate to after a successful call.
+   */
+  dataAction?: {
+    kind: 'auth.signInWithPassword' | 'auth.signUp' | 'auth.signOut'
+    redirectScreenName?: string
+  }
 }
+
+/**
+ * Convention regex used to identify the auth submit button on auth screens.
+ * Must mirror the comment in api/_lib/plan-prompt.ts. The first
+ * TouchableOpacity in the tree whose visible Text matches this is the action
+ * button — see exportTsx README block / Track B docs.
+ */
+export const AUTH_BUTTON_TEXT_REGEX = /sign in|log in|sign up|create account/i
 
 /**
  * Watermark function + styles appended to free-tier exports. Persists in the
@@ -145,18 +163,100 @@ const watermarkStyles = StyleSheet.create({
 `
 }
 
+/**
+ * Recursively collect all TouchableOpacity nodes in tree order so we can find
+ * the first one matching AUTH_BUTTON_TEXT_REGEX. Returns the matching node, or
+ * null if none.
+ */
+function findAuthButton(node: ComponentNode | string | undefined): ComponentNode | null {
+  if (!node || typeof node !== 'object') return null
+  if (node.type === 'TouchableOpacity') {
+    // Look for visible text — direct or one level deep (Text child or Text grandchild).
+    const collectText = (n: ComponentNode | string | undefined): string => {
+      if (!n) return ''
+      if (typeof n === 'string') return n
+      if (typeof n !== 'object') return ''
+      if (n.type === 'Text' && Array.isArray(n.children)) {
+        return n.children.filter(c => typeof c === 'string').join(' ')
+      }
+      if (Array.isArray(n.children)) {
+        return n.children.map(collectText).join(' ')
+      }
+      return ''
+    }
+    const text = collectText(node)
+    if (AUTH_BUTTON_TEXT_REGEX.test(text)) return node
+  }
+  if (Array.isArray(node.children)) {
+    for (const c of node.children) {
+      const found = findAuthButton(c)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+interface AuthFieldRefs {
+  emailNode: ComponentNode | null
+  passwordNode: ComponentNode | null
+}
+
+/**
+ * Find email + password TextInput nodes in the tree. Matches by:
+ *  - props.id === 'email' / 'password' (preferred — see component-library passthrough)
+ *  - secureTextEntry → password
+ *  - placeholder containing "email"/"password" → fallback heuristic
+ */
+function findAuthFields(node: ComponentNode | string | undefined, refs: AuthFieldRefs): void {
+  if (!node || typeof node !== 'object') return
+  if (node.type === 'TextInput') {
+    const p = (node.props || {}) as Record<string, unknown>
+    const id = typeof p.id === 'string' ? p.id.toLowerCase() : ''
+    const placeholder = typeof p.placeholder === 'string' ? p.placeholder.toLowerCase() : ''
+    if (!refs.emailNode && (id === 'email' || /email|e-mail/.test(placeholder))) {
+      refs.emailNode = node
+    } else if (!refs.passwordNode && (id === 'password' || p.secureTextEntry === true || /password/.test(placeholder))) {
+      refs.passwordNode = node
+    }
+  }
+  if (Array.isArray(node.children)) {
+    for (const c of node.children) findAuthFields(c, refs)
+  }
+}
+
 export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?: TSXExportOpts): string {
   const name = screenName ? screenName.replace(/[^a-zA-Z0-9]/g, '') + 'Screen' : 'GeneratedScreen'
   const compName = name.charAt(0).toUpperCase() + name.slice(1)
   const addWatermark = opts?.addWatermark === true
 
+  // BYO-Backend Track B: detect auth button + fields up front so the rendering
+  // pass can substitute the onPress handler and onChangeText bindings.
+  const dataAction = opts?.dataAction
+  const isAuthAction =
+    dataAction?.kind === 'auth.signInWithPassword' || dataAction?.kind === 'auth.signUp'
+  const authButtonNode: ComponentNode | null = isAuthAction ? findAuthButton(tree) : null
+  const authFieldRefs: AuthFieldRefs = { emailNode: null, passwordNode: null }
+  if (isAuthAction && authButtonNode) {
+    findAuthFields(tree, authFieldRefs)
+  }
+  const wireAuth = isAuthAction && authButtonNode !== null
+
   const ctx: Ctx = { styles: [], usedComponents: new Set(), usesIonicons: false, nameCount: new Map() }
   const navTargets = opts?.bindings
   const usesNavigation = { value: false }
   const innerIndent = addWatermark ? '      ' : '    '
-  const jsx = nodeJSXWithNav(tree, 0, 0, ctx, innerIndent, navTargets, usesNavigation)
+  const authCtx = wireAuth
+    ? {
+        kind: dataAction!.kind,
+        redirectScreenName: dataAction!.redirectScreenName,
+        buttonNode: authButtonNode!,
+        emailNode: authFieldRefs.emailNode,
+        passwordNode: authFieldRefs.passwordNode,
+      }
+    : null
+  const jsx = nodeJSXWithNav(tree, 0, 0, ctx, innerIndent, navTargets, usesNavigation, authCtx)
 
-  const rnOrder = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar', 'Linking', 'StyleSheet']
+  const rnOrder = ['View', 'Text', 'ScrollView', 'Image', 'TouchableOpacity', 'TextInput', 'Switch', 'SafeAreaView', 'StatusBar', 'Linking', 'Alert', 'StyleSheet']
   ctx.usedComponents.add('StyleSheet')
   if (addWatermark) {
     ctx.usedComponents.add('View')
@@ -164,10 +264,35 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
     ctx.usedComponents.add('TouchableOpacity')
     ctx.usedComponents.add('Linking')
   }
+  if (wireAuth) {
+    // Alert is used by the auth onPress error handler.
+    ctx.usedComponents.add('Alert')
+  }
   const imports = rnOrder.filter(c => ctx.usedComponents.has(c))
 
+  // wireAuth implies navigation may be used (post-success redirect). Hook in
+  // useNavigation regardless of whether other buttons triggered it so the
+  // emitted onPress can call navigation.navigate().
+  if (wireAuth && dataAction?.redirectScreenName) {
+    usesNavigation.value = true
+  }
+
   const navImport = usesNavigation.value ? "\nimport { useNavigation } from '@react-navigation/native';" : ''
-  const navHook = usesNavigation.value ? '\n  const navigation = useNavigation();\n' : ''
+  // navHook keeps its original trailing newline only when auth state is NOT
+  // appended, so the existing back-compat snapshot stays byte-for-byte. When
+  // auth state IS appended, drop the trailing newline so the useState block
+  // sits flush with the navigation hook (no spurious blank line in the body).
+  const navHook = usesNavigation.value
+    ? (wireAuth ? '\n  const navigation = useNavigation();' : '\n  const navigation = useNavigation();\n')
+    : ''
+
+  // BYO-Backend Track B: emit useState for email/password + the supabase
+  // import. The supabase module file (`./lib/supabase`) is created by Track C —
+  // this code just emits the import string.
+  const supabaseImport = wireAuth ? "\nimport { supabase } from './lib/supabase';" : ''
+  const authStateLines = wireAuth
+    ? `\n  const [email, setEmail] = useState('');\n  const [password, setPassword] = useState('');\n`
+    : ''
 
   // Emit `import { Ionicons } from '@expo/vector-icons';` when any Icon was used.
   // @expo/vector-icons is pre-bundled in every Expo Snack SDK — no peer-dep
@@ -186,10 +311,14 @@ export function convertTreeToTSX(tree: ComponentNode, screenName?: string, opts?
     ? `    <View style={{ flex: 1 }}>\n${jsx}\n      <Watermark />\n    </View>`
     : jsx
 
-  const baseFile = `import React from 'react';
-import { ${imports.join(', ')} } from 'react-native';${navImport}${iconsImport}
+  const reactImport = wireAuth
+    ? "import React, { useState } from 'react';"
+    : "import React from 'react';"
 
-export default function ${compName}() {${navHook}
+  const baseFile = `${reactImport}
+import { ${imports.join(', ')} } from 'react-native';${navImport}${iconsImport}${supabaseImport}
+
+export default function ${compName}() {${navHook}${authStateLines}
   return (
 ${body}
   );
@@ -203,11 +332,20 @@ ${styleLines}
   return addWatermark ? baseFile + watermarkSuffix() : baseFile
 }
 
+interface AuthCtx {
+  kind: 'auth.signInWithPassword' | 'auth.signUp' | 'auth.signOut'
+  redirectScreenName: string | undefined
+  buttonNode: ComponentNode
+  emailNode: ComponentNode | null
+  passwordNode: ComponentNode | null
+}
+
 /** Extended nodeJSX that can inject navigation.navigate() on TouchableOpacity */
 function nodeJSXWithNav(
   node: ComponentNode | string, depth: number, idx: number, ctx: Ctx, indent: string,
   navTargets: Map<ComponentNode, string> | undefined,
   usesNavigation: { value: boolean },
+  authCtx: AuthCtx | null = null,
 ): string {
   if (typeof node === 'string') {
     const trimmed = node.trim()
@@ -247,12 +385,34 @@ function nodeJSXWithNav(
   const props: string[] = []
   if (sName) props.push(`style={styles.${sName}}`)
 
-  // Check if this TouchableOpacity should navigate (node-identity lookup)
-  if (type === 'TouchableOpacity' && navTargets) {
+  // BYO-Backend Track B: auth button takes precedence over plain navigation
+  // bindings — its onPress wraps a Supabase call and does the redirect itself.
+  if (type === 'TouchableOpacity' && authCtx && node === authCtx.buttonNode) {
+    const method = authCtx.kind === 'auth.signUp' ? 'signUp' : 'signInWithPassword'
+    const redirect = authCtx.redirectScreenName
+      ? `\n        if (!error) navigation.navigate('${authCtx.redirectScreenName}');\n        else Alert.alert('Sign in failed', error.message);`
+      : `\n        if (error) Alert.alert('Sign in failed', error.message);`
+    props.push(
+      `onPress={async () => {\n        const { error } = await supabase.auth.${method}({ email, password });${redirect}\n      }}`
+    )
+  } else if (type === 'TouchableOpacity' && navTargets) {
+    // Check if this TouchableOpacity should navigate (node-identity lookup)
     const target = navTargets.get(node)
     if (target) {
       props.push(`onPress={() => navigation.navigate('${target}')}`)
       usesNavigation.value = true
+    }
+  }
+
+  // BYO-Backend Track B: bind TextInput onChangeText to the email/password
+  // setters when this TextInput is the recognized email/password field.
+  if (type === 'TextInput' && authCtx) {
+    if (authCtx.emailNode && node === authCtx.emailNode) {
+      props.push('value={email}')
+      props.push('onChangeText={setEmail}')
+    } else if (authCtx.passwordNode && node === authCtx.passwordNode) {
+      props.push('value={password}')
+      props.push('onChangeText={setPassword}')
     }
   }
 
@@ -292,7 +452,7 @@ function nodeJSXWithNav(
   }
 
   const ci = indent + '  '
-  const cJSX = children.map((c, i) => nodeJSXWithNav(c, depth + 1, i, ctx, ci, navTargets, usesNavigation)).filter(Boolean).join('\n')
+  const cJSX = children.map((c, i) => nodeJSXWithNav(c, depth + 1, i, ctx, ci, navTargets, usesNavigation, authCtx)).filter(Boolean).join('\n')
   return `${indent}<${type}${propsStr}>\n${cJSX}\n${indent}</${type}>`
 }
 

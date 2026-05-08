@@ -296,11 +296,49 @@ async function callAnthropic(apiKey: string, body: Record<string, unknown>): Pro
   })
 }
 
+/**
+ * Optional data-action attached to a screen by the planner. Track B of the
+ * BYO-Backend MVP: when an auth screen has a primary submit button, the
+ * planner emits a `dataAction` so the exporter knows to wire the button to
+ * Supabase auth instead of a plain navigation.navigate().
+ */
+export interface ScreenDataAction {
+  kind: 'auth.signInWithPassword' | 'auth.signUp' | 'auth.signOut'
+  /** plan id of the screen to navigate to on success */
+  redirectScreen?: string
+}
+
 interface AppPlan {
   appName: string
-  screens: Array<{ id: string; name: string; description: string; screenType: string; isHome: boolean }>
+  screens: Array<{
+    id: string
+    name: string
+    description: string
+    screenType: string
+    isHome: boolean
+    dataAction?: ScreenDataAction
+  }>
   navigation: { type: 'tabs' | 'stack' | 'hybrid'; tabScreens?: string[]; connections: Array<{ from: string; to: string; trigger: string }> }
   designDirection: { theme: string; accentColor: string; style: string }
+}
+
+/**
+ * Sanitize a parsed planner screen's `dataAction` field. Returns undefined
+ * unless the input matches the strict shape — defends against the LLM
+ * hallucinating other action kinds.
+ */
+function validateDataAction(raw: unknown): ScreenDataAction | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const kind = r.kind
+  if (kind !== 'auth.signInWithPassword' && kind !== 'auth.signUp' && kind !== 'auth.signOut') {
+    return undefined
+  }
+  const out: ScreenDataAction = { kind }
+  if (typeof r.redirectScreen === 'string' && r.redirectScreen.length > 0) {
+    out.redirectScreen = r.redirectScreen
+  }
+  return out
 }
 
 export function buildConnections(
@@ -601,6 +639,17 @@ async function handleApp(
     }
     if (!plan.screens.some(s => s.isHome)) plan.screens[0].isHome = true
     if (plan.screens.length > 8) plan.screens = plan.screens.slice(0, 8)
+
+    // Sanitize dataAction on each screen — drops unrecognized kinds, keeps
+    // back-compat for plans without dataAction (most non-auth apps).
+    for (const s of plan.screens) {
+      const validated = validateDataAction((s as any).dataAction)
+      if (validated) {
+        s.dataAction = validated
+      } else if ('dataAction' in s) {
+        delete (s as any).dataAction
+      }
+    }
 
     sendSSE(res, { type: 'plan', plan })
 

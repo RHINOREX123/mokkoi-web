@@ -354,6 +354,7 @@ RULES:
 - Screen IDs must be kebab-case (e.g. "home", "workout-detail", "meal-plans").
 - Screen names must be short and human-readable (e.g. "Home", "Workout Detail", "Meal Plans").
 - screenType must be one of: dashboard, list, detail, auth, profile, settings, onboarding, chat, music, social, calendar, map, form, search, cart, checkout
+- For screens with screenType:"auth", if the screen contains a primary submit button (login or signup), set dataAction on the screen: kind "auth.signInWithPassword" for login, "auth.signUp" for signup. Set redirectScreen to the planId of the screen to navigate to after success (typically the home/dashboard screen).
 - For content-heavy apps (social, ecommerce, food delivery, music, fitness): use "tabs" or "hybrid" navigation with 3-5 tab screens.
 - For flow/utility apps (onboarding, checkout, booking): use "stack" navigation.
 - "hybrid" means tabs for main screens + stack for detail/modal screens pushed on top.

@@ -5,6 +5,7 @@ import type { ChatMessage } from '../components/ChatPanel'
 import { GAP, PAD_X, PAD_Y, type FlowConnection } from '../components/FlowConnectors'
 import { DEFAULT_DEVICE, getCanvasDimensions, resolveDeviceId } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
+import type { ValidatedSupabaseCreds } from '../lib/byoSupabaseValidation'
 
 export interface GeneratedScreen {
   id: string
@@ -71,6 +72,11 @@ export interface ScreenManagement {
   setConnections: React.Dispatch<React.SetStateAction<FlowConnection[]>>
   addConnection: (from: string, to: string) => void
   removeConnection: (idx: number) => void
+
+  // BYO-Backend (per-project Supabase connection). Shape matches what
+  // InlineSnackPreview's `byoSupabase` prop expects (Track C).
+  projectBackend: { url: string; anonKey: string } | null
+  setProjectBackend: (creds: ValidatedSupabaseCreds | null) => Promise<void>
 }
 
 export function useScreenManagement(projectId: string | undefined): ScreenManagement {
@@ -83,6 +89,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   const [projectDeviceId, setProjectDeviceIdState] = useState<DeviceId>(DEFAULT_DEVICE)
   const [connections, setConnections] = useState<FlowConnection[]>([])
   const [screensLoaded, setScreensLoaded] = useState(false)
+  const [projectBackend, setProjectBackendState] = useState<{ url: string; anonKey: string } | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const connectionsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectLoadedRef = useRef(false)
@@ -118,6 +125,17 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
         setProjectDeviceIdState(resolveDeviceId(project.device_id || DEFAULT_DEVICE) as DeviceId)
         if (Array.isArray(project.connections)) {
           setConnections(project.connections as FlowConnection[])
+        }
+        // BYO-Backend: row stores snake_case JSONB { url, anon_key, connected_at };
+        // expose camelCase to the client. Null when not connected.
+        const byo = (project as Record<string, unknown>).byo_supabase as
+          | { url?: string; anon_key?: string }
+          | null
+          | undefined
+        if (byo && typeof byo === 'object' && byo.url && byo.anon_key) {
+          setProjectBackendState({ url: byo.url, anonKey: byo.anon_key })
+        } else {
+          setProjectBackendState(null)
         }
       }
 
@@ -397,6 +415,28 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     setConnections(prev => prev.filter((_, i) => i !== idx))
   }, [])
 
+  const setProjectBackend = useCallback(async (creds: ValidatedSupabaseCreds | null) => {
+    if (!projectId || !supabase) return
+    if (creds === null) {
+      setProjectBackendState(null)
+      const { error } = await supabase.from('projects')
+        .update({ byo_supabase: null, updated_at: new Date().toISOString() })
+        .eq('id', projectId)
+      if (error) console.error('[byo-backend] disconnect failed:', error.message)
+      return
+    }
+    const row = {
+      url: creds.url,
+      anon_key: creds.anonKey,
+      connected_at: new Date().toISOString(),
+    }
+    setProjectBackendState({ url: creds.url, anonKey: creds.anonKey })
+    const { error } = await supabase.from('projects')
+      .update({ byo_supabase: row, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    if (error) console.error('[byo-backend] connect failed:', error.message)
+  }, [projectId])
+
   const saveMessage = useCallback(async (msg: ChatMessage) => {
     if (!projectId || !supabase) return
     await supabase.from('messages').insert({
@@ -511,5 +551,7 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     setConnections,
     addConnection,
     removeConnection,
+    projectBackend,
+    setProjectBackend,
   }
 }
