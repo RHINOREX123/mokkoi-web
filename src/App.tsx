@@ -347,6 +347,8 @@ function App() {
     projectName: screens.projectName,
     setProjectName: screens.setProjectName,
     saveProjectName: screens.saveProjectName,
+    setRouteGraph: screens.setRouteGraph,
+    setAppData: screens.setAppData,
   })
 
   // Direct Edit
@@ -938,6 +940,18 @@ function App() {
                           // so the running app talks to the user's Supabase.
                           byoSupabase: screens.projectBackend,
                         }
+                        // Deep-nav props (routeGraph + appData) carry the
+                        // planner output. RuntimeIframePreview takes appData
+                        // typed against sentinelSubstitution's shape, while
+                        // InlineSnackPreview accepts the raw planner blob —
+                        // so they're passed separately rather than via the
+                        // shared spread. routeGraph isn't read by the
+                        // runtime today (navigation matches off `screens`
+                        // directly post planId→UUID rewrite server-side).
+                        const deepNavProps = {
+                          routeGraph: screens.routeGraph,
+                          appData: screens.appData,
+                        }
                         // Sibling keys are namespaced ("static-" on PreviewPhoneFrame
                         // above, "live-" here) so they never collide while still
                         // bumping in lockstep on refresh. Pre-namespace they both
@@ -950,7 +964,7 @@ function App() {
                               activeScreenId={screens.activeGeneratedId || ''}
                               onActiveScreenChange={screens.setActiveGeneratedId}
                             />
-                          : <InlineSnackPreview key={`live-${previewRefreshKey}`} {...sharedProps} />
+                          : <InlineSnackPreview key={`live-${previewRefreshKey}`} {...sharedProps} {...deepNavProps} />
                       })()}
                     </div>
                   </>
@@ -1119,7 +1133,7 @@ function App() {
       <ShareModal projectId={projectId || ''} projectName={screens.projectName} isOpen={showShareModal} onClose={() => setShowShareModal(false)} />
       <VariationsPanel isOpen={showVariationsPanel} onClose={() => setShowVariationsPanel(false)} onGenerate={ai.handleGenerateVariations} isGenerating={ai.isGeneratingVariations} />
       {showQrModal && <QrCodeModal url={qrUrl} onClose={() => setShowQrModal(false)} />}
-      {showExpoPreview && <ExpoPreviewModal screens={screens.generatedScreens.filter(s => s.tree)} connections={screens.connections} projectName={screens.projectName} onClose={() => setShowExpoPreview(false)} />}
+      {showExpoPreview && <ExpoPreviewModal screens={screens.generatedScreens.filter(s => s.tree)} connections={screens.connections} projectName={screens.projectName} onClose={() => setShowExpoPreview(false)} routeGraph={screens.routeGraph} appData={screens.appData} />}
       {showScreenshotModal && <ScreenshotModal
         onClose={() => {
           setShowScreenshotModal(false)

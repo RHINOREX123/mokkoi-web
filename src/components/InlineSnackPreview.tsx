@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Snack } from 'snack-sdk'
-import { buildSnackPayload } from '../utils/snackUrl'
+import { buildSnackPayload, buildDeepNavSnackPayload } from '../utils/snackUrl'
+import type { DeepNavRouteGraph } from '../utils/exportTsx'
 import { computeFitScale } from '../utils/computeFitScale'
 import { getDevicePreset, DEFAULT_DEVICE } from '../constants/devices'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
@@ -24,6 +25,13 @@ interface InlineSnackPreviewProps {
    *  TODO(byo-backend): once Track A's useScreenManagement merges and exposes
    *  `projectBackend`, App.tsx will pass that value through here directly. */
   byoSupabase?: { url: string; anonKey: string } | null
+  /** Deep-nav: when both fields are set, the inline preview switches its
+   *  Snack export to React Navigation (NavigationContainer + native-stack)
+   *  and inlines appData so {{sentinel}} substitution + navigation.navigate
+   *  calls resolve correctly. Either field missing falls back to the legacy
+   *  tab-based payload. */
+  routeGraph?: DeepNavRouteGraph | null
+  appData?: unknown | null
 }
 
 /** Inline Bolt-style preview: overlays the rendered Expo Snack web-player
@@ -57,6 +65,8 @@ export function InlineSnackPreview({
   manualZoom = null,
   disabled = false,
   byoSupabase = null,
+  routeGraph = null,
+  appData = null,
 }: InlineSnackPreviewProps) {
   const [snackReady, setSnackReady] = useState(false)
   const [snackErrored, setSnackErrored] = useState(false)
@@ -92,8 +102,14 @@ export function InlineSnackPreview({
     // emitted). Without this, switching backend after first render would still
     // serve the cached non-Supabase bundle.
     const backendKey = byoSupabase ? `${byoSupabase.url}|${byoSupabase.anonKey.length}` : ''
-    return `${projectName}::${screensKey}::${connKey}::${backendKey}`
-  }, [projectName, screens, connections, byoSupabase])
+    // Deep-nav: include a hash of routeGraph + appData so toggling between
+    // legacy (tab-only) and deep-nav (React Navigation) re-builds the
+    // payload.
+    const deepNavKey = routeGraph
+      ? `dn:${routeGraph.screens.length}:${routeGraph.tabs?.length ?? 0}:${appData ? JSON.stringify(appData).length : 0}`
+      : ''
+    return `${projectName}::${screensKey}::${connKey}::${backendKey}::${deepNavKey}`
+  }, [projectName, screens, connections, byoSupabase, routeGraph, appData])
 
   // Build the same files+dependencies payload the modal uses. Memoized on the
   // fingerprint so identity stays stable across re-renders when content is
@@ -101,13 +117,18 @@ export function InlineSnackPreview({
   const payload = useMemo(() => {
     if (!fingerprint) return null
     try {
+      if (routeGraph && appData) {
+        return buildDeepNavSnackPayload({
+          projectName, screens, routeGraph, appData, byoSupabase,
+        })
+      }
       return buildSnackPayload({ projectName, screens, connections, byoSupabase })
     } catch (err) {
       console.error('[InlineSnackPreview] failed to build snack payload', err)
       return null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fingerprint])
+  }, [fingerprint, routeGraph, appData])
 
   const shouldRunSnack = !disabled && payload !== null && !snackErrored
 

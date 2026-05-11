@@ -76,6 +76,32 @@ ROUTE GRAPH COMPLETENESS RULES:
   a screen id in routeGraph.screens.
 - appData collections referenced via dataSource MUST exist in appData and
   contain ≥3 records each.
+
+TEXT CONTENT IN DETAIL SCREENS — SENTINEL RULES
+
+Detail screens (kind: "screen", params: ["id"], with a matching
+dataSource pointing at a collection in appData) MUST reference
+dynamic record fields using mustache-style placeholders, NEVER
+inline literal values.
+
+Format: {{fieldName}} for top-level fields, {{field.0}} for
+array-indexed access, {{field.subfield}} for nested objects.
+
+Examples:
+  ✓ <Text>{{name}}</Text>                    (renders "Push-ups")
+  ✓ <Text>{{duration}} · {{difficulty}}</Text>
+  ✓ <Text>{{ingredients.0}}</Text>           (first ingredient)
+  ✗ <Text>Push-ups</Text>                    (hardcoded — wrong)
+  ✗ <Text>{name}</Text>                      (wrong syntax)
+
+Every text field in a detail screen that varies per record MUST be
+a sentinel. Static labels ("Ingredients:", "Steps:", icons) stay
+literal. The runtime resolves sentinels against
+appData[dataSource.collection][params.id] before rendering.
+
+This rule applies ONLY to screens with a dataSource AND params: ["id"]
+(or similar). List screens, modals, and tabs render the appData array
+inline and use literal text + array map; they do not use sentinels.
 `
 
 /**
