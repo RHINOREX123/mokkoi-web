@@ -1,8 +1,14 @@
+export type NavIntent =
+  | { kind: 'push'; target: string; params?: Record<string, string> }
+  | { kind: 'openSheet'; target: string; params?: Record<string, string> }
+  | { kind: 'noop' }
+
 export interface ComponentNode {
   type: string
   props?: Record<string, unknown>
   style?: Record<string, unknown>
   children?: (ComponentNode | string)[]
+  navIntent?: NavIntent
 }
 
 export interface Screen {
@@ -11,6 +17,8 @@ export interface Screen {
   component: string
   updatedAt: number
   componentTree?: ComponentNode
+  presentation?: 'screen' | 'modal'
+  params?: string[]
 }
 
 export interface DesignTokens {

@@ -3,6 +3,11 @@
  * Uses Jaccard token-overlap fuzzy matching with deterministic fallback.
  * Pure module: no network, no disk, no globals.
  */
+// TODO(stream-a-collapse): migrate these consumers to read node.navIntent:
+//   - src/utils/exportTsx.ts:245 (production: reads opts.bindings)
+//   - src/utils/wirer.test.ts:69,83,101,102,116,131,196 (test: result.bindings.get)
+//   - src/utils/wirer.test.ts:100,142,166 (test: result.bindings.size)
+//   - src/utils/wirer/__fixtures__/wirer-fixtures.test.ts:117 (test: iterates result.bindings)
 
 import type { ComponentNode } from '../types/mokkoi'
 import type { FlowConnection } from '../components/FlowConnectors'

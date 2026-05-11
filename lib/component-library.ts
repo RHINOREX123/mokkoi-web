@@ -630,7 +630,7 @@ function expandNode(node: any): any {
     const expander = COMPONENT_EXPANSIONS[node.type]
     const expanded = expander(node.props || {})
     // Recursively expand the result (macros can contain other macros)
-    return expandNode(expanded)
+    return expandNode({ ...expanded, ...(node.navIntent ? { navIntent: node.navIntent } : {}), ...(node.presentation ? { presentation: node.presentation } : {}) })
   }
 
   // Otherwise, recurse into children
