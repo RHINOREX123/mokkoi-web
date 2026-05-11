@@ -29,7 +29,7 @@ describe('validateNavIntents', () => {
       ],
     }
     const { warnings } = validateNavIntents(tree, routeGraph)
-    expect(tree.children[0].navIntent).toEqual({ kind: 'noop' })
+    expect(tree.children[0].navIntent).toEqual({ kind: 'noop', toastMessage: 'Coming soon' })
     expect(tree.children[1].navIntent).toEqual({ kind: 'noop' })
     expect(tree.children[2].navIntent).toEqual({ kind: 'push', target: 'Home' })
     expect(warnings).toHaveLength(1)
@@ -44,7 +44,7 @@ describe('validateNavIntents', () => {
       ],
     }
     const { warnings } = validateNavIntents(tree, routeGraph)
-    expect(tree.children[0].navIntent).toEqual({ kind: 'noop' })
+    expect(tree.children[0].navIntent).toEqual({ kind: 'noop', toastMessage: 'Coming soon' })
     expect(warnings[0]).toMatch(/push target "NoSuchScreen"/)
   })
 
@@ -54,7 +54,7 @@ describe('validateNavIntents', () => {
       navIntent: { kind: 'openSheet', target: 'Home' }, // Home is a screen, not modal
     }
     const { warnings } = validateNavIntents(tree, routeGraph)
-    expect(tree.navIntent).toEqual({ kind: 'noop' })
+    expect(tree.navIntent).toEqual({ kind: 'noop', toastMessage: 'Coming soon' })
     expect(warnings[0]).toMatch(/openSheet target "Home"/)
   })
 
@@ -81,7 +81,7 @@ describe('validateNavIntents', () => {
       ],
     }
     const { warnings } = validateNavIntents(tree, routeGraph)
-    expect(tree.children[0].children[0].navIntent).toEqual({ kind: 'noop' })
+    expect(tree.children[0].children[0].navIntent).toEqual({ kind: 'noop', toastMessage: 'Coming soon' })
     expect(warnings).toHaveLength(1)
   })
 

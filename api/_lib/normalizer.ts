@@ -526,20 +526,20 @@ export function validateNavIntents(tree: any, routeGraph: NavIntentRouteGraph): 
       const intent = node.navIntent
       if (!intent || typeof intent !== 'object' || typeof intent.kind !== 'string') {
         warnings.push(`[navIntent] missing on TouchableOpacity at ${path} — replacing with noop`)
-        node.navIntent = { kind: 'noop' }
+        node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
       } else if (intent.kind === 'push') {
         if (typeof intent.target !== 'string' || !screenIds.has(intent.target)) {
           warnings.push(`[navIntent] push target "${intent.target}" not in routeGraph at ${path} — replacing with noop`)
-          node.navIntent = { kind: 'noop' }
+          node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
         }
       } else if (intent.kind === 'openSheet') {
         if (typeof intent.target !== 'string' || !sheetIds.has(intent.target)) {
           warnings.push(`[navIntent] openSheet target "${intent.target}" not in routeGraph modals at ${path} — replacing with noop`)
-          node.navIntent = { kind: 'noop' }
+          node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
         }
       } else if (intent.kind !== 'noop') {
         warnings.push(`[navIntent] unknown kind "${intent.kind}" at ${path} — replacing with noop`)
-        node.navIntent = { kind: 'noop' }
+        node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
       }
     }
     if (Array.isArray(node.children)) {
@@ -551,6 +551,12 @@ export function validateNavIntents(tree: any, routeGraph: NavIntentRouteGraph): 
   }
 
   walk(tree, '')
+
+  if (routeGraph && Array.isArray(routeGraph.tabs) && routeGraph.tabs.length > 5) {
+    warnings.push(`[validateNavIntents] routeGraph.tabs has ${routeGraph.tabs.length} entries — clamping to 5`)
+    console.warn(`[validateNavIntents] tab overflow: clamping ${routeGraph.tabs.length} -> 5`)
+    routeGraph.tabs = routeGraph.tabs.slice(0, 5)
+  }
 
   if (warnings.length > 0) {
     console.warn(`[validateNavIntents] ${warnings.length} issue(s):`, warnings.slice(0, 10))

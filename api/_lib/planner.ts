@@ -72,6 +72,12 @@ export interface PlannerOutput {
   plan: AppPlan
   appData: AppData
   routeGraph: RouteGraph
+  /**
+   * Whether downstream generation must materialize collection records.
+   * Absent / undefined is treated as `true` for backward compatibility.
+   * Agent 2 populates this from the planner output.
+   */
+  requiresCollections?: boolean
 }
 
 // ── JSON parse / repair helpers (lifted from generate-flow) ───────────────────
@@ -284,7 +290,7 @@ export async function runPlanner(args: RunPlannerArgs): Promise<PlannerOutput> {
   const plannerSystem = buildFullPlannerSystem(templateId, images.length > 0, { deepNav: true })
   const plannerBody = {
     model,
-    max_tokens: 4000,
+    max_tokens: 6000,
     system: [{ type: 'text', text: plannerSystem, cache_control: { type: 'ephemeral' } }],
     messages: buildMessages(conversationHistory, prompt, images),
   }
