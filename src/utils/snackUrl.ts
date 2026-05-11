@@ -376,12 +376,9 @@ export function buildSnackPayload(opts: SnackFilesOpts): SnackPayload {
 
   for (let i = 0; i < screens.length; i++) {
     const name = names[i]
-    const { bindings, unmatched } = wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
+    const { unmatched } = wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
     allUnmatched.push(...unmatched)
-    const tsx = convertTreeToTSX(processedTrees[i], name, {
-      bindings: bindings.size > 0 ? bindings : undefined,
-      addWatermark,
-    })
+    const tsx = convertTreeToTSX(processedTrees[i], name, { addWatermark })
     files[`screens/${name}.tsx`] = { type: 'CODE', contents: tsx }
   }
 

@@ -13,9 +13,10 @@ import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LI
 import { normalizeComponentTree } from './_lib/normalizer.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
-import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, buildPlannerSystem } from './_lib/design-system.js'
+import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
 import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
+import { runAppPlanner, type AppPlan as PlannerAppPlan } from './_lib/planner.js'
 
 const REFERENCE_INSPIRATION_BLOCK = `REFERENCE IMAGES — VISUAL INSPIRATION ONLY
 
@@ -261,32 +262,7 @@ export function parseScreenArray(text: string): any {
   return null
 }
 
-function parseAppPlan(text: string): AppPlan | null {
-  const jsonText = stripCodeFences(text)
-  try { return JSON.parse(jsonText) } catch {}
-  try { return repairJSON(jsonText) } catch {}
-  const dequoted = repairStrayDigitQuotes(jsonText)
-  if (dequoted !== jsonText) {
-    try { return JSON.parse(dequoted) } catch {}
-    try { return repairJSON(dequoted) } catch {}
-  }
-  const objStart = jsonText.indexOf('{')
-  const objEnd = jsonText.lastIndexOf('}')
-  if (objStart >= 0 && objEnd > objStart) {
-    const extracted = jsonText.slice(objStart, objEnd + 1)
-    try { return JSON.parse(extracted) } catch {}
-    try { return repairJSON(extracted) } catch {}
-    const extractedDequoted = repairStrayDigitQuotes(extracted)
-    if (extractedDequoted !== extracted) {
-      try { return JSON.parse(extractedDequoted) } catch {}
-      try { return repairJSON(extractedDequoted) } catch {}
-    }
-  }
-  return null
-}
-
 const STRICT_ARRAY_SUFFIX = '\n\nOutput MUST be a single JSON array, nothing before or after. No markdown fences. No explanation. The first character is `[`. The last character is `]`. Numeric values MUST NOT be quoted: write `"padding": 16` (correct) NOT `"padding": 16"` (wrong — stray quote breaks parsing). All number literals are unquoted.'
-const STRICT_OBJECT_SUFFIX = '\n\nOutput MUST be a single JSON object, nothing before or after. No markdown fences. No explanation. The first character is `{`. The last character is `}`. Numeric values MUST NOT be quoted: write `"count": 5` (correct) NOT `"count": 5"` (wrong — stray quote breaks parsing). All number literals are unquoted.'
 
 async function callAnthropic(apiKey: string, body: Record<string, unknown>): Promise<Response> {
   return fetch('https://api.anthropic.com/v1/messages', {
@@ -306,20 +282,6 @@ export interface ScreenDataAction {
   kind: 'auth.signInWithPassword' | 'auth.signUp' | 'auth.signOut'
   /** plan id of the screen to navigate to on success */
   redirectScreen?: string
-}
-
-interface AppPlan {
-  appName: string
-  screens: Array<{
-    id: string
-    name: string
-    description: string
-    screenType: string
-    isHome: boolean
-    dataAction?: ScreenDataAction
-  }>
-  navigation: { type: 'tabs' | 'stack' | 'hybrid'; tabScreens?: string[]; connections: Array<{ from: string; to: string; trigger: string }> }
-  designDirection: { theme: string; accentColor: string; style: string }
 }
 
 /**
@@ -581,52 +543,27 @@ async function handleApp(
     if (templateMatch) {
       console.log(`[planner] template match: ${templateMatch.templateId} (score=${templateMatch.score.toFixed(2)})`)
     }
-    const basePlannerSystem = buildPlannerSystem(templateMatch?.templateId)
-    const plannerSystem = images.length > 0
-      ? `${REFERENCE_INSPIRATION_BLOCK}\n\n${basePlannerSystem}`
-      : basePlannerSystem
 
-    const PLANNER_MODEL = 'claude-haiku-4-5-20251001'
-    const plannerBody = {
-      model: PLANNER_MODEL,
-      max_tokens: 2000,
-      system: [{ type: 'text', text: plannerSystem, cache_control: { type: 'ephemeral' } }],
-      messages: buildMessages(undefined, prompt, images),
-    }
+    const plannerResult = await runAppPlanner({
+      callApi: async (body) => {
+        const r = await callAnthropic(apiKey, body)
+        return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() }
+      },
+      prompt,
+      images,
+      conversationHistory: undefined,
+      templateId: templateMatch?.templateId,
+    })
+    let plan: PlannerAppPlan | null = plannerResult.plan
 
-    let planResponse = await callAnthropic(apiKey, plannerBody)
-    if (!planResponse.ok) {
-      console.error('Plan API error:', planResponse.status, await planResponse.text())
-      sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
-      await finalizeFailed('plan_api_error')
-      return res.end()
-    }
-
-    let planData: any = await planResponse.json()
-    let planText: string = planData.content?.[0]?.text ?? ''
-    let plan: AppPlan | null = parseAppPlan(planText)
-
-    // Retry on ANY parse failure (not just max_tokens). Sonnet/Haiku can emit
-    // malformed JSON for other reasons too; the stricter STRICT_OBJECT_SUFFIX
-    // resolves most of them on the second pass.
     if (!plan) {
-      console.error('[generate-flow] Phase 1 planner parse failed; retrying with bumped tokens + strict suffix. Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
-      const retryResp = await callAnthropic(apiKey, {
-        ...plannerBody,
-        max_tokens: 64000,
-        system: [{ type: 'text', text: plannerSystem + STRICT_OBJECT_SUFFIX, cache_control: { type: 'ephemeral' } }],
-      })
-      if (retryResp.ok) {
-        planData = await retryResp.json()
-        planText = planData.content?.[0]?.text ?? ''
-        plan = parseAppPlan(planText)
-      } else {
-        console.error('[generate-flow] Phase 1 planner retry HTTP error:', retryResp.status, await retryResp.text())
+      if (plannerResult.failureCode === 'api_error') {
+        console.error('Plan API error')
+        sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
+        await finalizeFailed('plan_api_error')
+        return res.end()
       }
-    }
-
-    if (!plan) {
-      console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
+      console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', plannerResult.stopReason, 'Full raw body:\n', plannerResult.rawText)
       sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
       await finalizeFailed('plan_parse_failed')
       return res.end()
@@ -839,8 +776,8 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
 
     logUsage({
       userId: user.id, projectId: projectId || undefined, modelUsed: genModel,
-      tokensIn: (planData.usage?.input_tokens || 0) + (genData.usage?.input_tokens || 0),
-      tokensOut: (planData.usage?.output_tokens || 0) + (genData.usage?.output_tokens || 0),
+      tokensIn: (plannerResult.usage?.input_tokens || 0) + (genData.usage?.input_tokens || 0),
+      tokensOut: (plannerResult.usage?.output_tokens || 0) + (genData.usage?.output_tokens || 0),
       generationType: 'app', promptPreview: prompt, success: true,
     })
 

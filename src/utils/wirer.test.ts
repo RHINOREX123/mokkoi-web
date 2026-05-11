@@ -25,6 +25,13 @@ function makeScreen(
   }
 }
 
+function pushTarget(node: ComponentNode): string | undefined {
+  const intent = node.navIntent
+  if (!intent) return undefined
+  if (intent.kind === 'push' || intent.kind === 'openSheet') return intent.target
+  return undefined
+}
+
 // ── tokenize ─────────────────────────────────────────────────────────────────
 
 describe('tokenize', () => {
@@ -57,7 +64,7 @@ describe('jaccard', () => {
 // ── wireScreen ───────────────────────────────────────────────────────────────
 
 describe('wireScreen', () => {
-  it('test 6: exact match binds node → target, usesNavigation true', () => {
+  it('test 6: exact match stamps navIntent on node, usesNavigation true', () => {
     const btn = makeButton('Add to Cart')
     const screen = makeScreen('s1', 'CartScreen', [btn])
     const targetScreen = makeScreen('s2', 'CheckoutScreen', [])
@@ -66,7 +73,7 @@ describe('wireScreen', () => {
     const result = wireScreen(screen, [conn], [screen, targetScreen])
 
     const btnNode = (screen.tree.children![0] as ComponentNode)
-    expect(result.bindings.get(btnNode)).toBe('CheckoutScreen')
+    expect(pushTarget(btnNode)).toBe('CheckoutScreen')
     expect(result.usesNavigation).toBe(true)
     expect(result.tree).toBe(screen.tree) // same reference
   })
@@ -77,10 +84,10 @@ describe('wireScreen', () => {
     const targetScreen = makeScreen('s2', 'CheckoutScreen', [])
     const conn: FlowConnection = { fromScreenId: 's1', toScreenId: 's2', trigger: 'Cart' }
 
-    const result = wireScreen(screen, [conn], [screen, targetScreen])
+    wireScreen(screen, [conn], [screen, targetScreen])
 
     const btnNode = (screen.tree.children![0] as ComponentNode)
-    expect(result.bindings.get(btnNode)).toBe('CheckoutScreen')
+    expect(pushTarget(btnNode)).toBe('CheckoutScreen')
   })
 
   it('test 8: disambiguation — two buttons, two triggers each bound correctly', () => {
@@ -95,17 +102,13 @@ describe('wireScreen', () => {
       { fromScreenId: 's1', toScreenId: 's3', trigger: 'Profile' },
     ]
 
-    const result = wireScreen(screen, conns, [screen, cartScreen, profileScreen])
+    wireScreen(screen, conns, [screen, cartScreen, profileScreen])
 
-    expect(result.bindings.size).toBe(2)
-    expect(result.bindings.get(cartBtn)).toBe('CartScreen')
-    expect(result.bindings.get(profileBtn)).toBe('ProfileScreen')
+    expect(pushTarget(cartBtn)).toBe('CartScreen')
+    expect(pushTarget(profileBtn)).toBe('ProfileScreen')
   })
 
   it('test 9: directional fallback — trigger has directional verb, Jaccard=0, binds first unbound button', () => {
-    // "Go Now" → tokens ["go","now"]; button text "Checkout" → tokens ["checkout"]
-    // Jaccard = 0 (no overlap), but "go" is a DIRECTIONAL_VERB → shouldFallback=true
-    // Empty trigger must NOT trigger fallback (never blind-bind)
     const btn = makeButton('Checkout')
     const screen = makeScreen('s1', 'PaymentScreen', [btn])
     const checkoutScreen = makeScreen('s2', 'CheckoutScreen', [])
@@ -113,22 +116,19 @@ describe('wireScreen', () => {
 
     const result = wireScreen(screen, [conn], [screen, checkoutScreen])
 
-    expect(result.bindings.get(btn)).toBe('CheckoutScreen')
+    expect(pushTarget(btn)).toBe('CheckoutScreen')
     expect(result.unmatched).toHaveLength(0)
   })
 
   it('test 10: target-name fallback — token of target name in button text', () => {
-    // trigger "???" → tokens [] (no Jaccard match, no directional verb)
-    // target name "Dashboard Screen" → tokens ["dashboard","screen"]
-    // button "Dashboard" → tokens ["dashboard"] → overlap → shouldFallback via target-name
     const btn = makeButton('Dashboard')
     const screen = makeScreen('s1', 'HomeScreen', [btn])
     const dashScreen = makeScreen('s2', 'Dashboard Screen', [])
     const conn: FlowConnection = { fromScreenId: 's1', toScreenId: 's2', trigger: '???' }
 
-    const result = wireScreen(screen, [conn], [screen, dashScreen])
+    wireScreen(screen, [conn], [screen, dashScreen])
 
-    expect(result.bindings.get(btn)).toBe('Dashboard Screen')
+    expect(pushTarget(btn)).toBe('Dashboard Screen')
   })
 
   it('test 11: unmatched — no overlap, no directional, no target name', () => {
@@ -139,36 +139,39 @@ describe('wireScreen', () => {
 
     const result = wireScreen(screen, [conn], [screen, checkoutScreen])
 
-    expect(result.bindings.size).toBe(0)
+    expect(btn.navIntent).toBeUndefined()
     expect(result.unmatched).toHaveLength(1)
     expect(result.unmatched[0].trigger).toBe('Buy Now')
     expect(result.unmatched[0].target).toBe('CheckoutScreen')
   })
 
-  it('test 12: tree not mutated', () => {
+  it('test 12: only navIntent fields mutated on touchables; other tree shape preserved', () => {
     const btn = makeButton('Go')
     const screen = makeScreen('s1', 'HomeScreen', [btn])
     const targetScreen = makeScreen('s2', 'NextScreen', [])
     const conn: FlowConnection = { fromScreenId: 's1', toScreenId: 's2', trigger: 'Go' }
 
-    const clone = JSON.parse(JSON.stringify(screen.tree))
     wireScreen(screen, [conn], [screen, targetScreen])
 
-    expect(JSON.stringify(screen.tree)).toBe(JSON.stringify(clone))
+    // The mutation stamps navIntent on the button node only.
+    expect(pushTarget(btn)).toBe('NextScreen')
+    // Surrounding structure untouched.
+    expect(screen.tree.type).toBe('View')
+    expect(screen.tree.children).toHaveLength(1)
+    expect(screen.tree.navIntent).toBeUndefined()
   })
 
-  it('test 13: no outgoing connections — empty bindings, usesNavigation false, no throw', () => {
+  it('test 13: no outgoing connections — usesNavigation false, no throw, no stamps', () => {
     const btn = makeButton('Click me')
     const screen = makeScreen('s1', 'HomeScreen', [btn])
-    // no connections at all
     const result = wireScreen(screen, [], [screen])
 
-    expect(result.bindings.size).toBe(0)
+    expect(btn.navIntent).toBeUndefined()
     expect(result.usesNavigation).toBe(false)
     expect(result.unmatched).toHaveLength(0)
   })
 
-  it('test 14: nested button — deeply nested text still found', () => {
+  it('test 14: nested button — deeply nested text still found and stamped', () => {
     const deepBtn: ComponentNode = {
       type: 'TouchableOpacity',
       children: [
@@ -191,8 +194,8 @@ describe('wireScreen', () => {
     const targetScreen = makeScreen('s2', 'CheckoutScreen', [])
     const conn: FlowConnection = { fromScreenId: 's1', toScreenId: 's2', trigger: 'Checkout' }
 
-    const result = wireScreen(screen, [conn], [screen, targetScreen])
+    wireScreen(screen, [conn], [screen, targetScreen])
 
-    expect(result.bindings.get(deepBtn)).toBe('CheckoutScreen')
+    expect(pushTarget(deepBtn)).toBe('CheckoutScreen')
   })
 })

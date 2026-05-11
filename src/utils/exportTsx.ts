@@ -395,9 +395,10 @@ function nodeJSXWithNav(
     props.push(
       `onPress={async () => {\n        const { error } = await supabase.auth.${method}({ email, password });${redirect}\n      }}`
     )
-  } else if (type === 'TouchableOpacity' && navTargets) {
-    // Check if this TouchableOpacity should navigate (node-identity lookup)
-    const target = navTargets.get(node)
+  } else if (type === 'TouchableOpacity') {
+    // Read navIntent stamped on the node by the wirer (deep-nav contract).
+    const intent = node.navIntent
+    const target = intent && (intent.kind === 'push' || intent.kind === 'openSheet') ? intent.target : undefined
     if (target) {
       props.push(`onPress={() => navigation.navigate('${target}')}`)
       usesNavigation.value = true

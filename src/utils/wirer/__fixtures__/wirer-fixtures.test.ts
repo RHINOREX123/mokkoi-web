@@ -112,12 +112,24 @@ for (const { name: fixtureName, fixture } of fixtures) {
           u => u.screenName === screen.name,
         )
 
-        // Build actual bindings as { buttonText, target }[] by iterating the Map
+        // Build actual bindings as { buttonText, target }[] by walking the tree
+        // for stamped navIntent (push/openSheet target screen names).
         const actualBindings: Array<{ buttonText: string; target: string }> = []
-        for (const [node, target] of result.bindings) {
-          const text = collectAllText(node).trim()
-          actualBindings.push({ buttonText: text, target })
+        const walk = (node: ComponentNode): void => {
+          const intent = node.navIntent
+          if (intent && (intent.kind === 'push' || intent.kind === 'openSheet')) {
+            actualBindings.push({
+              buttonText: collectAllText(node).trim(),
+              target: intent.target,
+            })
+          }
+          if (node.children) {
+            for (const c of node.children) {
+              if (typeof c !== 'string') walk(c as ComponentNode)
+            }
+          }
         }
+        walk(screen.tree)
 
         // Every expectedBinding must appear in actualBindings
         for (const expected of expectedBindings) {
