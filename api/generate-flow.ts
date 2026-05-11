@@ -604,6 +604,15 @@ async function handleApp(
         plan = out.plan
         appData = out.appData
         routeGraph = out.routeGraph
+        // Defensive: if the planner returns a malformed routeGraph, downstream
+        // Phase 0 hooks (validateNavIntents, repairDeadButtons) would throw on
+        // `.screens.map` and kill the whole batch. Drop routeGraph so the
+        // screen loop falls back to the legacy path (no Phase 0 hooks) for
+        // this run instead.
+        if (routeGraph && !Array.isArray(routeGraph.screens)) {
+          console.warn('[deep-nav] missing or malformed routeGraph from planner; falling back to single-screen mode for this generation')
+          routeGraph = undefined
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error('[generate-flow] deep-nav planner failed:', msg)
@@ -882,18 +891,29 @@ keyed off the navigating screen's current params.
       if (deepNav) rewriteNavIntentTargets(tree, planIdToScreenId)
       // Phase 0: validate navIntents against routeGraph (UUID-rewritten form)
       // and run dead-button repair stub. Both are no-ops on the legacy path.
+      // Wrapped in a per-screen try/catch so a bug in either hook can't kill
+      // the entire batch — on failure we fall back to the raw tree (worst
+      // case: dead buttons on this one screen, vs. an empty generation).
       let finalTree: any = tree
       if (deepNav && routeGraph) {
-        const uuidRouteGraph = {
-          screens: routeGraph.screens.map(rs => ({
-            ...rs,
-            id: planIdToScreenId.get(rs.id) || rs.id,
-          })),
-          tabs: (routeGraph.tabs ?? []).map(t => planIdToScreenId.get(t) || t),
+        try {
+          const uuidRouteGraph = {
+            screens: routeGraph.screens.map(rs => ({
+              ...rs,
+              id: planIdToScreenId.get(rs.id) || rs.id,
+            })),
+            tabs: (routeGraph.tabs ?? []).map(t => planIdToScreenId.get(t) || t),
+          }
+          const validated = validateNavIntents(tree, uuidRouteGraph)
+          finalTree = validated.tree
+          if (validated.warnings.length > 0) {
+            console.warn('[deep-nav] nav warnings for screen', planId, validated.warnings)
+          }
+          finalTree = repairDeadButtons(finalTree, uuidRouteGraph as any, planId)
+        } catch (err) {
+          console.error('[deep-nav] per-screen phase-0 hook failed for', planId, '— falling back to original tree:', err)
+          finalTree = tree
         }
-        const validated = validateNavIntents(finalTree, uuidRouteGraph)
-        finalTree = validated.tree
-        finalTree = repairDeadButtons(finalTree, uuidRouteGraph as any, planId)
       }
       const normalized = {
         id: screenId,
