@@ -52,15 +52,28 @@ function resolveRecord(
     if (v && !candidates.includes(v)) candidates.push(v)
   }
   if (candidates.length === 0) return undefined
+  // Expand each candidate into a few "near-equivalent" forms the LLM
+  // might have produced: the raw value, every dash-separated segment
+  // (so "recipe-1" matches record.id "1"), and a digit-only extract
+  // (so "exercise_3" still matches "3"). Deduplicated, original order
+  // preserved so the most-likely match runs first.
+  const expanded: string[] = []
+  const push = (s: string) => { if (s && !expanded.includes(s)) expanded.push(s) }
+  for (const c of candidates) {
+    push(c)
+    for (const part of c.split(/[-_]/)) push(part)
+    const digits = c.replace(/\D+/g, '')
+    if (digits) push(digits)
+  }
   // Array shape: linear scan, match record.id, then slug(record.name).
   if (Array.isArray(coll)) {
-    for (const c of candidates) {
+    for (const c of expanded) {
       const hit = coll.find((r): r is Record<string, unknown> =>
-        !!r && typeof r === 'object' && (r as Record<string, unknown>).id === c
+        !!r && typeof r === 'object' && String((r as Record<string, unknown>).id) === c
       )
       if (hit) return hit
     }
-    for (const c of candidates) {
+    for (const c of expanded) {
       const cs = slugify(c)
       const hit = coll.find((r): r is Record<string, unknown> =>
         !!r && typeof r === 'object' && slugify((r as Record<string, unknown>).name) === cs
@@ -72,16 +85,16 @@ function resolveRecord(
   // Keyed-object shape: direct lookup, then scan values by record.id, then
   // by slug(record.name).
   const obj = coll as Record<string, unknown>
-  for (const c of candidates) {
+  for (const c of expanded) {
     const v = obj[c]
     if (v && typeof v === 'object') return v as Record<string, unknown>
   }
   const values = Object.values(obj).filter((v): v is Record<string, unknown> => !!v && typeof v === 'object')
-  for (const c of candidates) {
-    const hit = values.find(r => r.id === c)
+  for (const c of expanded) {
+    const hit = values.find(r => String(r.id) === c)
     if (hit) return hit
   }
-  for (const c of candidates) {
+  for (const c of expanded) {
     const cs = slugify(c)
     const hit = values.find(r => slugify(r.name) === cs)
     if (hit) return hit
