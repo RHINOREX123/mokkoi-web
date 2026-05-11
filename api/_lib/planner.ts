@@ -332,7 +332,25 @@ export async function runPlanner(args: RunPlannerArgs): Promise<PlannerOutput> {
     tabs: Array.isArray(parsed.routeGraph?.tabs) ? parsed.routeGraph.tabs : [],
   }
 
-  return { plan, appData, routeGraph }
+  // ── BEGIN agent-2: requiresCollections + widget detection ────────────────────
+  // The planner may explicitly mark widget-mode apps with
+  // `requiresCollections: false` (see WIDGET_MODE_RULES). If the field is
+  // absent or non-boolean we fall back to a conservative inference:
+  //  - empty appData AND empty tab list  → likely widget mode (false)
+  //  - otherwise                          → requires collections (true)
+  // Conservative default = true: false-positive widget mode breaks more
+  // than a stray Settings screen does.
+  let requiresCollections: boolean
+  if (typeof parsed.requiresCollections === 'boolean') {
+    requiresCollections = parsed.requiresCollections
+  } else {
+    const collectionCount = Object.keys(appData).length
+    const tabCount = routeGraph.tabs.length
+    requiresCollections = !(collectionCount === 0 && tabCount <= 1)
+  }
+  // ── END agent-2 ──────────────────────────────────────────────────────────────
+
+  return { plan, appData, routeGraph, requiresCollections }
 }
 
 // ── Validation: structural rule checks against the spec ───────────────────────

@@ -25,6 +25,7 @@ import {
   type RouteGraph,
 } from './_lib/planner.js'
 import { makeMilestone, deriveIdentified, type MilestoneKind, type MilestoneStatus } from './_lib/progress-events.js'
+import { HEADER_ICON_NAV_RULES, WIDGET_MODE_RULES } from './_lib/planner-prompt.js'
 
 /**
  * Send a milestone SSE event. Additive to the existing 'status'/'plan'/'screen'
@@ -803,6 +804,10 @@ the matching appData record at navigation time.
 
 Modals (kind: "modal") render their own content and may use sentinels
 keyed off the navigating screen's current params.
+
+${HEADER_ICON_NAV_RULES}
+
+${WIDGET_MODE_RULES}
 `
       : ''
 
