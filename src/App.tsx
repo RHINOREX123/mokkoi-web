@@ -793,6 +793,7 @@ function App() {
               appProgress={ai.isGenerating
                 ? ai.appProgress
                 : (generationRun.isRunning ? generationRun.progress : ai.appProgress)}
+              milestones={ai.milestones}
               resumingRun={!ai.isGenerating && generationRun.isRunning}
             />
           </ErrorBoundary>

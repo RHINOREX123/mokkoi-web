@@ -24,6 +24,26 @@ import {
   type AppData,
   type RouteGraph,
 } from './_lib/planner.js'
+import { makeMilestone, deriveIdentified, type MilestoneKind, type MilestoneStatus } from './_lib/progress-events.js'
+
+/**
+ * Send a milestone SSE event. Additive to the existing 'status'/'plan'/'screen'
+ * stream — pre-milestone clients ignore unknown types and keep working. Wrapped
+ * in try/catch so a telemetry hiccup never propagates into the generation path.
+ */
+function emitMilestone(
+  res: VercelResponse,
+  kind: MilestoneKind,
+  message: string,
+  status: MilestoneStatus = 'inflight',
+) {
+  try {
+    const m = makeMilestone(kind, message, status)
+    sendSSE(res, { type: 'milestone', ...m })
+  } catch (err) {
+    console.warn('[generate-flow] milestone emit failed:', err instanceof Error ? err.message : err)
+  }
+}
 
 const REFERENCE_INSPIRATION_BLOCK = `REFERENCE IMAGES — VISUAL INSPIRATION ONLY
 
@@ -572,6 +592,10 @@ async function handleApp(
 
   try {
     // ===== PHASE 1: Plan the app with Haiku =====
+    // Milestone (a): analyzing — emitted alongside the existing 'status' event so
+    // a client that knows about 'milestone' can render a timeline, while older
+    // clients still see the legacy 'status' phase change.
+    emitMilestone(res, 'analyzing', 'Analyzing your prompt…')
     sendSSE(res, { type: 'status', phase: 'planning', message: 'Planning your app...' })
 
     const templateMatch = matchTemplate(prompt)
@@ -670,6 +694,17 @@ async function handleApp(
       }
     }
 
+    // Milestone (b): identified — once the planner has produced a usable
+    // app shape, surface what we understood so the user sees signal before
+    // any screen renders. deriveIdentified pulls from appData when present
+    // (deep-nav) and falls back to plan-only counts otherwise.
+    emitMilestone(
+      res,
+      'identified',
+      deriveIdentified(plan as { appName?: string; screens?: unknown[] }, appData as Record<string, unknown> | undefined),
+      'done',
+    )
+
     // Deep-nav extras (appData + routeGraph) ride alongside `plan` in the
     // same event so the client can persist them once instead of waiting for
     // 'complete'. The fields are undefined in legacy mode and the client
@@ -678,6 +713,9 @@ async function handleApp(
 
     // ===== PHASE 2: Generate all screens =====
     const screenCount = plan.screens.length
+    // Milestone (c): generating — starts the long-running step. Done state is
+    // emitted post-Promise.all alongside milestone (d).
+    emitMilestone(res, 'generating', `Generating ${screenCount} screen${screenCount === 1 ? '' : 's'}…`)
     sendSSE(res, { type: 'status', phase: 'generating', message: `Generating ${screenCount} screens...`, current: 0, total: screenCount })
 
     // free-tier app gen on Sonnet for parse reliability; activation > free-tier COGS.
@@ -982,6 +1020,13 @@ keyed off the navigating screen's current params.
       tokensOut: (plannerUsage?.output_tokens || 0) + (genData.usage?.output_tokens || 0),
       generationType: 'app', promptPreview: prompt, success: true,
     })
+
+    // Milestone (d): complete — flips the 'generating' step to done and adds a
+    // terminal 'Done' row. Emitted right before the legacy 'complete' event so
+    // a client watching the timeline reaches the final state in the same tick
+    // it learns the screens are ready.
+    emitMilestone(res, 'generating', `Generated ${normalizedScreens.length} screen${normalizedScreens.length === 1 ? '' : 's'}`, 'done')
+    emitMilestone(res, 'complete', `Done — ${normalizedScreens.length} screen${normalizedScreens.length === 1 ? '' : 's'} ready`, 'done')
 
     sendSSE(res, {
       type: 'complete',
