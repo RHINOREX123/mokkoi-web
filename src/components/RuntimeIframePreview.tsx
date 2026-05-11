@@ -5,10 +5,20 @@ import { findNavigationTarget } from '../utils/previewNavigation'
 import { fuzzyMatchScreen } from '../utils/fuzzyMatchScreen'
 import { getDevicePreset, DEFAULT_DEVICE } from '../constants/devices'
 import { trackEvent } from '../lib/analytics'
-import type { ComponentNode } from '../types/mokkoi'
+import type { ComponentNode, NavIntent } from '../types/mokkoi'
 import type { FlowConnection } from './FlowConnectors'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { DeviceId } from '../constants/devices'
+import { substituteSentinels, type AppData } from '../utils/sentinelSubstitution'
+
+export type { AppData } from '../utils/sentinelSubstitution'
+
+/** Screen shape extensions added by the planner (Stream A) but not yet
+ *  threaded through GeneratedScreen. Read defensively. */
+interface ScreenExtras {
+  presentation?: 'screen' | 'modal'
+  dataSource?: { collection: string; paramKey?: string }
+}
 
 interface RuntimeIframePreviewProps {
   screens: GeneratedScreen[]
@@ -22,6 +32,11 @@ interface RuntimeIframePreviewProps {
   /** Stable project identifier (Supabase row id). Threaded through for Week 5
    *  Day 0 telemetry properties. Optional — if absent, events fire without it. */
   projectId?: string
+  /** Planner-produced record collections (Stream A). When present, detail
+   *  screens with a dataSource get their {{sentinels}} substituted before the
+   *  tree is posted into the iframe. Old projects omit this; substitution is
+   *  a no-op then. */
+  appData?: AppData
 }
 
 /** Recursive node count — used as a tree-size dimension on render telemetry.
@@ -60,6 +75,7 @@ export function RuntimeIframePreview({
   manualZoom = null,
   disabled = false,
   projectId,
+  appData,
 }: RuntimeIframePreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
@@ -84,6 +100,16 @@ export function RuntimeIframePreview({
   // screen on every forward navigation and pop on back-glyph clicks; if the
   // stack is empty we fall back to screens[0] (entry/home).
   const historyRef = useRef<string[]>([])
+
+  // Current navigation params per screen id (populated when a navIntent push
+  // carries them). Used to look up the record for sentinel substitution
+  // before posting the detail screen's tree into the iframe.
+  const paramsByScreenRef = useRef<Record<string, Record<string, string>>>({})
+
+  // Tracks whether the active screen is a modal-presentation screen. Drives
+  // the CSS slide-up transition and the close (X) overlay rendered in the
+  // wrapper (outside the iframe).
+  const [modalAnim, setModalAnim] = useState(false)
 
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const isAndroid = device.category === 'Android'
@@ -190,12 +216,23 @@ export function RuntimeIframePreview({
       'arrow-left', 'arrow-back', 'chevron-left',
     ])
 
-    function navigateForward(target: string) {
+    function navigateForward(target: string, params?: Record<string, string>) {
       if (target === activeScreenId) return
       // Avoid pushing duplicates back-to-back (defensive against double-click).
       const stack = historyRef.current
       if (stack[stack.length - 1] !== activeScreenId) {
         stack.push(activeScreenId)
+      }
+      if (params && Object.keys(params).length > 0) {
+        paramsByScreenRef.current[target] = params
+      }
+      const targetScreen = screens.find(s => s.id === target) as
+        | (GeneratedScreen & ScreenExtras)
+        | undefined
+      if (targetScreen?.presentation === 'modal') {
+        setModalAnim(true)
+      } else {
+        setModalAnim(false)
       }
       onActiveScreenChange(target)
     }
@@ -206,11 +243,43 @@ export function RuntimeIframePreview({
       const kind = String(e.data.elementKind ?? '')
       const label = String(e.data.label ?? '')
       const deferReason = String(e.data.deferReason ?? '')
+      const navIntent = (e.data.navIntent ?? null) as NavIntent | null
       if (!activeScreenId) return
 
       const tried: string[] = []
       const has_label = label.length > 0
       const isListRowDefer = kind === 'Deferred' && deferReason === 'list-row'
+
+      // Deep-nav resolution: manual FlowConnection > navIntent > fuzzy/single.
+      // Manual wires win because users editing connections by hand must not be
+      // silently overruled by LLM-emitted intents on regen.
+      if (navIntent && navIntent.kind !== 'noop' && !isListRowDefer) {
+        tried.push('flowConnection')
+        const flowTarget = label
+          ? findNavigationTarget(connections, activeScreenId, label)
+          : null
+        if (flowTarget && flowTarget !== navIntent.target) {
+          console.warn(
+            `[mokkoi-click] manual FlowConnection overrode navIntent (manual=${flowTarget} navIntent=${navIntent.target})`,
+          )
+          navigateForward(flowTarget)
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'flow_connection' })
+          return
+        }
+        if (flowTarget) {
+          navigateForward(flowTarget)
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'flow_connection' })
+          return
+        }
+        tried.push('navIntent')
+        if (screens.some(s => s.id === navIntent.target)) {
+          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → tried=${tried.join(',')} matched=navIntent:${navIntent.target}`)
+          navigateForward(navIntent.target, navIntent.params)
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'nav_intent' })
+          return
+        }
+        if (import.meta.env.DEV) console.warn(`[mokkoi-click] navIntent target='${navIntent.target}' not found; falling through`)
+      }
 
       // Back-glyph short-circuit. The wirer doesn't reliably wire back arrows
       // (planner connections key on forward triggers), so we maintain an
@@ -232,6 +301,9 @@ export function RuntimeIframePreview({
         }
         if (target) {
           if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=backHistory matched=${target}`)
+          const targetScreen = screens.find(s => s.id === target) as
+            | (GeneratedScreen & ScreenExtras) | undefined
+          setModalAnim(targetScreen?.presentation === 'modal')
           onActiveScreenChange(target)
           trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'back_history' })
         } else {
@@ -315,6 +387,26 @@ export function RuntimeIframePreview({
       console.error('[runtime-preview] expandComponents failed', err)
       return
     }
+
+    // Deep-nav: sentinel substitution. If this screen has a dataSource and
+    // current nav params point at a record, walk the tree and replace
+    // {{path}} sentinels in Text node strings with values from the record.
+    // Substitution happens OUTSIDE the iframe — the runtime stays ignorant
+    // of appData. Misses are left as-is (visible debug aid).
+    const extras = activeScreen as GeneratedScreen & ScreenExtras
+    const ds = extras.dataSource
+    if (appData && ds) {
+      const params = paramsByScreenRef.current[activeScreen.id]
+      const key = params?.[ds.paramKey ?? 'id']
+      const record = key ? appData[ds.collection]?.[key] : undefined
+      if (record) {
+        const subbed = substituteSentinels(expanded, record)
+        if (subbed && typeof subbed === 'object') {
+          expanded = subbed as ComponentNode
+        }
+      }
+    }
+
     const treeJson = JSON.stringify(expanded)
     const nodeCount = countTreeNodes(expanded)
     iframeRef.current?.contentWindow?.postMessage(
@@ -333,7 +425,48 @@ export function RuntimeIframePreview({
       tree_byte_size: treeJson.length,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [iframeReady, treeFingerprint, disabled])
+  }, [iframeReady, treeFingerprint, disabled, appData])
+
+  // Close the current modal screen: pop the back-stack to the previous screen.
+  // Mirrors the back-glyph short-circuit in the click handler so the user can
+  // dismiss a modal even when the LLM-generated tree forgot its own X button.
+  const closeModal = useCallback(() => {
+    const stack = historyRef.current
+    let target: string | undefined
+    while (stack.length) {
+      const cand = stack.pop()!
+      if (cand !== activeScreenId && screens.some(s => s.id === cand)) {
+        target = cand
+        break
+      }
+    }
+    if (!target) target = screens[0]?.id
+    if (target && target !== activeScreenId) {
+      const ts = screens.find(s => s.id === target) as
+        | (GeneratedScreen & ScreenExtras) | undefined
+      setModalAnim(ts?.presentation === 'modal')
+      onActiveScreenChange(target)
+    }
+  }, [activeScreenId, screens, onActiveScreenChange])
+
+  const activePresentation = (activeScreen as
+    | (GeneratedScreen & ScreenExtras) | undefined)?.presentation
+
+  // Slide-up: when we navigate INTO a modal screen, we want the iframe pane
+  // to slide up from offscreen. We can't remount the iframe (would drop the
+  // handshake), so we animate a wrapper div via a transform + transition,
+  // toggling state on the next frame after modalAnim flips on.
+  const [modalSlidIn, setModalSlidIn] = useState(false)
+  useEffect(() => {
+    if (modalAnim && activePresentation === 'modal') {
+      setModalSlidIn(false)
+      const id = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setModalSlidIn(true))
+      })
+      return () => cancelAnimationFrame(id)
+    }
+    setModalSlidIn(true)
+  }, [modalAnim, activePresentation, activeScreenId])
 
   if (disabled) return null
 
@@ -370,20 +503,65 @@ export function RuntimeIframePreview({
           background: '#0A0A1A',
           visibility: containerSize.w === 0 ? 'hidden' : 'visible',
           flexShrink: 0,
+          position: 'relative',
         }}
       >
-        <iframe
-          ref={iframeRef}
-          src="/runtime/index.html"
-          title="Mokkoi Runtime Preview"
+        <div
           style={{
             width: '100%',
             height: '100%',
-            border: 'none',
-            display: 'block',
-            background: '#0F172A',
+            // Modal slide-up: transform-driven so the iframe never remounts.
+            transform:
+              activePresentation === 'modal' && !modalSlidIn
+                ? 'translateY(100%)'
+                : 'translateY(0)',
+            transition:
+              activePresentation === 'modal'
+                ? 'transform 250ms ease-out'
+                : undefined,
           }}
-        />
+        >
+          <iframe
+            ref={iframeRef}
+            src="/runtime/index.html"
+            title="Mokkoi Runtime Preview"
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              display: 'block',
+              background: '#0F172A',
+            }}
+          />
+        </div>
+        {activePresentation === 'modal' && (
+          <button
+            type="button"
+            aria-label="Close modal"
+            onClick={closeModal}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(15, 23, 42, 0.7)',
+              color: '#E6EDF3',
+              fontSize: 18,
+              lineHeight: 1,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1001,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            }}
+          >
+            ×
+          </button>
+        )}
       </div>
     </div>
   )

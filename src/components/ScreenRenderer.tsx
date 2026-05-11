@@ -579,17 +579,20 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
       )
     }
 
-    case 'TouchableOpacity':
+    case 'TouchableOpacity': {
+      const navIntent = node.navIntent
       return (
         <div
           key={key}
           className="mokkoi-touchable"
           style={{ ...VIEW_BASE, ...style, cursor: 'pointer' }}
           role="button"
+          data-mokkoi-nav={navIntent ? JSON.stringify(navIntent) : undefined}
         >
           {children}
         </div>
       )
+    }
 
     case 'Image': {
       const searchQuery = node.props?.searchQuery as string | undefined
