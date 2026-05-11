@@ -704,10 +704,19 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     // heuristics — fine for legacy apps, useless for list→detail flows
     // where the planner already declared the intent. Static list of valid
     // targets is injected so the LLM doesn't invent screen ids.
+    // Stringify appData for the screen-gen prompt. Tools downstream consume
+    // it record-by-record via sentinel substitution, but the LLM also needs
+    // the exact record names + ids when rendering list screens — otherwise
+    // it hallucinates content (e.g. cards labeled "Chest Crusher" while
+    // appData.workouts has "Push-ups"), breaking the list→detail data link.
+    const appDataJson = deepNav && appData
+      ? JSON.stringify(appData, null, 2).slice(0, 8000)
+      : ''
+
     const deepNavAddendum = deepNav && routeGraph
       ? `
 
-DEEP NAVIGATION — navIntent EMISSION (CRITICAL):
+DEEP NAVIGATION — navIntent + appData BINDING (CRITICAL):
 
 Every TouchableOpacity (button, card, list row) that navigates somewhere
 MUST carry a "navIntent" field on the same node:
@@ -727,8 +736,25 @@ ${routeGraph.screens.map(s => `    "${s.id}" (${s.kind})`).join('\n')}
 - Tab bar items DO NOT need navIntent — the runtime resolves tabs by id from
   the routeGraph.tabs list.
 
-Detail screens MUST use {{sentinel}} placeholders for record fields (see
-planner system prompt).
+LIST SCREENS — BIND TO appData (CRITICAL):
+
+When generating a list/grid/feed screen whose routeGraph entry has
+\`dataSource: "<collection>"\`, you MUST render ONE card per record in
+appData.<collection>. Use the record's EXACT name field for the card
+title, and pass the record's \`id\` as the navIntent params.id.
+
+NEVER invent new record names. NEVER skip records. The list screen
+is data-bound, not creatively named.
+
+appData (record source — these are the ONLY records that exist):
+${appDataJson || '(none)'}
+
+Detail screens (kind: "screen" with dataSource) MUST use {{name}},
+{{description}}, etc. placeholders — the runtime substitutes them from
+the matching appData record at navigation time.
+
+Modals (kind: "modal") render their own content and may use sentinels
+keyed off the navigating screen's current params.
 `
       : ''
 
