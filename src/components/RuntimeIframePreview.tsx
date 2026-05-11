@@ -11,6 +11,7 @@ import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { DeviceId } from '../constants/devices'
 import { substituteSentinels } from '../utils/sentinelSubstitution'
 import type { DeepNavRouteGraph } from '../utils/exportTsx'
+import { setActivePillStateKey, type PillState } from '../runtime/state'
 
 export type { AppData } from '../utils/sentinelSubstitution'
 
@@ -215,12 +216,12 @@ export function RuntimeIframePreview({
   //     handling but should not modify the widget render itself. ===
   const [toast, setToast] = useState<string | null>(null)
 
-  // === PHASE 0 stub: pillState holds toggleState for filter pills.
-  //     Agent 4 wires the postMessage listener + passes pillState
-  //     to ScreenRenderer as a prop. ===
-  const [pillState, setPillState] = useState<Record<string, Record<string, string>>>({})
-  void pillState
-  void setPillState
+  // === Workstream D: pillState holds toggleState for filter pills.
+  //     Lives in the parent (survives screen re-renders); mirrored into
+  //     the iframe via mokkoi:pill-state so ScreenRenderer can apply
+  //     active styling. Pure-visual — never mutates appData or affects
+  //     any other screen.
+  const [pillState, setPillState] = useState<PillState>({})
 
   useEffect(() => {
     function onToastMessage(e: MessageEvent) {
@@ -241,6 +242,48 @@ export function RuntimeIframePreview({
     const t = setTimeout(() => setToast(null), 2000)
     return () => clearTimeout(t)
   }, [toast])
+
+  // Workstream D: receive toggleState clicks from the iframe and update
+  // pillState. Wrapped in try/catch — a malformed payload must not crash
+  // the parent.
+  useEffect(() => {
+    function onToggleStateMessage(e: MessageEvent) {
+      try {
+        const data = e.data
+        if (!data || typeof data !== 'object') return
+        if (data.type !== 'mokkoi:toggleState') return
+        const group = typeof data.group === 'string' ? data.group : ''
+        const stateKey = typeof data.stateKey === 'string' ? data.stateKey : ''
+        // screenId is optional in the payload (iframe doesn't always know it);
+        // scope to the currently active screen as the parent's authoritative
+        // source.
+        const screenId = activeScreenId
+        if (!group || !stateKey || !screenId) {
+          if (import.meta.env.DEV) {
+            console.warn('[runtime-preview] toggleState payload missing fields, ignoring', data)
+          }
+          return
+        }
+        setPillState(prev => setActivePillStateKey(prev, screenId, group, stateKey))
+      } catch (err) {
+        console.warn('[runtime-preview] toggleState handler crashed; ignoring', err)
+      }
+    }
+    window.addEventListener('message', onToggleStateMessage)
+    return () => window.removeEventListener('message', onToggleStateMessage)
+  }, [activeScreenId])
+
+  // Workstream D: mirror pillState changes into the iframe so ScreenRenderer
+  // can update active styling without a full tree repost. The render-tree
+  // post above carries pillState too — this is the additive incremental
+  // update path for taps that don't change the tree.
+  useEffect(() => {
+    if (!iframeReady) return
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'mokkoi:pill-state', pillState, activeScreenId },
+      '*',
+    )
+  }, [pillState, activeScreenId, iframeReady])
 
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const isAndroid = device.category === 'Android'
@@ -544,7 +587,16 @@ export function RuntimeIframePreview({
     const treeJson = JSON.stringify(expanded)
     const nodeCount = countTreeNodes(expanded)
     iframeRef.current?.contentWindow?.postMessage(
-      { type: 'mokkoi:render-tree', tree: expanded },
+      {
+        type: 'mokkoi:render-tree',
+        tree: expanded,
+        // Workstream D: parent-held pillState mirrored into the iframe so
+        // ScreenRenderer can apply active styling. Additive field — old
+        // iframe HTML that ignores it falls back to undefined (no pills
+        // active visually) without crashing.
+        pillState,
+        activeScreenId,
+      },
       '*',
     )
     // Telemetry (Week 5 Day 0). Stamp post-time refs BEFORE the message lands;

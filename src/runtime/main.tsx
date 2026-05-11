@@ -4,6 +4,7 @@ import { ScreenRenderer } from '../components/ScreenRenderer'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { validateTree } from '../utils/validateTree'
 import type { ComponentNode, NavIntent } from '../types/mokkoi'
+import type { PillState } from './state'
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Click classification
@@ -304,6 +305,12 @@ function RuntimeFallback({ message }: { message: string }) {
 function RuntimeApp() {
   const [tree, setTree] = useState<ComponentNode | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
+  // Workstream D: parent-mirrored pillState for filter-pill active styling.
+  // Posted alongside the tree on mokkoi:render-tree, and incrementally via
+  // mokkoi:pill-state on pill taps. Undefined-safe — ScreenRenderer accepts
+  // optional props and renders unchanged when these aren't provided.
+  const [pillState, setPillState] = useState<PillState | undefined>(undefined)
+  const [activeScreenId, setActiveScreenId] = useState<string | undefined>(undefined)
 
   // Toast debounce: track last (label, timestamp) so rapid identical clicks fire one toast.
   const lastToastRef = useRef<{ message: string; t: number } | null>(null)
@@ -327,6 +334,29 @@ function RuntimeApp() {
         const incoming = e.data.tree as ComponentNode
         console.log('[runtime] received tree:', JSON.stringify(incoming).slice(0, 500))
         setTree(incoming)
+        // Workstream D: additive pillState + activeScreenId fields. Old
+        // parents that don't send them leave these as undefined; new
+        // parents keep the iframe's pill view in sync with the tree.
+        if (e.data.pillState && typeof e.data.pillState === 'object') {
+          setPillState(e.data.pillState as PillState)
+        }
+        if (typeof e.data.activeScreenId === 'string') {
+          setActiveScreenId(e.data.activeScreenId)
+        }
+        return
+      }
+      // Workstream D: incremental pill-state update (no tree change).
+      if (e.data.type === 'mokkoi:pill-state') {
+        try {
+          if (e.data.pillState && typeof e.data.pillState === 'object') {
+            setPillState(e.data.pillState as PillState)
+          }
+          if (typeof e.data.activeScreenId === 'string') {
+            setActiveScreenId(e.data.activeScreenId)
+          }
+        } catch (err) {
+          console.warn('[runtime] mokkoi:pill-state handler crashed; ignoring', err)
+        }
         return
       }
       // Parent reports back when it failed to resolve a click → show toast.
@@ -513,7 +543,7 @@ function RuntimeApp() {
         fallback={<RuntimeFallback message="Couldn't render this screen" />}
         telemetrySurface="runtime"
       >
-        <ScreenRenderer tree={validation.tree} />
+        <ScreenRenderer tree={validation.tree} pillState={pillState} activeScreenId={activeScreenId} />
         <RenderCompleteSignal treeId={validation.tree} />
       </ErrorBoundary>
       <Toast state={toast} />
