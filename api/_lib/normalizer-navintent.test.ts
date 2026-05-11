@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { validateNavIntents, type NavIntentRouteGraph } from './normalizer'
+import { validateNavIntents, hoistInnerNavIntents, type NavIntentRouteGraph } from './normalizer'
 
 describe('validateNavIntents', () => {
   const routeGraph: NavIntentRouteGraph = {
@@ -143,5 +143,175 @@ describe('validateNavIntents', () => {
     const { warnings } = validateNavIntents(tree, routeGraph)
     expect(tree.navIntent).toEqual({ kind: 'back' })
     expect(warnings).toHaveLength(0)
+  })
+})
+
+// ─── Package A.2: hoistInnerNavIntents ────────────────────────────────────────
+
+describe('hoistInnerNavIntents', () => {
+  it('hoists a push intent from an inner Text up to the outer TouchableOpacity', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      children: [
+        { type: 'Icon', name: 'home' },
+        {
+          type: 'View',
+          children: [
+            {
+              type: 'Text',
+              navIntent: { kind: 'push', target: 'addresses' },
+              children: ['Addresses'],
+            },
+            { type: 'Text', children: ['Manage delivery locations'] },
+          ],
+        },
+        { type: 'Icon', name: 'chevron' },
+      ],
+    }
+    const count = hoistInnerNavIntents(tree)
+    expect(count).toBe(1)
+    expect(tree.navIntent).toEqual({ kind: 'push', target: 'addresses' })
+    expect(tree.children[1].children[0].navIntent).toBeUndefined()
+  })
+
+  it('does not hoist when the outer TouchableOpacity already has a real intent', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'profile' },
+      children: [
+        { type: 'Text', navIntent: { kind: 'push', target: 'addresses' }, children: ['Inner'] },
+      ],
+    }
+    const count = hoistInnerNavIntents(tree)
+    expect(count).toBe(0)
+    expect(tree.navIntent).toEqual({ kind: 'push', target: 'profile' })
+    expect(tree.children[0].navIntent).toEqual({ kind: 'push', target: 'addresses' })
+  })
+
+  it('hoists when the outer TouchableOpacity has noop navIntent', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'noop', toastMessage: 'Coming soon' },
+      children: [
+        { type: 'Text', navIntent: { kind: 'push', target: 'addresses' }, children: ['Inner'] },
+      ],
+    }
+    const count = hoistInnerNavIntents(tree)
+    expect(count).toBe(1)
+    expect(tree.navIntent).toEqual({ kind: 'push', target: 'addresses' })
+  })
+
+  it('does not hoist when there are multiple inner intents (ambiguous)', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      children: [
+        { type: 'Text', navIntent: { kind: 'push', target: 'a' }, children: ['A'] },
+        { type: 'Text', navIntent: { kind: 'push', target: 'b' }, children: ['B'] },
+      ],
+    }
+    const count = hoistInnerNavIntents(tree)
+    expect(count).toBe(0)
+    expect(tree.navIntent).toBeUndefined()
+    expect(tree.children[0].navIntent).toEqual({ kind: 'push', target: 'a' })
+    expect(tree.children[1].navIntent).toEqual({ kind: 'push', target: 'b' })
+  })
+
+  it('does not hoist across nested TouchableOpacity boundaries', () => {
+    // The inner TouchableOpacity should keep its own intent — the outer
+    // wrapper has its own click target (the inner TO itself).
+    const tree: any = {
+      type: 'TouchableOpacity',
+      children: [
+        {
+          type: 'TouchableOpacity',
+          navIntent: { kind: 'push', target: 'addresses' },
+          children: [{ type: 'Text', children: ['Inner button'] }],
+        },
+      ],
+    }
+    const count = hoistInnerNavIntents(tree)
+    expect(count).toBe(0)
+    expect(tree.navIntent).toBeUndefined()
+    expect(tree.children[0].navIntent).toEqual({ kind: 'push', target: 'addresses' })
+  })
+
+  it('hoists toggleState intents too (filter pills with stranded intent)', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      children: [
+        { type: 'Text', navIntent: { kind: 'toggleState', group: 'category', stateKey: 'pizza' }, children: ['Pizza'] },
+      ],
+    }
+    const count = hoistInnerNavIntents(tree)
+    expect(count).toBe(1)
+    expect(tree.navIntent).toEqual({ kind: 'toggleState', group: 'category', stateKey: 'pizza' })
+  })
+
+  it('runs as part of validateNavIntents and the warning surfaces', () => {
+    const tree: any = {
+      type: 'View',
+      children: [
+        {
+          type: 'TouchableOpacity',
+          children: [
+            { type: 'Text', navIntent: { kind: 'push', target: 'Home' }, children: ['Tap'] },
+          ],
+        },
+      ],
+    }
+    const rg: NavIntentRouteGraph = { screens: [{ id: 'Home', kind: 'screen' }] }
+    const { warnings } = validateNavIntents(tree, rg)
+    // After hoist + validation, the outer TO carries a valid push and
+    // the inner Text is intent-free. The hoist warning fires.
+    expect(tree.children[0].navIntent).toEqual({ kind: 'push', target: 'Home' })
+    expect(tree.children[0].children[0].navIntent).toBeUndefined()
+    expect(warnings.some(w => w.includes('hoisted 1 inner navIntent'))).toBe(true)
+  })
+
+  it('handles a real-world Profile menu-row tree end-to-end', () => {
+    // Shape from the production smoke test (Maya Patel Profile screen).
+    const tree: any = {
+      type: 'View',
+      children: [
+        {
+          type: 'TouchableOpacity',
+          children: [
+            { type: 'Icon', name: 'location' },
+            {
+              type: 'View',
+              children: [
+                { type: 'Text', navIntent: { kind: 'push', target: 'addresses' }, children: ['Addresses'] },
+                { type: 'Text', children: ['Manage delivery locations'] },
+              ],
+            },
+            { type: 'Icon', name: 'chevron-right' },
+          ],
+        },
+        {
+          type: 'TouchableOpacity',
+          children: [
+            { type: 'Icon', name: 'card' },
+            {
+              type: 'View',
+              children: [
+                { type: 'Text', navIntent: { kind: 'push', target: 'payment-methods' }, children: ['Payment Methods'] },
+                { type: 'Text', children: ['Cards and digital wallets'] },
+              ],
+            },
+            { type: 'Icon', name: 'chevron-right' },
+          ],
+        },
+      ],
+    }
+    const rg: NavIntentRouteGraph = {
+      screens: [
+        { id: 'addresses', kind: 'screen' },
+        { id: 'payment-methods', kind: 'screen' },
+      ],
+    }
+    const { warnings } = validateNavIntents(tree, rg)
+    expect(tree.children[0].navIntent).toEqual({ kind: 'push', target: 'addresses' })
+    expect(tree.children[1].navIntent).toEqual({ kind: 'push', target: 'payment-methods' })
+    expect(warnings.some(w => w.includes('hoisted 2 inner navIntents'))).toBe(true)
   })
 })

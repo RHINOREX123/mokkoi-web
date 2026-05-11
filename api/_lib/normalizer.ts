@@ -510,8 +510,98 @@ export interface ValidateNavIntentsResult {
   warnings: string[]
 }
 
+/**
+ * Hoist a navIntent placed on an inner element up to the wrapping
+ * TouchableOpacity (Package A.2).
+ *
+ * Without this pass, screen-gen rows like
+ *   <TouchableOpacity>              ← no navIntent set on the wrapper
+ *     <Icon />
+ *     <View>
+ *       <Text navIntent={...}>Title</Text>  ← intent stranded on inner Text
+ *       <Text>Subtitle</Text>
+ *     </View>
+ *     <Chevron />
+ *   </TouchableOpacity>
+ * get classified at runtime as "Deferred reason=compound" — the click
+ * event bubbles to the outer TouchableOpacity which has no
+ * data-mokkoi-nav set, so no push fires. Observed in production smoke
+ * test on Profile menu rows where the model put navIntent on the
+ * "Addresses" Text instead of the row's TouchableOpacity wrapper.
+ *
+ * Rules:
+ *  - Only hoist when the outer TouchableOpacity has NO navIntent OR a
+ *    noop one. Never overwrite an explicit push/openSheet/back/toggleState
+ *    the model deliberately set.
+ *  - Only hoist if EXACTLY ONE hoistable descendant intent exists.
+ *    Multiple inner intents = ambiguous, leave alone (validator will
+ *    flag whichever survives).
+ *  - Do NOT traverse into nested TouchableOpacities — their descendants
+ *    belong to them. Stops the walk at the first inner TouchableOpacity.
+ *
+ * Mutates in place to match the rest of the normalizer's style.
+ */
+export function hoistInnerNavIntents(tree: any): number {
+  let hoistCount = 0
+
+  function findHoistable(node: any, results: any[], topLevel: boolean): void {
+    if (!node || typeof node !== 'object') return
+    // Stop at nested TouchableOpacity boundaries (except the outer one
+    // we're currently considering).
+    if (!topLevel && node.type === 'TouchableOpacity') return
+    const intent = node.navIntent
+    if (intent && typeof intent === 'object' && typeof intent.kind === 'string') {
+      const kind = intent.kind
+      if (kind === 'push' || kind === 'openSheet' || kind === 'back' || kind === 'toggleState') {
+        if (!topLevel) results.push(node)
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) findHoistable(c, results, false)
+    }
+  }
+
+  function walk(node: any): void {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'TouchableOpacity') {
+      const ownIntent = node.navIntent
+      const ownIsHoistTarget =
+        !ownIntent ||
+        typeof ownIntent !== 'object' ||
+        typeof ownIntent.kind !== 'string' ||
+        ownIntent.kind === 'noop'
+
+      if (ownIsHoistTarget) {
+        const candidates: any[] = []
+        findHoistable(node, candidates, true)
+        if (candidates.length === 1) {
+          node.navIntent = candidates[0].navIntent
+          delete candidates[0].navIntent
+          hoistCount++
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) walk(c)
+    }
+  }
+
+  walk(tree)
+  return hoistCount
+}
+
 export function validateNavIntents(tree: any, routeGraph: NavIntentRouteGraph): ValidateNavIntentsResult {
   const warnings: string[] = []
+
+  // Package A.2: hoist stranded navIntents on inner elements up to the
+  // wrapping TouchableOpacity BEFORE validation. Compound rows where the
+  // model placed navIntent on an inner Text would otherwise be backfilled
+  // to noop here and toast "Coming soon" at runtime.
+  const hoisted = hoistInnerNavIntents(tree)
+  if (hoisted > 0) {
+    warnings.push(`[navIntent] hoisted ${hoisted} inner navIntent${hoisted === 1 ? '' : 's'} to outer TouchableOpacity wrappers`)
+  }
+
   const screenIds = new Set<string>()
   const sheetIds = new Set<string>()
   for (const s of routeGraph?.screens ?? []) {
