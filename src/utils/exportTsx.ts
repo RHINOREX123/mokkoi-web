@@ -395,12 +395,24 @@ function nodeJSXWithNav(
     props.push(
       `onPress={async () => {\n        const { error } = await supabase.auth.${method}({ email, password });${redirect}\n      }}`
     )
-  } else if (type === 'TouchableOpacity' && navTargets) {
-    // Check if this TouchableOpacity should navigate (node-identity lookup)
-    const target = navTargets.get(node)
-    if (target) {
-      props.push(`onPress={() => navigation.navigate('${target}')}`)
+  } else if (type === 'TouchableOpacity') {
+    // Prefer navIntent (deep-nav schema, see src/types/mokkoi.ts NavIntent).
+    // Falls back to the legacy bindings map so existing single-screen exports
+    // and tests keep working through Stream A's collapse migration.
+    const intent = node.navIntent
+    if (intent && intent.kind !== 'noop' && typeof intent.target === 'string') {
+      const paramsArg = intent.params && Object.keys(intent.params).length > 0
+        ? `, ${JSON.stringify(intent.params)}`
+        : ''
+      props.push(`onPress={() => navigation.navigate('${intent.target}'${paramsArg})}`)
       usesNavigation.value = true
+    } else if (navTargets) {
+      // Legacy bindings path (single-screen export wirer flow).
+      const target = navTargets.get(node)
+      if (target) {
+        props.push(`onPress={() => navigation.navigate('${target}')}`)
+        usesNavigation.value = true
+      }
     }
   }
 
@@ -456,4 +468,107 @@ function nodeJSXWithNav(
   return `${indent}<${type}${propsStr}>\n${cJSX}\n${indent}</${type}>`
 }
 
+// ── Deep-navigation App.tsx scaffold ─────────────────────────────────────────
+//
+// Emits a top-level App.tsx that wires up React Navigation's native-stack with
+// one Stack.Screen per planner routeGraph entry, embeds the planner's appData
+// as a const, and passes it into each screen as a prop. Detail screens read
+// `route.params.id` and look up `appData[collection][id]`.
+//
+// Per-screen files are still produced by convertTreeToTSX — they accept
+// `appData` and `route` via React Navigation's standard screen-component
+// signature so this scaffold can mount them directly.
 
+export interface DeepNavScreenEntry {
+  id: string
+  kind?: 'screen' | 'modal'
+}
+
+export interface DeepNavRouteGraph {
+  screens: DeepNavScreenEntry[]
+  tabs?: string[]
+  entryScreenId?: string
+}
+
+export interface AppTsxOptions {
+  /** Imported screen component names, keyed by planner screen id.
+   *  Caller is responsible for emitting matching `import` lines for each. */
+  componentNameByScreenId: Record<string, string>
+  /** Relative import path (without extension) for each screen, keyed by id.
+   *  Example: `./screens/Home` */
+  importPathByScreenId: Record<string, string>
+  /** Inlined planner appData blob. Stringified via JSON.stringify so any
+   *  nested objects survive untouched. */
+  appData: unknown
+  routeGraph: DeepNavRouteGraph
+}
+
+function toScreenIdent(id: string): string {
+  return id.replace(/[^a-zA-Z0-9]/g, '_').replace(/^[0-9]/, '_$&')
+}
+
+/**
+ * Generates a stand-alone App.tsx string for the deep-navigation export.
+ * Pure / deterministic — no I/O. Designed to be dropped into the Snack
+ * bundle (or a real Expo project) alongside the per-screen files.
+ */
+export function convertAppToTSX(opts: AppTsxOptions): string {
+  const { componentNameByScreenId, importPathByScreenId, appData, routeGraph } = opts
+  const screens = routeGraph.screens ?? []
+  if (screens.length === 0) {
+    throw new Error('convertAppToTSX: routeGraph.screens must contain at least one screen')
+  }
+
+  // Initial route: planner-provided entry id wins; otherwise first non-modal.
+  const firstNonModal = screens.find(s => s.kind !== 'modal') ?? screens[0]
+  const initialId = (routeGraph.entryScreenId && screens.some(s => s.id === routeGraph.entryScreenId))
+    ? routeGraph.entryScreenId
+    : firstNonModal.id
+
+  // Imports: one per screen. Stable order = routeGraph order.
+  const importLines = screens.map(s => {
+    const compName = componentNameByScreenId[s.id]
+    const importPath = importPathByScreenId[s.id]
+    if (!compName || !importPath) {
+      throw new Error(`convertAppToTSX: missing componentName/importPath for screen "${s.id}"`)
+    }
+    return `import ${compName} from '${importPath}';`
+  }).join('\n')
+
+  // Stack.Screen entries — modal screens get presentation: "modal" so they
+  // slide up from the bottom on iOS like a sheet.
+  const stackScreens = screens.map(s => {
+    const compName = componentNameByScreenId[s.id]
+    const optionsArg = s.kind === 'modal'
+      ? ' options={{ presentation: "modal" }}'
+      : ''
+    return `        <Stack.Screen name="${s.id}"${optionsArg}>
+          {(props) => <${compName} {...props} appData={appData} />}
+        </Stack.Screen>`
+  }).join('\n')
+
+  // Stringify appData as a JSON literal. JSON.stringify is safe inside JS
+  // source because it never emits the closing-script-tag pattern and the
+  // result is valid JS object-literal syntax.
+  const appDataLiteral = JSON.stringify(appData, null, 2)
+
+  return `import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+${importLines}
+
+const Stack = createNativeStackNavigator();
+
+const appData = ${appDataLiteral};
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="${initialId}">
+${stackScreens}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+`
+}

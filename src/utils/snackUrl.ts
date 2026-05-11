@@ -3,7 +3,8 @@
 // Uses a simple state-based tab switcher instead of React Navigation
 // to avoid native module crashes in the Snack runtime.
 
-import { convertTreeToTSX } from './exportTsx'
+import { convertTreeToTSX, convertAppToTSX } from './exportTsx'
+import type { DeepNavRouteGraph } from './exportTsx'
 import { expandComponents } from '../../lib/component-library'
 import { wireScreen } from './wirer'
 import type { ScreenInfo } from './wirer'
@@ -498,6 +499,133 @@ export default function App() {
       dependencies['@supabase/supabase-js'] = { version: '^2.105.3' }
       // String literal injection (Snack has no envs). Use JSON.stringify so any
       // embedded quotes/backslashes/newlines in the values are escaped safely.
+      files['lib/supabase.ts'] = {
+        type: 'CODE',
+        contents: `import { createClient } from '@supabase/supabase-js'
+
+export const supabase = createClient(
+  ${JSON.stringify(url)},
+  ${JSON.stringify(anonKey)}
+)
+`,
+      }
+    }
+  }
+
+  return {
+    name: projectName || 'Mokkoi App',
+    files,
+    dependencies,
+  }
+}
+
+// ─── Deep-navigation Snack builder ───────────────────────────────────────────
+//
+// Counterpart to buildSnackPayload that emits a React Navigation App.tsx
+// (NavigationContainer + native-stack) instead of the tab-based shim. Used by
+// the deep-nav generation flow where each TouchableOpacity carries a
+// navIntent and the planner provides a routeGraph + appData blob.
+//
+// Each per-screen file is generated with convertTreeToTSX — the navIntent
+// branch already emits navigation.navigate calls. The new App.tsx is produced
+// by convertAppToTSX.
+
+export interface DeepNavSnackOpts {
+  projectName: string
+  screens: GeneratedScreen[]
+  routeGraph: DeepNavRouteGraph
+  appData: unknown
+  addWatermark?: boolean
+  byoSupabase?: { url: string; anonKey: string } | null
+}
+
+export function buildDeepNavSnackPayload(opts: DeepNavSnackOpts): SnackPayload {
+  const { projectName, screens, routeGraph, appData, addWatermark, byoSupabase } = opts
+
+  if (screens.length === 0) throw new Error('No screens to preview')
+
+  // PascalCase + dedupe component names. Screens are keyed by planner id
+  // (stable, planner-controlled) but the file/component names must be valid
+  // JS identifiers, so we derive them from screen.name with the same pipeline
+  // the tab-based builder uses.
+  const rawNames = screens.map(s => toPascalCase(s.name))
+  const names = deduplicateNames(rawNames)
+
+  // Pre-process trees: macro expansion, image-source rewrite, nav cleanup.
+  // Same pipeline as buildSnackPayload so the resulting screens look identical
+  // to what users see on the canvas.
+  const processedTrees: ComponentNode[] = screens.map(s => {
+    let tree = expandComponents(s.tree) as ComponentNode
+    tree = replaceImageSources(tree)
+    tree = cleanTreeForSnack(tree)
+    return tree
+  })
+
+  // Map planner screen id → component name + import path. The routeGraph
+  // references screens by id, so the App.tsx scaffold needs that lookup. Any
+  // screen present in `screens` but not in routeGraph is still emitted as a
+  // file (defensive) but won't show up in the Stack.
+  const componentNameByScreenId: Record<string, string> = {}
+  const importPathByScreenId: Record<string, string> = {}
+
+  const files: Record<string, { type: string; contents: string }> = {}
+  for (let i = 0; i < screens.length; i++) {
+    const compName = names[i]
+    const id = screens[i].id
+    componentNameByScreenId[id] = `${compName}Screen`
+    importPathByScreenId[id] = `./screens/${compName}`
+    const tsx = convertTreeToTSX(processedTrees[i], compName, { addWatermark })
+    files[`screens/${compName}.tsx`] = { type: 'CODE', contents: tsx }
+  }
+
+  // Validate that every routeGraph screen has a corresponding generated file.
+  // If a planner-promised screen never materialized (e.g. partial-failure
+  // stub was filtered out upstream) we emit a tiny placeholder so React
+  // Navigation doesn't crash trying to resolve the route.
+  for (const s of routeGraph.screens ?? []) {
+    if (!componentNameByScreenId[s.id]) {
+      const fallbackName = toPascalCase(s.id) || 'Missing'
+      componentNameByScreenId[s.id] = `${fallbackName}Screen`
+      importPathByScreenId[s.id] = `./screens/${fallbackName}`
+      const stub = `import React from 'react';
+import { View, Text } from 'react-native';
+export default function ${fallbackName}Screen() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0A1A' }}>
+      <Text style={{ color: '#94a3b8' }}>Screen unavailable</Text>
+    </View>
+  );
+}
+`
+      files[`screens/${fallbackName}.tsx`] = { type: 'CODE', contents: stub }
+    }
+  }
+
+  files['App.tsx'] = {
+    type: 'CODE',
+    contents: convertAppToTSX({
+      componentNameByScreenId,
+      importPathByScreenId,
+      appData,
+      routeGraph,
+    }),
+  }
+
+  const dependencies: Record<string, { version: string }> = {
+    'expo-status-bar': { version: '~1.11.1' },
+    // React Navigation native-stack — pinned to versions known to work on the
+    // Expo SDK Snack bundles ship today. Peer deps (react-native-screens,
+    // react-native-safe-area-context) are pre-bundled into Snack so we don't
+    // declare them here; declaring them risks version conflicts.
+    '@react-navigation/native': { version: '^6.1.18' },
+    '@react-navigation/native-stack': { version: '^6.11.0' },
+  }
+
+  if (byoSupabase) {
+    const url = String(byoSupabase.url || '').trim()
+    const anonKey = String(byoSupabase.anonKey || '').trim()
+    if (url && anonKey) {
+      dependencies['@supabase/supabase-js'] = { version: '^2.105.3' }
       files['lib/supabase.ts'] = {
         type: 'CODE',
         contents: `import { createClient } from '@supabase/supabase-js'
