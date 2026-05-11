@@ -1,7 +1,9 @@
 export type NavIntent =
-  | { kind: 'push'; target: string; params?: Record<string, string> }
-  | { kind: 'openSheet'; target: string; params?: Record<string, string> }
-  | { kind: 'noop' }
+  | { kind: 'push'; target: string; params?: Record<string, unknown> }
+  | { kind: 'openSheet'; target: string; params?: Record<string, unknown> }
+  | { kind: 'back' }
+  | { kind: 'noop'; toastMessage?: string }
+  | { kind: 'toggleState'; group: string; stateKey: string }
 
 export interface ComponentNode {
   type: string

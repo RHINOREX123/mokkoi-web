@@ -371,13 +371,38 @@ function RuntimeApp() {
       } catch (err) {
         console.warn('[mokkoi-click] malformed data-mokkoi-nav:', err)
       }
-      if (navIntent && navIntent.kind !== 'noop') {
+      if (navIntent) {
+        if (navIntent.kind === 'noop') {
+          e.stopPropagation()
+          // Phase 0: forward toast to parent. Agent 3 will wire the Toast
+          // widget consumption in RuntimeIframePreview.
+          window.parent.postMessage(
+            { type: 'mokkoi:toast', message: navIntent.toastMessage || '' },
+            '*',
+          )
+          return
+        }
+        if (navIntent.kind === 'toggleState') {
+          e.stopPropagation()
+          // Phase 0 stub: post toggleState. Agent 4 will wire the state
+          // holder + ScreenRenderer consumption.
+          window.parent.postMessage(
+            {
+              type: 'mokkoi:toggleState',
+              group: navIntent.group,
+              stateKey: navIntent.stateKey,
+            },
+            '*',
+          )
+          return
+        }
         e.stopPropagation()
         // Best-effort label for telemetry / fallback resolution downstream.
         const labelClone = navBtn!.cloneNode(true) as HTMLElement
         labelClone.querySelectorAll('.material-symbols-outlined').forEach(n => n.remove())
         const label = (labelClone.textContent || '').trim().replace(/\s+/g, ' ')
-        console.log(`[mokkoi-click] iframe → navIntent=${navIntent.kind}:${navIntent.target}`)
+        const targetForLog = 'target' in navIntent ? navIntent.target : '(back)'
+        console.log(`[mokkoi-click] iframe → navIntent=${navIntent.kind}:${targetForLog}`)
         window.parent.postMessage(
           { type: 'mokkoi:click', elementKind: 'Button', label, navIntent },
           '*',

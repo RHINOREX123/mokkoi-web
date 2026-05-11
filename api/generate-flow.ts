@@ -10,7 +10,8 @@ import {
 } from './_lib/generation-runs.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
-import { normalizeComponentTree } from './_lib/normalizer.js'
+import { normalizeComponentTree, validateNavIntents } from './_lib/normalizer.js'
+import { repairDeadButtons } from './_lib/dead-button-repair.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './_lib/design-system.js'
@@ -647,7 +648,7 @@ async function handleApp(
       return res.end()
     }
     if (!plan.screens.some(s => s.isHome)) plan.screens[0].isHome = true
-    if (plan.screens.length > 8) plan.screens = plan.screens.slice(0, 8)
+    if (plan.screens.length > 13) plan.screens = plan.screens.slice(0, 13)
 
     // Sanitize dataAction on each screen — drops unrecognized kinds, keeps
     // back-compat for plans without dataAction (most non-auth apps).
@@ -879,11 +880,26 @@ keyed off the navigating screen's current params.
       // validateNavIntents (when wired in a follow-up) will turn them into
       // noop.
       if (deepNav) rewriteNavIntentTargets(tree, planIdToScreenId)
+      // Phase 0: validate navIntents against routeGraph (UUID-rewritten form)
+      // and run dead-button repair stub. Both are no-ops on the legacy path.
+      let finalTree: any = tree
+      if (deepNav && routeGraph) {
+        const uuidRouteGraph = {
+          screens: routeGraph.screens.map(rs => ({
+            ...rs,
+            id: planIdToScreenId.get(rs.id) || rs.id,
+          })),
+          tabs: (routeGraph.tabs ?? []).map(t => planIdToScreenId.get(t) || t),
+        }
+        const validated = validateNavIntents(finalTree, uuidRouteGraph)
+        finalTree = validated.tree
+        finalTree = repairDeadButtons(finalTree, uuidRouteGraph as any, planId)
+      }
       const normalized = {
         id: screenId,
         planId,
         name: s.name || plan.screens[i]?.name || `Screen ${i + 1}`,
-        tree,
+        tree: finalTree,
       }
       normalizedScreens.push(normalized)
 

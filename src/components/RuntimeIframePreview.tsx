@@ -102,6 +102,16 @@ function resolveRecord(
   return undefined
 }
 
+function coerceParams(p: Record<string, unknown> | undefined): Record<string, string> | undefined {
+  if (!p) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(p)) {
+    if (v == null) continue
+    out[k] = typeof v === 'string' ? v : String(v)
+  }
+  return out
+}
+
 interface RuntimeIframePreviewProps {
   screens: GeneratedScreen[]
   connections: FlowConnection[]
@@ -200,6 +210,37 @@ export function RuntimeIframePreview({
   // the CSS slide-up transition and the close (X) overlay rendered in the
   // wrapper (outside the iframe).
   const [modalAnim, setModalAnim] = useState(false)
+
+  // === PHASE 0: Toast widget owned here. Agent 3 may extend message
+  //     handling but should not modify the widget render itself. ===
+  const [toast, setToast] = useState<string | null>(null)
+
+  // === PHASE 0 stub: pillState holds toggleState for filter pills.
+  //     Agent 4 wires the postMessage listener + passes pillState
+  //     to ScreenRenderer as a prop. ===
+  const [pillState, setPillState] = useState<Record<string, Record<string, string>>>({})
+  void pillState
+  void setPillState
+
+  useEffect(() => {
+    function onToastMessage(e: MessageEvent) {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type !== 'mokkoi:toast') return
+      const message = typeof data.message === 'string' && data.message.length > 0
+        ? data.message
+        : 'Coming soon'
+      setToast(message)
+    }
+    window.addEventListener('message', onToastMessage)
+    return () => window.removeEventListener('message', onToastMessage)
+  }, [])
+
+  useEffect(() => {
+    if (toast === null) return
+    const t = setTimeout(() => setToast(null), 2000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const device = getDevicePreset(deviceId || DEFAULT_DEVICE)
   const isAndroid = device.category === 'Android'
@@ -345,7 +386,7 @@ export function RuntimeIframePreview({
       // Deep-nav resolution: manual FlowConnection > navIntent > fuzzy/single.
       // Manual wires win because users editing connections by hand must not be
       // silently overruled by LLM-emitted intents on regen.
-      if (navIntent && navIntent.kind !== 'noop' && !isListRowDefer) {
+      if (navIntent && (navIntent.kind === 'push' || navIntent.kind === 'openSheet') && !isListRowDefer) {
         tried.push('flowConnection')
         const flowTarget = label
           ? findNavigationTarget(connections, activeScreenId, label)
@@ -366,7 +407,7 @@ export function RuntimeIframePreview({
         tried.push('navIntent')
         if (screens.some(s => s.id === navIntent.target)) {
           if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → tried=${tried.join(',')} matched=navIntent:${navIntent.target}`)
-          navigateForward(navIntent.target, navIntent.params)
+          navigateForward(navIntent.target, coerceParams(navIntent.params))
           trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'nav_intent' })
           return
         }
@@ -631,6 +672,28 @@ export function RuntimeIframePreview({
             }}
           />
         </div>
+        {toast !== null && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              position: 'absolute',
+              bottom: 16,
+              right: 16,
+              padding: '8px 14px',
+              borderRadius: 9999,
+              background: 'rgba(15, 23, 42, 0.92)',
+              color: '#E6EDF3',
+              fontSize: 13,
+              fontWeight: 500,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              pointerEvents: 'none',
+              zIndex: 1002,
+            }}
+          >
+            {toast}
+          </div>
+        )}
         {activePresentation === 'modal' && (
           <button
             type="button"
