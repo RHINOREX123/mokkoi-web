@@ -503,10 +503,6 @@ export interface AppTsxOptions {
   routeGraph: DeepNavRouteGraph
 }
 
-function toScreenIdent(id: string): string {
-  return id.replace(/[^a-zA-Z0-9]/g, '_').replace(/^[0-9]/, '_$&')
-}
-
 /**
  * Generates a stand-alone App.tsx string for the deep-navigation export.
  * Pure / deterministic — no I/O. Designed to be dropped into the Snack
