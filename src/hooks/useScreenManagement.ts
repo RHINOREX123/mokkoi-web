@@ -3,6 +3,7 @@ import type { ComponentNode } from '../types/mokkoi'
 import { supabase } from '../lib/supabase'
 import type { ChatMessage } from '../components/ChatPanel'
 import { GAP, PAD_X, PAD_Y, type FlowConnection } from '../components/FlowConnectors'
+import type { DeepNavRouteGraph } from '../utils/exportTsx'
 import { DEFAULT_DEVICE, getCanvasDimensions, resolveDeviceId } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
 import type { ValidatedSupabaseCreds } from '../lib/byoSupabaseValidation'
@@ -77,6 +78,17 @@ export interface ScreenManagement {
   // InlineSnackPreview's `byoSupabase` prop expects (Track C).
   projectBackend: { url: string; anonKey: string } | null
   setProjectBackend: (creds: ValidatedSupabaseCreds | null) => Promise<void>
+
+  // Deep-nav planner output. Populated when the generator runs in
+  // mode: 'deep-nav' (the default for app generation as of 2026-05-11).
+  // Consumed by InlineSnackPreview / ExpoPreviewModal to switch the Snack
+  // export to React Navigation, and by RuntimeIframePreview for routing.
+  // In-memory only for now — a follow-up adds Supabase persistence so the
+  // values survive a page reload.
+  routeGraph: DeepNavRouteGraph | null
+  setRouteGraph: React.Dispatch<React.SetStateAction<DeepNavRouteGraph | null>>
+  appData: unknown | null
+  setAppData: React.Dispatch<React.SetStateAction<unknown | null>>
 }
 
 export function useScreenManagement(projectId: string | undefined): ScreenManagement {
@@ -90,6 +102,8 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
   const [connections, setConnections] = useState<FlowConnection[]>([])
   const [screensLoaded, setScreensLoaded] = useState(false)
   const [projectBackend, setProjectBackendState] = useState<{ url: string; anonKey: string } | null>(null)
+  const [routeGraph, setRouteGraph] = useState<DeepNavRouteGraph | null>(null)
+  const [appData, setAppData] = useState<unknown | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const connectionsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectLoadedRef = useRef(false)
@@ -553,5 +567,9 @@ export function useScreenManagement(projectId: string | undefined): ScreenManage
     removeConnection,
     projectBackend,
     setProjectBackend,
+    routeGraph,
+    setRouteGraph,
+    appData,
+    setAppData,
   }
 }

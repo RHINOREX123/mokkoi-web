@@ -16,7 +16,13 @@ import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
 import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
-import { runAppPlanner, type AppPlan as PlannerAppPlan } from './_lib/planner.js'
+import {
+  runAppPlanner,
+  runPlanner,
+  type AppPlan as PlannerAppPlan,
+  type AppData,
+  type RouteGraph,
+} from './_lib/planner.js'
 
 const REFERENCE_INSPIRATION_BLOCK = `REFERENCE IMAGES — VISUAL INSPIRATION ONLY
 
@@ -325,6 +331,29 @@ function sendSSE(res: VercelResponse, data: Record<string, unknown>) {
   }
 }
 
+/**
+ * Deep-nav helper. The LLM emits navIntent.target using planner ids (e.g.
+ * "ExerciseDetail") because that's what the plan listed. The DB schema and
+ * the rest of the client identify screens by UUID, so before sending the
+ * tree out we walk it and remap each push/openSheet target through the
+ * planId→UUID map built from this run. Targets not in the map are left
+ * untouched — they get caught by the normalizer's validateNavIntents pass
+ * downstream and turned into noop.
+ */
+function rewriteNavIntentTargets(node: unknown, map: Map<string, string>): void {
+  if (!node || typeof node !== 'object') return
+  const n = node as Record<string, unknown>
+  const intent = n.navIntent as { kind?: string; target?: string } | undefined
+  if (intent && typeof intent.target === 'string' && (intent.kind === 'push' || intent.kind === 'openSheet')) {
+    const remapped = map.get(intent.target)
+    if (remapped) intent.target = remapped
+  }
+  const children = n.children
+  if (Array.isArray(children)) {
+    for (const c of children) rewriteNavIntentTargets(c, map)
+  }
+}
+
 // ==================== FLOW HANDLER (mode: default) ====================
 
 async function handleFlow(req: VercelRequest, res: VercelResponse, user: any) {
@@ -423,6 +452,11 @@ async function handleApp(
   res: VercelResponse,
   user: any,
   userSupabase: SupabaseClient | null,
+  /** When true, run the deep-nav planner (emits appData + routeGraph and
+   *  asks the LLM for detail screens + modals). When false, run the legacy
+   *  single-tier planner. Both paths share the rest of this handler — same
+   *  paywall, SSE protocol, per-screen normalization, persistence. */
+  deepNav: boolean = false,
 ) {
   if (!user.isMCP) {
     const tier = await getUserTier(user.id, user.email)
@@ -544,29 +578,67 @@ async function handleApp(
       console.log(`[planner] template match: ${templateMatch.templateId} (score=${templateMatch.score.toFixed(2)})`)
     }
 
-    const plannerResult = await runAppPlanner({
-      callApi: async (body) => {
-        const r = await callAnthropic(apiKey, body)
-        return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() }
-      },
-      prompt,
-      images,
-      conversationHistory: undefined,
-      templateId: templateMatch?.templateId,
-    })
-    let plan: PlannerAppPlan | null = plannerResult.plan
+    const plannerCallApi = async (body: any) => {
+      const r = await callAnthropic(apiKey, body)
+      return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() }
+    }
 
-    if (!plan) {
-      if (plannerResult.failureCode === 'api_error') {
-        console.error('Plan API error')
-        sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
-        await finalizeFailed('plan_api_error')
+    let plan: PlannerAppPlan | null = null
+    let appData: AppData | undefined
+    let routeGraph: RouteGraph | undefined
+    let plannerUsage: { input_tokens?: number; output_tokens?: number } | undefined
+
+    if (deepNav) {
+      // Deep-nav planner: returns plan + appData + routeGraph. Parse failures
+      // throw — we surface them as the same SSE 'error' event the legacy path
+      // uses so the client UI is mode-agnostic.
+      try {
+        const out = await runPlanner({
+          callApi: plannerCallApi,
+          prompt,
+          images,
+          conversationHistory: undefined,
+          templateId: templateMatch?.templateId,
+        })
+        plan = out.plan
+        appData = out.appData
+        routeGraph = out.routeGraph
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[generate-flow] deep-nav planner failed:', msg)
+        const isParse = msg.includes('parse_failed')
+        sendSSE(res, {
+          type: 'error',
+          message: isParse
+            ? 'Failed to parse app plan. Try a more specific description.'
+            : 'Failed to plan app. Try again.',
+        })
+        await finalizeFailed(isParse ? 'plan_parse_failed' : 'plan_api_error')
         return res.end()
       }
-      console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', plannerResult.stopReason, 'Full raw body:\n', plannerResult.rawText)
-      sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
-      await finalizeFailed('plan_parse_failed')
-      return res.end()
+    } else {
+      const plannerResult = await runAppPlanner({
+        callApi: plannerCallApi,
+        prompt,
+        images,
+        conversationHistory: undefined,
+        templateId: templateMatch?.templateId,
+      })
+      plan = plannerResult.plan
+      plannerUsage = plannerUsage
+
+      if (!plan) {
+        if (plannerResult.failureCode === 'api_error') {
+          console.error('Plan API error')
+          sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
+          await finalizeFailed('plan_api_error')
+          return res.end()
+        }
+        console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', plannerResult.stopReason, 'Full raw body:\n', plannerResult.rawText)
+        sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
+        await finalizeFailed('plan_parse_failed')
+        return res.end()
+      }
     }
 
     if (!plan.screens || !Array.isArray(plan.screens) || plan.screens.length < 2) {
@@ -588,7 +660,11 @@ async function handleApp(
       }
     }
 
-    sendSSE(res, { type: 'plan', plan })
+    // Deep-nav extras (appData + routeGraph) ride alongside `plan` in the
+    // same event so the client can persist them once instead of waiting for
+    // 'complete'. The fields are undefined in legacy mode and the client
+    // ignores them.
+    sendSSE(res, { type: 'plan', plan, appData, routeGraph })
 
     // ===== PHASE 2: Generate all screens =====
     const screenCount = plan.screens.length
@@ -622,9 +698,43 @@ IMPORTANT: Keep each screen's tree COMPACT. Use macro components (BottomNav, Sea
 
 Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No explanation, no markdown.`
 
+    // Deep-nav addendum: when the planner produced a routeGraph, the screen
+    // generator must emit navIntent fields on every TouchableOpacity that
+    // navigates. Without this, the runtime falls back to fuzzy-match
+    // heuristics — fine for legacy apps, useless for list→detail flows
+    // where the planner already declared the intent. Static list of valid
+    // targets is injected so the LLM doesn't invent screen ids.
+    const deepNavAddendum = deepNav && routeGraph
+      ? `
+
+DEEP NAVIGATION — navIntent EMISSION (CRITICAL):
+
+Every TouchableOpacity (button, card, list row) that navigates somewhere
+MUST carry a "navIntent" field on the same node:
+
+  { "type": "TouchableOpacity",
+    "navIntent": { "kind": "push", "target": "<screenId>", "params": { "id": "<recordId>" } },
+    "children": [ ... ] }
+
+Rules:
+- kind: "push" for screens, "openSheet" for modals, "noop" for non-navigating taps.
+- target: MUST be one of these planner ids exactly:
+${routeGraph.screens.map(s => `    "${s.id}" (${s.kind})`).join('\n')}
+- params: include "id" pointing at an appData record id when navigating to a
+  detail screen (params: ["id"]). Other params per the routeGraph entry.
+- Every list/grid item that opens a detail screen MUST set navIntent on the
+  outer TouchableOpacity (NOT on inner text/icons).
+- Tab bar items DO NOT need navIntent — the runtime resolves tabs by id from
+  the routeGraph.tabs list.
+
+Detail screens MUST use {{sentinel}} placeholders for record fields (see
+planner system prompt).
+`
+      : ''
+
     const genSystem = images.length > 0
-      ? `${REFERENCE_INSPIRATION_BLOCK}\n\n${APP_GENERATION_SYSTEM_PROMPT}`
-      : APP_GENERATION_SYSTEM_PROMPT
+      ? `${REFERENCE_INSPIRATION_BLOCK}\n\n${APP_GENERATION_SYSTEM_PROMPT}${deepNavAddendum}`
+      : `${APP_GENERATION_SYSTEM_PROMPT}${deepNavAddendum}`
 
     const genBody = {
       model: genModel,
@@ -706,6 +816,17 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
           .map(s => s.name)
           .filter((n): n is string => typeof n === 'string' && n.length > 0)
 
+    // Pre-allocate planner-id → DB-UUID mapping so deep-nav can rewrite
+    // navIntent.target (planner emits descriptive ids like "ExerciseDetail",
+    // DB schema requires UUID) in the same pass it normalizes the tree. The
+    // legacy path doesn't read this map until the connections build later
+    // (no behavior change there).
+    const planIdToScreenId = new Map<string, string>()
+    for (let i = 0; i < screens.length; i++) {
+      const planId = screens[i].id || plan.screens[i]?.id || `screen-${i + 1}`
+      planIdToScreenId.set(planId, crypto.randomUUID())
+    }
+
     // Sequential async loop (was screens.map) so we can persist each screen
     // to the DB mid-stream. The LLM has already returned all screens by this
     // point — we're iterating over an in-memory array, so awaiting per-screen
@@ -713,7 +834,8 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
     const normalizedScreens: Array<{ id: string; planId: string; name: string; tree: unknown }> = []
     for (let i = 0; i < screens.length; i++) {
       const s = screens[i]
-      const screenId = crypto.randomUUID()
+      const planId = s.id || plan.screens[i]?.id || `screen-${i + 1}`
+      const screenId = planIdToScreenId.get(planId)!
       const tree = normalizeComponentTree(
         expandComponents(
           validateBottomNavLabels(
@@ -724,9 +846,16 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       )
       // Walk the tree and replace any invented person-name/email with the shared persona.
       applyPersonaToTree(tree, persona)
+      // Deep-nav: rewrite navIntent.target from planner ids to DB UUIDs so
+      // RuntimeIframePreview's `screens.some(s => s.id === navIntent.target)`
+      // resolution actually matches. No-op on legacy 'app' mode (planner emits
+      // no navIntents). Unknown targets are left untouched — normalizer's
+      // validateNavIntents (when wired in a follow-up) will turn them into
+      // noop.
+      if (deepNav) rewriteNavIntentTargets(tree, planIdToScreenId)
       const normalized = {
         id: screenId,
-        planId: s.id || plan.screens[i]?.id || `screen-${i + 1}`,
+        planId,
         name: s.name || plan.screens[i]?.name || `Screen ${i + 1}`,
         tree,
       }
@@ -763,11 +892,22 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       }
     }
 
-    // Build connections from plan
-    const planIdToScreenId = new Map<string, string>()
-    for (const s of normalizedScreens) planIdToScreenId.set(s.planId, s.id)
-
+    // Build connections from plan. planIdToScreenId was pre-allocated before
+    // the screens loop so deep-nav could rewrite navIntent.target inline.
     const connections = buildConnections(plan, planIdToScreenId)
+
+    // Deep-nav: rewrite the routeGraph (and any tabs list) from planner ids
+    // to the DB UUIDs the client uses. The runtime navigates against screens
+    // by id, so without this rewrite tab + entry lookups would never resolve.
+    if (deepNav && routeGraph) {
+      routeGraph = {
+        screens: routeGraph.screens.map(s => ({
+          ...s,
+          id: planIdToScreenId.get(s.id) || s.id,
+        })),
+        tabs: (routeGraph.tabs ?? []).map(t => planIdToScreenId.get(t) || t),
+      }
+    }
 
     const homePlanId = plan.screens.find(s => s.isHome)?.id || plan.screens[0]?.id
     const homeScreenId = planIdToScreenId.get(homePlanId) || normalizedScreens[0]?.id
@@ -776,8 +916,8 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
 
     logUsage({
       userId: user.id, projectId: projectId || undefined, modelUsed: genModel,
-      tokensIn: (plannerResult.usage?.input_tokens || 0) + (genData.usage?.input_tokens || 0),
-      tokensOut: (plannerResult.usage?.output_tokens || 0) + (genData.usage?.output_tokens || 0),
+      tokensIn: (plannerUsage?.input_tokens || 0) + (genData.usage?.input_tokens || 0),
+      tokensOut: (plannerUsage?.output_tokens || 0) + (genData.usage?.output_tokens || 0),
       generationType: 'app', promptPreview: prompt, success: true,
     })
 
@@ -786,6 +926,10 @@ Return ONLY a JSON array of ${screenCount} screens with "id", "name", "tree". No
       screens: normalizedScreens.map((s: { id: string; name: string; tree: unknown }) => ({ id: s.id, name: s.name, tree: s.tree })),
       connections, homeScreenId, appName: plan.appName,
       modelUsed: genModel.includes('sonnet') ? 'Sonnet' : 'Haiku',
+      // Deep-nav extras: undefined in legacy mode; clients ignore unknown
+      // fields gracefully.
+      appData,
+      routeGraph,
     })
     if (runId && userSupabase && typeof projectId === 'string') {
       await completeRun(userSupabase, runId)
@@ -818,8 +962,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { mode } = req.body ?? {}
 
-  if (mode === 'app') {
-    return handleApp(req, res, user, userSupabase)
+  // Deep-nav is the canonical app-generation mode (planner emits routeGraph
+  // + appData + detail screens, runtime/exporter consume them). 'app' remains
+  // a back-compat alias for the legacy single-tier planner so direct API
+  // callers and older clients still work.
+  if (mode === 'deep-nav' || mode === 'app') {
+    return handleApp(req, res, user, userSupabase, mode === 'deep-nav')
   }
   return handleFlow(req, res, user)
 }

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Smartphone, ExternalLink, RefreshCw, QrCode, Loader } from 'lucide-react'
-import { buildSnackPayload } from '../utils/snackUrl'
+import { buildSnackPayload, buildDeepNavSnackPayload } from '../utils/snackUrl'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { FlowConnection } from './FlowConnectors'
+import type { DeepNavRouteGraph } from '../utils/exportTsx'
 import { trackEvent } from '../lib/analytics'
 import { useUserPlan } from '../hooks/useUserPlan'
 
@@ -11,6 +12,12 @@ interface ExpoPreviewModalProps {
   connections: FlowConnection[]
   projectName: string
   onClose: () => void
+  /** Deep-nav: when both are set, the modal builds a React-Navigation Snack
+   *  payload (NavigationContainer + per-screen navigation.navigate calls)
+   *  with appData inlined. Missing either field falls back to the legacy
+   *  tab-based payload. */
+  routeGraph?: DeepNavRouteGraph | null
+  appData?: unknown | null
 }
 
 const C = {
@@ -32,7 +39,7 @@ const C = {
  * 3. We reply with ['expoDataEvent', {iframeId, files, dependencies}]
  * 4. Snack renders the code — live on web, scannable via Expo Go
  */
-export function ExpoPreviewModal({ screens, connections, projectName, onClose }: ExpoPreviewModalProps) {
+export function ExpoPreviewModal({ screens, connections, projectName, onClose, routeGraph = null, appData = null }: ExpoPreviewModalProps) {
   const [showQR, setShowQR] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -47,12 +54,17 @@ export function ExpoPreviewModal({ screens, connections, projectName, onClose }:
   // the export-time watermark UX (work that leaves Mokkoi's web canvas).
   const payload = useCallback(() => {
     try {
+      if (routeGraph && appData) {
+        return buildDeepNavSnackPayload({
+          projectName, screens, routeGraph, appData, addWatermark,
+        })
+      }
       return buildSnackPayload({ projectName, screens, connections, addWatermark })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to build preview')
       return null
     }
-  }, [projectName, screens, connections, addWatermark])
+  }, [projectName, screens, connections, addWatermark, routeGraph, appData])
 
   // Listen for the iframe's "ready" message and send code
   useEffect(() => {

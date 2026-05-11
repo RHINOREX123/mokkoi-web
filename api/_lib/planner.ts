@@ -10,7 +10,7 @@
  *  - runPlanner: deep-nav variant returning the full PlannerOutput (legacy
  *    AppPlan + routeGraph + appData) for downstream Streams B/C.
  *  - validatePlannerOutput: structural rule checks (every list has a
- *    detail, ≥3 records per collection, navIntent.screen references all
+ *    detail, ≥3 records per collection, navIntent.target references all
  *    resolve to routeGraph.screens).
  *
  * This module is intentionally self-contained: it accepts a `callApi`

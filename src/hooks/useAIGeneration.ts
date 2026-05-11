@@ -202,6 +202,14 @@ interface AIGenerationDeps {
   setProjectName?: React.Dispatch<React.SetStateAction<string>>
   /** Persist the project name to Supabase */
   saveProjectName?: (name: string) => Promise<void>
+  /** Deep-nav: setters for the planner-produced routeGraph + appData blobs.
+   *  Populated from the SSE 'plan' and 'complete' events when the server
+   *  ran in mode: 'deep-nav'. Optional so the hook is back-compat for any
+   *  consumer that hasn't wired the new state slice yet. Typed loosely
+   *  because SSE event payloads arrive as `any` JSON — useScreenManagement
+   *  narrows the shape at the React-state boundary. */
+  setRouteGraph?: React.Dispatch<React.SetStateAction<any>>
+  setAppData?: React.Dispatch<React.SetStateAction<any>>
 }
 
 /** Build conversation history from recent messages for Claude context */
@@ -239,6 +247,8 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
     projectName,
     setProjectName,
     saveProjectName,
+    setRouteGraph,
+    setAppData,
   } = deps
 
   const [isGenerating, setIsGenerating] = useState(false)
@@ -481,7 +491,10 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         const res = await fetch('/api/generate-flow', {
           method: 'POST',
           headers: { ...authHeaders, 'Accept': 'text/event-stream' },
-          body: JSON.stringify({ mode: 'app', prompt, projectId, conversationHistory, deviceId, images: imagesArr }),
+          // Deep-nav is the default app-generation mode as of 2026-05-11.
+          // Legacy mode: 'app' single-screen path remains reachable via direct
+          // API calls and is scheduled for removal in a follow-up cleanup.
+          body: JSON.stringify({ mode: 'deep-nav', prompt, projectId, conversationHistory, deviceId, images: imagesArr }),
         })
 
         if (!res.ok) {
@@ -538,12 +551,24 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
                 }
               } else if (event.type === 'screen') {
                 allScreens.push(event.screen)
+              } else if (event.type === 'plan') {
+                // Deep-nav: planner output ships in the 'plan' event ahead of
+                // any screens so the canvas can render its routeGraph-aware
+                // UX (Snack export uses NavigationContainer, etc) without
+                // waiting for the final 'complete' event. Legacy mode omits
+                // both fields — the setters are no-ops then.
+                if (event.routeGraph && setRouteGraph) setRouteGraph(event.routeGraph)
+                if (event.appData && setAppData) setAppData(event.appData)
               } else if (event.type === 'complete') {
                 allScreens = event.screens || allScreens
                 connections = event.connections || []
                 homeScreenId = event.homeScreenId || ''
                 appName = event.appName || ''
                 modelUsed = event.modelUsed || ''
+                // Deep-nav: refresh from 'complete' too (planner may rewrite
+                // routeGraph ids after the screens loop completes server-side).
+                if (event.routeGraph && setRouteGraph) setRouteGraph(event.routeGraph)
+                if (event.appData && setAppData) setAppData(event.appData)
               } else if (event.type === 'paywall') {
                 // Free-tier limit hit. Not an error — surface the upgrade modal
                 // instead of an error toast, drop the placeholder, and stop
