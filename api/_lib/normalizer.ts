@@ -623,17 +623,34 @@ export function stampFilterChipToggleState(tree: any): number {
 
   function isPillRow(node: any): { pills: any[] } | null {
     if (!node || typeof node !== 'object') return null
-    if (node.type !== 'View' && node.type !== 'ScrollView') return null
-    const style = node.style
-    const flexDir = style && typeof style === 'object' ? (style as Record<string, unknown>).flexDirection : undefined
-    if (flexDir !== 'row') return null
     if (!Array.isArray(node.children) || node.children.length < 3) return null
     // Every direct child must be a TouchableOpacity (no Text/View mixed in —
     // those are headers, not chip rows).
     for (const c of node.children) {
       if (!c || typeof c !== 'object' || c.type !== 'TouchableOpacity') return null
     }
+    // Exclude BottomNav-shaped containers (paddingBottom safe-area inset +
+    // top border). The runtime's isBottomNavRow uses the same signal.
+    const style = (node.style && typeof node.style === 'object')
+      ? node.style as Record<string, unknown>
+      : {}
+    const padBottom = typeof style.paddingBottom === 'number' ? style.paddingBottom
+      : typeof style.paddingBottom === 'string' ? parseFloat(style.paddingBottom) : 0
+    const borderTop = typeof style.borderTopWidth === 'number' ? style.borderTopWidth
+      : typeof style.borderTopWidth === 'string' ? parseFloat(style.borderTopWidth) : 0
+    if (padBottom >= 24 && borderTop >= 1) return null
+    // Exclude obviously-vertical containers (column layouts of buttons like
+    // Sign In / Sign Up / Forgot — those are NOT filter pills). If style.flexDirection
+    // is explicitly 'column', bail. Anything else (row, undefined, default) → eligible.
+    if (style.flexDirection === 'column') return null
     return { pills: node.children }
+  }
+
+  function countDescendants(n: any): number {
+    if (!n || typeof n !== 'object') return 0
+    let c = 1
+    if (Array.isArray(n.children)) for (const k of n.children) c += countDescendants(k)
+    return c
   }
 
   function isEligiblePill(p: any): { label: string } | null {
@@ -645,9 +662,15 @@ export function stampFilterChipToggleState(tree: any): number {
         return null
       }
     }
-    // Pill must have a short text label (≤25 chars) and small subtree (chip-y).
+    // Pill must have a short text label (≤25 chars).
     const text = collectTextContent(p)
     if (text.length === 0 || text.length > 25) return null
+    // Pill must have a small subtree (chip-y). This is what distinguishes a
+    // 5-icon Cuisines row from a 3-button login stack: a chip is icon+text
+    // (~3-6 descendants), a form button or card wraps more structure (10+).
+    // Excludes false-positives where the parent's children include
+    // structurally-complex TouchableOpacities like cards.
+    if (countDescendants(p) > 8) return null
     return { label: text }
   }
 

@@ -642,6 +642,121 @@ describe('stampFilterChipToggleState', () => {
     expect(count).toBe(0)
   })
 
+  it('stamps a pill row even when the wrapper lacks flexDirection:row (production case)', () => {
+    // The user observed pills classified as filter-chip-deferred at runtime
+    // (which means the DOM had flex-row layout) even though our normalizer
+    // skipped them. Most likely the model emitted the wrapper without an
+    // explicit flexDirection style, or wrapped pills in a horizontal
+    // ScrollView whose flex-row is set by the runtime not the LLM.
+    const tree: any = {
+      type: 'View', // No style at all
+      children: [
+        { type: 'TouchableOpacity', children: [{ type: 'Image' }, { type: 'Text', children: ['American'] }] },
+        { type: 'TouchableOpacity', children: [{ type: 'Image' }, { type: 'Text', children: ['Japanese'] }] },
+        { type: 'TouchableOpacity', children: [{ type: 'Image' }, { type: 'Text', children: ['Italian'] }] },
+        { type: 'TouchableOpacity', children: [{ type: 'Image' }, { type: 'Text', children: ['Indian'] }] },
+      ],
+    }
+    const count = stampFilterChipToggleState(tree)
+    expect(count).toBe(4)
+    expect(tree.children[0].navIntent.kind).toBe('toggleState')
+    expect(tree.children[0].navIntent.stateKey).toBe('american')
+  })
+
+  it('refuses to stamp a vertical button stack with large subtrees (login flow false-positive guard)', () => {
+    // Sign In / Sign Up / Forgot Password — three sibling TouchableOpacities
+    // that look like chips structurally but are NOT pills. Each button wraps
+    // an icon, label, and decorative ring (more descendants than a chip).
+    // Without the subtree-size check, the broadened heuristic would
+    // false-positive these.
+    const tree: any = {
+      type: 'View',
+      style: { flexDirection: 'column' }, // explicit column rules it out anyway
+      children: [
+        {
+          type: 'TouchableOpacity',
+          children: [
+            { type: 'View', children: [
+              { type: 'Icon', name: 'login' },
+              { type: 'View', children: [
+                { type: 'Text', children: ['Sign In'] },
+                { type: 'Text', children: ['Continue to your account'] },
+              ] },
+            ] },
+          ],
+        },
+        {
+          type: 'TouchableOpacity',
+          children: [
+            { type: 'View', children: [
+              { type: 'Icon', name: 'person-add' },
+              { type: 'View', children: [
+                { type: 'Text', children: ['Sign Up'] },
+                { type: 'Text', children: ['Create a new account'] },
+              ] },
+            ] },
+          ],
+        },
+        {
+          type: 'TouchableOpacity',
+          children: [
+            { type: 'View', children: [
+              { type: 'Icon', name: 'help' },
+              { type: 'View', children: [
+                { type: 'Text', children: ['Forgot password?'] },
+                { type: 'Text', children: ['Recover via email'] },
+              ] },
+            ] },
+          ],
+        },
+      ],
+    }
+    const count = stampFilterChipToggleState(tree)
+    expect(count).toBe(0)
+  })
+
+  it('refuses to stamp pills whose subtree is too large (cards in a row)', () => {
+    // A horizontal row of card-shaped touchables — NOT pills. Each card wraps
+    // an image, title, subtitle, badge, price etc. Subtree-size check
+    // discriminates from genuine chip rows.
+    const tree: any = {
+      type: 'View',
+      style: { flexDirection: 'row' },
+      children: Array.from({ length: 3 }, (_, i) => ({
+        type: 'TouchableOpacity',
+        children: [
+          { type: 'Image' },
+          { type: 'View', children: [
+            { type: 'Text', children: [`Card ${i}`] },
+            { type: 'Text', children: ['Long descriptive subtitle here'] },
+            { type: 'View', children: [
+              { type: 'Icon', name: 'star' },
+              { type: 'Text', children: ['4.5'] },
+            ] },
+          ] },
+          { type: 'View', children: [{ type: 'Text', children: ['$12.99'] }] },
+        ],
+      })),
+    }
+    const count = stampFilterChipToggleState(tree)
+    expect(count).toBe(0)
+  })
+
+  it('refuses to stamp BottomNav-shaped containers (safety check)', () => {
+    const tree: any = {
+      type: 'View',
+      style: { flexDirection: 'row', paddingBottom: 32, borderTopWidth: 1 },
+      children: [
+        { type: 'TouchableOpacity', children: [{ type: 'Text', children: ['Home'] }] },
+        { type: 'TouchableOpacity', children: [{ type: 'Text', children: ['Search'] }] },
+        { type: 'TouchableOpacity', children: [{ type: 'Text', children: ['Cart'] }] },
+        { type: 'TouchableOpacity', children: [{ type: 'Text', children: ['Profile'] }] },
+      ],
+    }
+    const count = stampFilterChipToggleState(tree)
+    expect(count).toBe(0)
+  })
+
   it('plays well with validateNavIntents: stamped pills survive the validator', () => {
     const tree: any = {
       type: 'View',
