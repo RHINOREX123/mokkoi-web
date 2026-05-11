@@ -16,6 +16,7 @@ import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES, buildPlannerSystem } from './_lib/design-system.js'
 import { matchTemplate } from './_lib/template-matcher.js'
 import { buildPersona, applyPersonaToTree } from './_lib/persona.js'
+import { runAppPlanner, type AppPlan as PlannerAppPlan } from './_lib/planner.js'
 
 const REFERENCE_INSPIRATION_BLOCK = `REFERENCE IMAGES — VISUAL INSPIRATION ONLY
 
@@ -581,52 +582,27 @@ async function handleApp(
     if (templateMatch) {
       console.log(`[planner] template match: ${templateMatch.templateId} (score=${templateMatch.score.toFixed(2)})`)
     }
-    const basePlannerSystem = buildPlannerSystem(templateMatch?.templateId)
-    const plannerSystem = images.length > 0
-      ? `${REFERENCE_INSPIRATION_BLOCK}\n\n${basePlannerSystem}`
-      : basePlannerSystem
 
-    const PLANNER_MODEL = 'claude-haiku-4-5-20251001'
-    const plannerBody = {
-      model: PLANNER_MODEL,
-      max_tokens: 2000,
-      system: [{ type: 'text', text: plannerSystem, cache_control: { type: 'ephemeral' } }],
-      messages: buildMessages(undefined, prompt, images),
-    }
+    const plannerResult = await runAppPlanner({
+      callApi: async (body) => {
+        const r = await callAnthropic(apiKey, body)
+        return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() }
+      },
+      prompt,
+      images,
+      conversationHistory: undefined,
+      templateId: templateMatch?.templateId,
+    })
+    let plan: PlannerAppPlan | null = plannerResult.plan
 
-    let planResponse = await callAnthropic(apiKey, plannerBody)
-    if (!planResponse.ok) {
-      console.error('Plan API error:', planResponse.status, await planResponse.text())
-      sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
-      await finalizeFailed('plan_api_error')
-      return res.end()
-    }
-
-    let planData: any = await planResponse.json()
-    let planText: string = planData.content?.[0]?.text ?? ''
-    let plan: AppPlan | null = parseAppPlan(planText)
-
-    // Retry on ANY parse failure (not just max_tokens). Sonnet/Haiku can emit
-    // malformed JSON for other reasons too; the stricter STRICT_OBJECT_SUFFIX
-    // resolves most of them on the second pass.
     if (!plan) {
-      console.error('[generate-flow] Phase 1 planner parse failed; retrying with bumped tokens + strict suffix. Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
-      const retryResp = await callAnthropic(apiKey, {
-        ...plannerBody,
-        max_tokens: 64000,
-        system: [{ type: 'text', text: plannerSystem + STRICT_OBJECT_SUFFIX, cache_control: { type: 'ephemeral' } }],
-      })
-      if (retryResp.ok) {
-        planData = await retryResp.json()
-        planText = planData.content?.[0]?.text ?? ''
-        plan = parseAppPlan(planText)
-      } else {
-        console.error('[generate-flow] Phase 1 planner retry HTTP error:', retryResp.status, await retryResp.text())
+      if (plannerResult.failureCode === 'api_error') {
+        console.error('Plan API error')
+        sendSSE(res, { type: 'error', message: 'Failed to plan app. Try again.' })
+        await finalizeFailed('plan_api_error')
+        return res.end()
       }
-    }
-
-    if (!plan) {
-      console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', planData.stop_reason, 'Full raw body:\n', planText)
+      console.error('[generate-flow] Phase 1 planner parse failed (post-retry). Stop reason:', plannerResult.stopReason, 'Full raw body:\n', plannerResult.rawText)
       sendSSE(res, { type: 'error', message: 'Failed to parse app plan. Try a more specific description.' })
       await finalizeFailed('plan_parse_failed')
       return res.end()

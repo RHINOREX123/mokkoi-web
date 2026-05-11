@@ -1,15 +1,12 @@
 /**
- * wirer.ts — resolves planner navigation connections to button-level onPress bindings
+ * wirer.ts — resolves planner navigation connections to button-level onPress bindings.
+ *
+ * Stamps `navIntent` directly on TouchableOpacity nodes in the tree (mutating).
  * Uses Jaccard token-overlap fuzzy matching with deterministic fallback.
  * Pure module: no network, no disk, no globals.
  */
-// TODO(stream-a-collapse): migrate these consumers to read node.navIntent:
-//   - src/utils/exportTsx.ts:245 (production: reads opts.bindings)
-//   - src/utils/wirer.test.ts:69,83,101,102,116,131,196 (test: result.bindings.get)
-//   - src/utils/wirer.test.ts:100,142,166 (test: result.bindings.size)
-//   - src/utils/wirer/__fixtures__/wirer-fixtures.test.ts:117 (test: iterates result.bindings)
 
-import type { ComponentNode } from '../types/mokkoi'
+import type { ComponentNode, NavIntent } from '../types/mokkoi'
 import type { FlowConnection } from '../components/FlowConnectors'
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -22,7 +19,6 @@ export interface ScreenInfo {
 
 export interface WireResult {
   tree: ComponentNode
-  bindings: Map<ComponentNode, string>
   usesNavigation: boolean
   unmatched: Array<{ trigger: string; target: string; reason: string }>
 }
@@ -119,14 +115,13 @@ export function wireScreen(
   allConnections: FlowConnection[],
   allScreens: ScreenInfo[],
 ): WireResult {
-  const bindings = new Map<ComponentNode, string>()
   const unmatched: Array<{ trigger: string; target: string; reason: string }> = []
 
   // Filter to only this screen's outgoing connections
   const outgoing = allConnections.filter(c => c.fromScreenId === screen.id)
 
   if (outgoing.length === 0) {
-    return { tree: screen.tree, bindings, usesNavigation: false, unmatched }
+    return { tree: screen.tree, usesNavigation: false, unmatched }
   }
 
   // Build a lookup: screenId → screen name
@@ -176,13 +171,20 @@ export function wireScreen(
 
   const assignedButtons = new Set<ComponentNode>()
   const assignedConnections = new Set<FlowConnection>()
+  let stampedCount = 0
+
+  const stamp = (node: ComponentNode, targetName: string) => {
+    const intent: NavIntent = { kind: 'push', target: targetName }
+    node.navIntent = intent
+    stampedCount++
+  }
 
   for (const { button, connection, score: _score } of candidates) {
     if (assignedButtons.has(button.node)) continue
     if (assignedConnections.has(connection)) continue
 
     const targetName = screenNameById.get(connection.toScreenId) ?? connection.toScreenId
-    bindings.set(button.node, targetName)
+    stamp(button.node, targetName)
     assignedButtons.add(button.node)
     assignedConnections.add(connection)
   }
@@ -212,7 +214,7 @@ export function wireScreen(
     if (shouldFallback) {
       const candidate = unboundTouchables.find(b => collectAllText(b.node).trim().length > 0)
       if (candidate) {
-        bindings.set(candidate.node, targetName)
+        stamp(candidate.node, targetName)
         assignedButtons.add(candidate.node)
         assignedConnections.add(conn)
         continue
@@ -229,8 +231,7 @@ export function wireScreen(
 
   return {
     tree: screen.tree,
-    bindings,
-    usesNavigation: bindings.size > 0,
+    usesNavigation: stampedCount > 0,
     unmatched,
   }
 }

@@ -277,8 +277,8 @@ export function useScreenExport({ phoneFrameRefs, onToast }: UseScreenExportOpts
       for (let i = 0; i < allScreens.length; i++) {
         const screen = allScreens[i]
         const name = screenIdToName.get(screen.screenId)!
-        const { bindings } = wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
-        const tsx = convertTreeToTSX(screen.tree, name, { bindings: bindings.size > 0 ? bindings : undefined, addWatermark })
+        wireScreen(allScreenInfos[i], connections ?? [], allScreenInfos)
+        const tsx = convertTreeToTSX(screen.tree, name, { addWatermark })
         zip.file(`screens/${name}.tsx`, tsx)
       }
 
