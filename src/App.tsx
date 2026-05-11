@@ -961,6 +961,7 @@ function App() {
                           ? <RuntimeIframePreview
                               key={`live-${previewRefreshKey}`}
                               {...sharedProps}
+                              {...deepNavProps}
                               activeScreenId={screens.activeGeneratedId || ''}
                               onActiveScreenChange={screens.setActiveGeneratedId}
                             />

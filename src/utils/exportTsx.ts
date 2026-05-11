@@ -482,6 +482,17 @@ function nodeJSXWithNav(
 export interface DeepNavScreenEntry {
   id: string
   kind?: 'screen' | 'modal'
+  /** Planner-supplied: the appData collection this screen reads from
+   *  (deep-nav detail screens only). */
+  dataSource?: string
+  /** Planner-supplied: required route params for this screen (e.g.
+   *  ["workoutId"]). Used at runtime to map navIntent params to the
+   *  record-key lookup. */
+  params?: string[]
+  /** Planner-supplied: a 1-line description of what the user does on
+   *  this screen. Carried through for completeness; not yet consumed
+   *  by the runtime. */
+  purpose?: string
 }
 
 export interface DeepNavRouteGraph {

@@ -9,7 +9,8 @@ import type { ComponentNode, NavIntent } from '../types/mokkoi'
 import type { FlowConnection } from './FlowConnectors'
 import type { GeneratedScreen } from '../hooks/useScreenManagement'
 import type { DeviceId } from '../constants/devices'
-import { substituteSentinels, type AppData } from '../utils/sentinelSubstitution'
+import { substituteSentinels } from '../utils/sentinelSubstitution'
+import type { DeepNavRouteGraph } from '../utils/exportTsx'
 
 export type { AppData } from '../utils/sentinelSubstitution'
 
@@ -18,6 +19,74 @@ export type { AppData } from '../utils/sentinelSubstitution'
 interface ScreenExtras {
   presentation?: 'screen' | 'modal'
   dataSource?: { collection: string; paramKey?: string }
+}
+
+/** Slugify a string for tolerant id matching (e.g. "Push-ups" ↔ "push-ups"). */
+function slugify(s: unknown): string {
+  return String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+/** Find a record across the planner's appData blob for the given screen, no
+ *  matter which of the four shape combinations the LLM produced:
+ *   - appData[collection] as id-keyed object vs array of records
+ *   - navIntent params keyed by 'id' vs by routeGraph's declared paramKey
+ *   - id value as the record's real id vs a slug of its name
+ *  Returns undefined when nothing resolves; the substitution helper then
+ *  leaves the {{sentinel}} text in place as a visible debug aid. */
+function resolveRecord(
+  appData: unknown,
+  collection: string | undefined,
+  paramKey: string | undefined,
+  params: Record<string, string> | undefined,
+): Record<string, unknown> | undefined {
+  if (!appData || typeof appData !== 'object' || !collection) return undefined
+  const coll = (appData as Record<string, unknown>)[collection]
+  if (!coll) return undefined
+  // Build a list of candidate id values to try: the routeGraph-declared
+  // paramKey first, then every other param value (covers LLM variance like
+  // params.id vs params.workoutId).
+  const candidates: string[] = []
+  if (paramKey && params?.[paramKey]) candidates.push(params[paramKey])
+  if (params) for (const k of Object.keys(params)) {
+    const v = params[k]
+    if (v && !candidates.includes(v)) candidates.push(v)
+  }
+  if (candidates.length === 0) return undefined
+  // Array shape: linear scan, match record.id, then slug(record.name).
+  if (Array.isArray(coll)) {
+    for (const c of candidates) {
+      const hit = coll.find((r): r is Record<string, unknown> =>
+        !!r && typeof r === 'object' && (r as Record<string, unknown>).id === c
+      )
+      if (hit) return hit
+    }
+    for (const c of candidates) {
+      const cs = slugify(c)
+      const hit = coll.find((r): r is Record<string, unknown> =>
+        !!r && typeof r === 'object' && slugify((r as Record<string, unknown>).name) === cs
+      )
+      if (hit) return hit
+    }
+    return undefined
+  }
+  // Keyed-object shape: direct lookup, then scan values by record.id, then
+  // by slug(record.name).
+  const obj = coll as Record<string, unknown>
+  for (const c of candidates) {
+    const v = obj[c]
+    if (v && typeof v === 'object') return v as Record<string, unknown>
+  }
+  const values = Object.values(obj).filter((v): v is Record<string, unknown> => !!v && typeof v === 'object')
+  for (const c of candidates) {
+    const hit = values.find(r => r.id === c)
+    if (hit) return hit
+  }
+  for (const c of candidates) {
+    const cs = slugify(c)
+    const hit = values.find(r => slugify(r.name) === cs)
+    if (hit) return hit
+  }
+  return undefined
 }
 
 interface RuntimeIframePreviewProps {
@@ -35,8 +104,15 @@ interface RuntimeIframePreviewProps {
   /** Planner-produced record collections (Stream A). When present, detail
    *  screens with a dataSource get their {{sentinels}} substituted before the
    *  tree is posted into the iframe. Old projects omit this; substitution is
-   *  a no-op then. */
-  appData?: AppData
+   *  a no-op then. Loose type because the planner emits arrays per collection
+   *  while the substitution path also accepts id-keyed objects — resolveRecord
+   *  handles both at runtime. */
+  appData?: unknown
+  /** Planner-produced route graph. Used to look up the active screen's
+   *  dataSource (collection name + param key) and its kind ('modal' triggers
+   *  the slide-up animation). The generated screens carry no per-screen
+   *  metadata, so this is the canonical source. */
+  routeGraph?: DeepNavRouteGraph | null
 }
 
 /** Recursive node count — used as a tree-size dimension on render telemetry.
@@ -76,6 +152,7 @@ export function RuntimeIframePreview({
   disabled = false,
   projectId,
   appData,
+  routeGraph,
 }: RuntimeIframePreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
@@ -229,11 +306,13 @@ export function RuntimeIframePreview({
       const targetScreen = screens.find(s => s.id === target) as
         | (GeneratedScreen & ScreenExtras)
         | undefined
-      if (targetScreen?.presentation === 'modal') {
-        setModalAnim(true)
-      } else {
-        setModalAnim(false)
-      }
+      // Modal detection: prefer the screen's explicit presentation (legacy
+      // single-screen apps) but fall back to the planner's routeGraph kind
+      // for deep-nav apps where the screen object never gets a presentation
+      // field stamped on it.
+      const rgKind = routeGraph?.screens.find(s => s.id === target)?.kind
+      const isModal = targetScreen?.presentation === 'modal' || rgKind === 'modal'
+      setModalAnim(isModal)
       onActiveScreenChange(target)
     }
 
@@ -388,19 +467,20 @@ export function RuntimeIframePreview({
       return
     }
 
-    // Deep-nav: sentinel substitution. If this screen has a dataSource and
-    // current nav params point at a record, walk the tree and replace
-    // {{path}} sentinels in Text node strings with values from the record.
-    // Substitution happens OUTSIDE the iframe — the runtime stays ignorant
-    // of appData. Misses are left as-is (visible debug aid).
-    const extras = activeScreen as GeneratedScreen & ScreenExtras
-    const ds = extras.dataSource
-    if (appData && ds) {
+    // Deep-nav: sentinel substitution. The planner emits routeGraph entries
+    // with `dataSource: <collectionName>` and `params: [<paramKey>]`. Look
+    // those up by activeScreen.id, then resolve a record from appData using
+    // the tolerant resolveRecord helper (handles array vs keyed shapes and
+    // slug-vs-id navIntent values). Misses are left in place as a visible
+    // debug aid.
+    const rgEntry = routeGraph?.screens.find(s => s.id === activeScreen.id)
+    const collection = typeof rgEntry?.dataSource === 'string' ? rgEntry.dataSource : undefined
+    const paramKey = Array.isArray(rgEntry?.params) ? rgEntry.params[0] : undefined
+    if (appData && collection) {
       const params = paramsByScreenRef.current[activeScreen.id]
-      const key = params?.[ds.paramKey ?? 'id']
-      const record = key ? appData[ds.collection]?.[key] : undefined
+      const record = resolveRecord(appData, collection, paramKey, params)
       if (record) {
-        const subbed = substituteSentinels(expanded, record)
+        const subbed = substituteSentinels(expanded, record as Record<string, unknown>)
         if (subbed && typeof subbed === 'object') {
           expanded = subbed as ComponentNode
         }
@@ -425,7 +505,7 @@ export function RuntimeIframePreview({
       tree_byte_size: treeJson.length,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [iframeReady, treeFingerprint, disabled, appData])
+  }, [iframeReady, treeFingerprint, disabled, appData, routeGraph])
 
   // Close the current modal screen: pop the back-stack to the previous screen.
   // Mirrors the back-glyph short-circuit in the click handler so the user can
@@ -444,13 +524,17 @@ export function RuntimeIframePreview({
     if (target && target !== activeScreenId) {
       const ts = screens.find(s => s.id === target) as
         | (GeneratedScreen & ScreenExtras) | undefined
-      setModalAnim(ts?.presentation === 'modal')
+      const rgKind = routeGraph?.screens.find(s => s.id === target)?.kind
+      setModalAnim(ts?.presentation === 'modal' || rgKind === 'modal')
       onActiveScreenChange(target)
     }
-  }, [activeScreenId, screens, onActiveScreenChange])
+  }, [activeScreenId, screens, onActiveScreenChange, routeGraph])
 
-  const activePresentation = (activeScreen as
+  // Resolve current screen's presentation: explicit `presentation` field on
+  // the screen wins; otherwise consult the routeGraph kind (deep-nav apps).
+  const activePresentation = ((activeScreen as
     | (GeneratedScreen & ScreenExtras) | undefined)?.presentation
+    ?? (routeGraph?.screens.find(s => s.id === activeScreenId)?.kind === 'modal' ? 'modal' : undefined))
 
   // Slide-up: when we navigate INTO a modal screen, we want the iframe pane
   // to slide up from offscreen. We can't remount the iframe (would drop the
