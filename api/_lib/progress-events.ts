@@ -7,8 +7,11 @@
 
 export type MilestoneKind =
   | 'analyzing'
+  | 'planning'
   | 'identified'
   | 'generating'
+  | 'wiring'
+  | 'finalizing'
   | 'complete'
   | 'error'
 
@@ -21,7 +24,15 @@ export interface MilestoneEvent {
   status: MilestoneStatus
 }
 
-const KIND_ORDER: MilestoneKind[] = ['analyzing', 'identified', 'generating', 'complete']
+const KIND_ORDER: MilestoneKind[] = [
+  'analyzing',
+  'planning',
+  'identified',
+  'generating',
+  'wiring',
+  'finalizing',
+  'complete',
+]
 
 /** Build a milestone event with a stable id (kind-derived). The reducer
  *  upserts by id so re-emitting the same kind updates rather than appends. */

@@ -109,6 +109,36 @@ declaring destinations for its menu rows. If a sub-screen is not worth
 declaring (too thin, not relevant to the app), OMIT the row entirely
 from the menu — a missing row is better than a dead row.
 
+CRITICAL — DECLARE IN BOTH ARRAYS:
+
+Each menu sub-screen MUST appear in BOTH:
+  1. The top-level "screens" array (so the screen generator produces a
+     tree for it). Use a minimal entry — id, name, description,
+     screenType: "form" or "list" as appropriate.
+  2. routeGraph.screens (so the router can resolve nav).
+
+A sub-screen declared in routeGraph.screens but missing from the
+top-level screens[] is a silent dead-end — the router validates the
+target exists in screens[] before navigating, so the click registers
+as "No screen wired for X" with no navigation.
+
+Example for a Profile screen with three menu rows:
+
+  screens: [
+    ...,
+    { "id": "addresses", "name": "Addresses", "description": "Manage saved delivery addresses", "screenType": "list" },
+    { "id": "payment-methods", "name": "Payment Methods", "description": "Manage saved cards and wallets", "screenType": "list" },
+    { "id": "help", "name": "Help Center", "description": "FAQs and contact support", "screenType": "list" }
+  ],
+  routeGraph: {
+    screens: [
+      ...,
+      { "id": "addresses", "kind": "screen", "purpose": "Manage saved addresses" },
+      { "id": "payment-methods", "kind": "screen", "purpose": "Manage payment methods" },
+      { "id": "help", "kind": "screen", "purpose": "Help and FAQ" }
+    ]
+  }
+
 The screen generator wires each menu row's outer TouchableOpacity to
 navIntent: {kind:"push", target:"<the-id-you-declared>"}. The runtime
 pushes onto the nav stack and renders the sub-screen.

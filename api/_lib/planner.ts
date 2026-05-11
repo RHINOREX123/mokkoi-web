@@ -449,6 +449,25 @@ export function validatePlannerOutput(
     }
   }
 
+  // Rule (Package A.1): every routeGraph.screens entry of kind "screen" MUST
+  // also appear in the top-level screens[] array. Without the top-level entry
+  // the screen generator never produces UI for it AND the runtime's existence
+  // check at the navigation hop rejects the push, so menu taps fall through
+  // to "No screen wired for X". Modals are exempt — they're rendered via a
+  // different path and don't need a screens[] companion.
+  const topLevelScreenIds = new Set(
+    (out.plan?.screens ?? []).map(s => (s as { id?: string }).id).filter((id): id is string => typeof id === 'string'),
+  )
+  for (const rgScreen of out.routeGraph.screens) {
+    if (rgScreen.kind !== 'screen') continue
+    if (!topLevelScreenIds.has(rgScreen.id)) {
+      issues.push({
+        rule: 'routeGraph.screen_missing_in_top_level',
+        detail: `routeGraph.screens has "${rgScreen.id}" (kind=screen) but the top-level screens[] array has no matching entry. The screen generator will skip it and the router will reject navigation. Add a screens[] entry with the same id.`,
+      })
+    }
+  }
+
   // Rule (Package A): Profile / Settings / Account screens must declare at
   // least one menu-row sub-screen, otherwise their menu rows render as dead
   // taps. The canonical sub-screen ids match the planner-prompt's

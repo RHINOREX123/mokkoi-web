@@ -18,6 +18,11 @@ const FITNESS_RESPONSE = {
     { id: 'addWorkout', name: 'Add Workout', description: 'Modal to add a new workout entry', screenType: 'form' },
     { id: 'progress', name: 'Progress', description: 'Charts and personal records over time', screenType: 'analytics' },
     { id: 'profile', name: 'Profile', description: 'User profile and settings', screenType: 'profile' },
+    // Package A.1: menu-row sub-screens must appear in BOTH screens[] AND routeGraph.screens.
+    { id: 'edit-profile', name: 'Edit Profile', description: 'Edit account details', screenType: 'form' },
+    { id: 'notification-settings', name: 'Notifications', description: 'Notification preferences', screenType: 'form' },
+    { id: 'privacy', name: 'Privacy', description: 'Privacy and security', screenType: 'form' },
+    { id: 'help', name: 'Help', description: 'Help and support', screenType: 'list' },
   ],
   navigation: {
     type: 'tabs',
@@ -92,7 +97,8 @@ describe('runAppPlanner (behavior-preserving)', () => {
     })
     expect(res.plan).not.toBeNull()
     expect(res.plan?.appName).toBe('FitForge')
-    expect(res.plan?.screens).toHaveLength(6)
+    // 6 primary screens + 4 menu-row sub-screens (Package A.1).
+    expect(res.plan?.screens).toHaveLength(10)
     expect(res.plan?.navigation.tabScreens).toEqual(['home', 'workouts', 'progress', 'profile'])
   })
 
@@ -204,6 +210,30 @@ describe('validatePlannerOutput', () => {
     const report = validatePlannerOutput(out)
     expect(report.ok).toBe(false)
     expect(report.issues.some(i => i.rule === 'routeGraph.profile_needs_menu_subscreens')).toBe(true)
+  })
+
+  it('flags routeGraph screens missing from the top-level screens[] array (Package A.1)', async () => {
+    const broken = structuredClone(FITNESS_RESPONSE)
+    // Simulate the production failure mode: planner declares a sub-screen in
+    // routeGraph but forgets to add it to the top-level screens[] array.
+    broken.screens = broken.screens.filter(s => s.id !== 'edit-profile')
+    // routeGraph still has it.
+    const out = await runPlanner({ callApi: mockCallApi(broken), prompt: 'fitness', images: [] })
+    const report = validatePlannerOutput(out)
+    expect(report.ok).toBe(false)
+    expect(report.issues.some(i =>
+      i.rule === 'routeGraph.screen_missing_in_top_level' && i.detail.includes('edit-profile'),
+    )).toBe(true)
+  })
+
+  it('does not flag modal screens for missing top-level screens[] entries', async () => {
+    const out = await runPlanner({ callApi: mockCallApi(FITNESS_RESPONSE), prompt: 'fitness', images: [] })
+    const report = validatePlannerOutput(out)
+    // addWorkout is kind:'modal' in routeGraph. It's also in screens[], but even
+    // if it weren't, the rule should skip modals.
+    expect(report.issues.some(i =>
+      i.rule === 'routeGraph.screen_missing_in_top_level' && i.detail.includes('addWorkout'),
+    )).toBe(false)
   })
 
   it('does not flag a planner output with no Profile/Settings screen', async () => {
