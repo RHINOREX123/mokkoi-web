@@ -181,6 +181,7 @@ export interface RunAppPlannerResult {
   failureCode?: 'api_error' | 'parse_failed'
   rawText?: string
   stopReason?: string
+  usage?: { input_tokens?: number; output_tokens?: number }
 }
 
 // ── Message builder (mirrors generate-flow's buildMessages) ───────────────────
@@ -265,9 +266,9 @@ export async function runAppPlanner(args: RunPlannerArgs): Promise<RunAppPlanner
   }
 
   if (!plan) {
-    return { plan: null, failureCode: 'parse_failed', rawText: planText, stopReason: planData?.stop_reason }
+    return { plan: null, failureCode: 'parse_failed', rawText: planText, stopReason: planData?.stop_reason, usage: planData?.usage }
   }
-  return { plan, rawText: planText, stopReason: planData?.stop_reason }
+  return { plan, rawText: planText, stopReason: planData?.stop_reason, usage: planData?.usage }
 }
 
 // ── runPlanner (deep-nav variant) ─────────────────────────────────────────────
