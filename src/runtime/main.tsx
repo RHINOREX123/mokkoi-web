@@ -364,40 +364,39 @@ function RuntimeApp() {
       }
     }
     const rawNav = navBtn?.dataset.mokkoiNav
+    let navIntent: NavIntent | null = null
     if (rawNav) {
-      let navIntent: NavIntent | null = null
       try {
         navIntent = JSON.parse(rawNav) as NavIntent
       } catch (err) {
         console.warn('[mokkoi-click] malformed data-mokkoi-nav:', err)
       }
-      if (navIntent) {
-        if (navIntent.kind === 'noop') {
-          e.stopPropagation()
-          // Phase 0: forward toast to parent. Agent 3 will wire the Toast
-          // widget consumption in RuntimeIframePreview.
-          window.parent.postMessage(
-            { type: 'mokkoi:toast', message: navIntent.toastMessage || '' },
-            '*',
-          )
-          return
-        }
-        if (navIntent.kind === 'toggleState') {
-          e.stopPropagation()
-          // Phase 0 stub: post toggleState. Agent 4 will wire the state
-          // holder + ScreenRenderer consumption.
-          window.parent.postMessage(
-            {
-              type: 'mokkoi:toggleState',
-              group: navIntent.group,
-              stateKey: navIntent.stateKey,
-            },
-            '*',
-          )
-          return
-        }
+    }
+
+    // 1. Real nav intents (push/openSheet/back/toggleState) take priority.
+    //    noop falls through so the legacy CSS classifier still gets a shot
+    //    at BottomNav rows, back glyphs, etc. (which are sanitized to
+    //    navIntent:{kind:'noop'} by the validator but were always handled
+    //    by classifyClickedElement pre-Phase 0).
+    if (navIntent) {
+      if (navIntent.kind === 'toggleState') {
         e.stopPropagation()
-        // Best-effort label for telemetry / fallback resolution downstream.
+        window.parent.postMessage(
+          {
+            type: 'mokkoi:toggleState',
+            group: navIntent.group,
+            stateKey: navIntent.stateKey,
+          },
+          '*',
+        )
+        return
+      }
+      if (
+        navIntent.kind === 'push' ||
+        navIntent.kind === 'openSheet' ||
+        navIntent.kind === 'back'
+      ) {
+        e.stopPropagation()
         const labelClone = navBtn!.cloneNode(true) as HTMLElement
         labelClone.querySelectorAll('.material-symbols-outlined').forEach(n => n.remove())
         const label = (labelClone.textContent || '').trim().replace(/\s+/g, ' ')
@@ -409,10 +408,24 @@ function RuntimeApp() {
         )
         return
       }
+      // navIntent.kind === 'noop' → fall through to legacy classifier
     }
 
+    // 2. Legacy CSS classifier — handles BottomNav rows, back glyphs, and
+    //    other shapes that worked pre-Phase 0.
     const c = classifyClickedElement(e.target)
-    if (!c) return
+    if (!c) {
+      // 3. Last resort: noop intent with a toast message.
+      if (navIntent && navIntent.kind === 'noop' && navIntent.toastMessage) {
+        e.stopPropagation()
+        window.parent.postMessage(
+          { type: 'mokkoi:toast', message: navIntent.toastMessage },
+          '*',
+        )
+      }
+      // 4. Otherwise silent: truly dead click, no signal anywhere.
+      return
+    }
 
     // Deferred: handle iframe-side (toast + diagnostic), don't bother parent.
     // Exception: list-row defers are forwarded so the parent can attempt
