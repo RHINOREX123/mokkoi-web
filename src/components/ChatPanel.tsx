@@ -6,6 +6,7 @@ import { useUserPlan } from '../hooks/useUserPlan'
 import ChipRow from './ChipRow'
 import { VoiceMicButton } from './VoiceMicButton'
 import { getAuthHeaders } from '../lib/authHeaders'
+import type { MilestoneEvent } from '../lib/progress-events'
 
 export interface PlanExtracted {
   domain: string | null
@@ -76,6 +77,11 @@ interface ChatPanelProps {
   appPhase?: 'idle' | 'planning' | 'generating'
   /** App generation progress (current/total screens) */
   appProgress?: { current: number; total: number } | null
+  /** Streaming progress timeline. When non-empty, replaces the static 2-step
+   *  appPhase block. Empty means "no milestone events yet" — fall back to
+   *  the legacy block so pre-milestone servers and existing-project views
+   *  render exactly as they did before. */
+  milestones?: MilestoneEvent[]
   /** True when the user submitted from the dashboard's Plan toggle.
    *  Routes input to onPlanSend instead of onSend, renders a "Build my app"
    *  button in the chat header, and (when chips are present on the latest
@@ -148,7 +154,7 @@ const GENERATING_STEPS = [
   { text: 'Applying styles and tokens...', icon: 'paint' },
 ]
 
-export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight, resumingRun, onVoiceError }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStreaming, streamingText, initialPrompt, initialImages, onFlowScreenClick, hasScreens, screensLoaded, selectedScreenName, selectedScreenTree, onSelectedScreenClick, onDeselectScreen, focusTrigger, onStopGenerating, appPhase, appProgress, milestones, planMode, onPlanSend, readyToBuildLatched, onBuildFromPlan, planInflight, resumingRun, onVoiceError }: ChatPanelProps) {
   // Plan-mode banner ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â dismissible, local state only. App.tsx strips the
   // ?mode=plan param on mount, so a refresh does NOT re-show the banner;
   // dismiss is effectively per-page-load. That's intentional: the banner is
@@ -933,6 +939,10 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
                   <span style={{ color: '#818CF8', animation: 'blink 1s step-end infinite' }}>|</span>
                 </div>
               </div>
+            ) : milestones && milestones.length > 0 ? (
+              /* Streaming progress timeline (Phase-A Workstream 1). Replaces the
+                 static 2-step block once any 'milestone' SSE event arrives. */
+              <MilestoneTimeline milestones={milestones} resumingRun={resumingRun} />
             ) : appPhase && appPhase !== 'idle' ? (
               /* App generation progress (planning ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ generating screens) */
               <div style={{
@@ -1327,4 +1337,98 @@ export function ChatPanel({ messages, onSend, onExportCode, isGenerating, isStre
       </div>
     </div>
   )
+}
+
+/** Render the streaming-progress timeline. Each milestone is one row with a
+ *  status glyph + message. The latest row auto-scrolls into view (debounced
+ *  so a flurry of events doesn't fight the user's own scrolling). */
+function MilestoneTimeline({ milestones, resumingRun }: { milestones: MilestoneEvent[]; resumingRun?: boolean }) {
+  const lastRowRef = useRef<HTMLLIElement | null>(null)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      lastRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 100)
+    return () => clearTimeout(t)
+  }, [milestones.length])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200 }}>
+      {resumingRun && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: 11, color: '#94a3b8',
+          padding: '4px 8px', borderRadius: 6,
+          background: 'rgba(129,140,248,0.08)',
+          border: '1px solid rgba(129,140,248,0.18)',
+          alignSelf: 'flex-start', marginBottom: 2,
+        }}>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <circle cx="5" cy="5" r="3" fill="#818CF8">
+              <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite" />
+            </circle>
+          </svg>
+          Resuming generation
+        </div>
+      )}
+      <ul
+        className="generation-timeline"
+        style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
+      >
+        {milestones.map((m, i) => {
+          const isLast = i === milestones.length - 1
+          return (
+            <li
+              key={m.id}
+              ref={isLast ? lastRowRef : undefined}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                opacity: m.status === 'pending' ? 0.4 : 1,
+              }}
+            >
+              <MilestoneIcon status={m.status} />
+              <span style={{
+                fontSize: 12,
+                color: m.status === 'failed'
+                  ? '#f87171'
+                  : m.status === 'done'
+                    ? '#94a3b8'
+                    : m.status === 'inflight'
+                      ? '#e2e8f0'
+                      : '#64748b',
+              }}>
+                {m.message}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+function MilestoneIcon({ status }: { status: MilestoneEvent['status'] }) {
+  if (status === 'done') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-label="done">
+        <circle cx="7" cy="7" r="7" fill="rgba(52,211,153,0.2)" />
+        <path d="M4 7l2 2 4-4" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  if (status === 'failed') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-label="failed">
+        <circle cx="7" cy="7" r="7" fill="rgba(248,113,113,0.2)" />
+        <path d="M5 5l4 4M9 5l-4 4" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    )
+  }
+  if (status === 'inflight') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" className="animate-spin" style={{ animationDuration: '1.5s' }} aria-label="inflight">
+        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+      </svg>
+    )
+  }
+  return <div aria-label="pending" style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.15)' }} />
 }

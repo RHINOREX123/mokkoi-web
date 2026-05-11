@@ -8,6 +8,11 @@ import type { VariationSettings } from '../components/VariationsPanel'
 import { GAP } from '../components/FlowConnectors'
 import { getCanvasDimensions } from '../constants/devices'
 import type { DeviceId } from '../constants/devices'
+import {
+  reduceMilestones,
+  failLatestInflight,
+  type MilestoneEvent,
+} from '../lib/progress-events'
 
 // Intent detection regexes. The old substring lists (e.g. 'build an app', 'flow')
 // missed common phrasing like "Build a food delivery app" — 'build a X app' never
@@ -139,6 +144,11 @@ export interface AIGeneration {
   partialTree: ComponentNode | null
   appPhase: 'idle' | 'planning' | 'generating'
   appProgress: { current: number; total: number } | null
+  /** Streaming progress timeline. Empty unless the server emitted
+   *  'milestone' SSE events during the current generation. Consumers
+   *  must fall back to the appPhase block when the array is empty
+   *  (e.g. idle, viewing an existing project, pre-milestone server). */
+  milestones: MilestoneEvent[]
 
   handleSend: (prompt: string, images?: Array<{ data: string; mimeType: string }>, forceNew?: boolean, regenerateTree?: ComponentNode, opts?: HandleSendOpts) => Promise<void>
   handleRegenerate: () => void
@@ -258,6 +268,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
   const [partialTree, setPartialTree] = useState<ComponentNode | null>(null)
   const [appPhase, setAppPhase] = useState<'idle' | 'planning' | 'generating'>('idle')
   const [appProgress, setAppProgress] = useState<{ current: number; total: number } | null>(null)
+  const [milestones, setMilestones] = useState<MilestoneEvent[]>([])
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // ── Plan mode state ──
@@ -484,6 +495,10 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
       setIsGenerating(true)
       setAppPhase('planning')
       setAppProgress(null)
+      // Clear any milestones from a previous generation so the new run
+      // starts with an empty timeline (and the fallback block renders
+      // until the first 'milestone' event arrives).
+      setMilestones([])
 
       try {
         const authHeaders = await getAuthHeaders()
@@ -569,6 +584,15 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
                 // routeGraph ids after the screens loop completes server-side).
                 if (event.routeGraph && setRouteGraph) setRouteGraph(event.routeGraph)
                 if (event.appData && setAppData) setAppData(event.appData)
+              } else if (event.type === 'milestone') {
+                // Phase-A Workstream 1: streaming timeline. Reducer is
+                // defensive — malformed events return the same state. Wrap
+                // in try/catch so a reducer bug can't crash the SSE loop.
+                try {
+                  setMilestones(prev => reduceMilestones(prev, event))
+                } catch (reducerErr) {
+                  console.warn('[mokkoi] milestone reducer threw, skipping event', reducerErr)
+                }
               } else if (event.type === 'paywall') {
                 // Free-tier limit hit. Not an error — surface the upgrade modal
                 // instead of an error toast, drop the placeholder, and stop
@@ -577,6 +601,9 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
                 trackEvent('paywall_triggered')
                 onPaywall?.()
               } else if (event.type === 'error') {
+                // Flip the latest in-flight timeline step to failed so the
+                // user sees WHERE generation broke, not just that it broke.
+                try { setMilestones(prev => failLatestInflight(prev)) } catch { /* swallow */ }
                 throw new Error(event.message)
               }
             } catch (parseErr) {
@@ -704,6 +731,7 @@ export function useAIGeneration(deps: AIGenerationDeps): AIGeneration {
         saveMessage(errorMsg)
         // Remove placeholder on error
         setGeneratedScreens(prev => prev.filter(s => s.id !== placeholderId))
+        try { setMilestones(prev => failLatestInflight(prev)) } catch { /* swallow */ }
       } finally {
         setIsGenerating(false)
         setAppPhase('idle')
@@ -1066,6 +1094,7 @@ Generate a new version of this screen as a variation. Return ONLY the JSON compo
     partialTree,
     appPhase,
     appProgress,
+    milestones,
     handleSend,
     handleRegenerate,
     handleGenerateVariations,
