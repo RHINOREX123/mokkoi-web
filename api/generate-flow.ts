@@ -24,6 +24,7 @@ import {
   type AppData,
   type RouteGraph,
 } from './_lib/planner.js'
+import { HEADER_ICON_NAV_RULES, WIDGET_MODE_RULES } from './_lib/planner-prompt.js'
 
 const REFERENCE_INSPIRATION_BLOCK = `REFERENCE IMAGES — VISUAL INSPIRATION ONLY
 
@@ -765,6 +766,10 @@ the matching appData record at navigation time.
 
 Modals (kind: "modal") render their own content and may use sentinels
 keyed off the navigating screen's current params.
+
+${HEADER_ICON_NAV_RULES}
+
+${WIDGET_MODE_RULES}
 `
       : ''
 
