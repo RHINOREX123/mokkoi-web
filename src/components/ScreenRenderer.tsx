@@ -1,6 +1,30 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ComponentNode } from '../types/mokkoi'
 import { toMaterialSymbol, KNOWN_MATERIAL_SYMBOLS } from '../utils/iconMap'
+import { getActivePillStateKey, type PillState } from '../runtime/state'
+
+// === Workstream D: filter-pill toggleState rendering ===
+// Module-scoped context for the current ScreenRenderer pass. Only one tree
+// renders at a time inside the iframe runtime; safe to use module state.
+// Reset on every ScreenRenderer invocation BEFORE renderNode walks the tree.
+let currentPillState: PillState | undefined
+let currentActiveScreenId: string | undefined
+let currentGroupFirsts: Record<string, string> = {}
+
+/** Pre-walk the tree once to record the first stateKey encountered per
+ *  toggleState group. Used as the active fallback when pillState has no entry
+ *  yet for that (screen, group), so a pill row never renders with all pills
+ *  inactive. */
+function collectGroupFirsts(node: ComponentNode | string | null | undefined, out: Record<string, string>): void {
+  if (!node || typeof node === 'string' || typeof node !== 'object') return
+  const intent = node.navIntent
+  if (intent && intent.kind === 'toggleState') {
+    if (!(intent.group in out)) out[intent.group] = intent.stateKey
+  }
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) collectGroupFirsts(child as ComponentNode, out)
+  }
+}
 
 // Track icon names we've already warned about, so console.warn fires once per
 // unknown name per session — feeds the "missing icon" backlog without spamming.
@@ -581,11 +605,35 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
 
     case 'TouchableOpacity': {
       const navIntent = node.navIntent
+      // Workstream D: toggleState pills render with active/inactive visual
+      // differentiation. The active pill keeps full opacity; inactive pills
+      // dim. Defaults to first pill in group if pillState has no entry yet.
+      // Path only fires when navIntent.kind === 'toggleState' AND a pillState
+      // is in scope — old screens with no toggleState renders untouched.
+      let pillStyle: React.CSSProperties = {}
+      if (
+        navIntent &&
+        navIntent.kind === 'toggleState' &&
+        currentPillState &&
+        currentActiveScreenId
+      ) {
+        const fallback = currentGroupFirsts[navIntent.group]
+        const active = getActivePillStateKey(
+          currentPillState,
+          currentActiveScreenId,
+          navIntent.group,
+          fallback,
+        )
+        const isActive = active === navIntent.stateKey
+        if (!isActive) {
+          pillStyle = { opacity: 0.45 }
+        }
+      }
       return (
         <div
           key={key}
           className="mokkoi-touchable"
-          style={{ ...VIEW_BASE, ...style, cursor: 'pointer' }}
+          style={{ ...VIEW_BASE, ...style, ...pillStyle, cursor: 'pointer' }}
           role="button"
           data-mokkoi-nav={navIntent ? JSON.stringify(navIntent) : undefined}
         >
@@ -847,9 +895,24 @@ function renderNode(node: ComponentNode | string, key: number): React.ReactNode 
 
 interface ScreenRendererProps {
   tree: ComponentNode
+  /** Workstream D: parent-held toggleState for filter pills, keyed
+   *  by screenId then group. Optional — old call sites unaffected. */
+  pillState?: PillState
+  /** Workstream D: id of the screen this tree belongs to, so pill
+   *  lookups can scope to the correct screen. Optional. */
+  activeScreenId?: string
 }
 
-export function ScreenRenderer({ tree }: ScreenRendererProps) {
+export function ScreenRenderer({ tree, pillState, activeScreenId }: ScreenRendererProps) {
+  // Reset module context BEFORE walking. Pre-pass collects the first pill in
+  // each toggleState group so renderNode can use it as the active fallback.
+  currentPillState = pillState
+  currentActiveScreenId = activeScreenId
+  currentGroupFirsts = {}
+  if (tree && pillState && activeScreenId) {
+    collectGroupFirsts(tree, currentGroupFirsts)
+  }
+
   if (!tree) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>
