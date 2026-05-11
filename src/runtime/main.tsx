@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { ScreenRenderer } from '../components/ScreenRenderer'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { validateTree } from '../utils/validateTree'
-import type { ComponentNode } from '../types/mokkoi'
+import type { ComponentNode, NavIntent } from '../types/mokkoi'
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Click classification
@@ -349,6 +349,43 @@ function RuntimeApp() {
   }, [])
 
   function handleCapture(e: React.MouseEvent) {
+    // Deep-nav: if the clicked element walks up to a [role="button"] carrying
+    // `data-mokkoi-nav`, the LLM/wirer already declared the intent. Forward it
+    // verbatim to the parent and bypass the heuristic classifier (which would
+    // otherwise defer compound clickables like cards). Existing classification
+    // is the fallback for old projects with no navIntent.
+    let navBtn: HTMLElement | null = null
+    if (e.target instanceof Element) {
+      for (let cur: Element | null = e.target; cur; cur = cur.parentElement) {
+        if (cur instanceof HTMLElement && cur.getAttribute('role') === 'button') {
+          navBtn = cur
+          break
+        }
+      }
+    }
+    const rawNav = navBtn?.dataset.mokkoiNav
+    if (rawNav) {
+      let navIntent: NavIntent | null = null
+      try {
+        navIntent = JSON.parse(rawNav) as NavIntent
+      } catch (err) {
+        console.warn('[mokkoi-click] malformed data-mokkoi-nav:', err)
+      }
+      if (navIntent && navIntent.kind !== 'noop') {
+        e.stopPropagation()
+        // Best-effort label for telemetry / fallback resolution downstream.
+        const labelClone = navBtn!.cloneNode(true) as HTMLElement
+        labelClone.querySelectorAll('.material-symbols-outlined').forEach(n => n.remove())
+        const label = (labelClone.textContent || '').trim().replace(/\s+/g, ' ')
+        console.log(`[mokkoi-click] iframe → navIntent=${navIntent.kind}:${navIntent.target}`)
+        window.parent.postMessage(
+          { type: 'mokkoi:click', elementKind: 'Button', label, navIntent },
+          '*',
+        )
+        return
+      }
+    }
+
     const c = classifyClickedElement(e.target)
     if (!c) return
 
