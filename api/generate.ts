@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authenticateRequest, checkCredits, logUsage, logEditDiff, deductCredits, getUserPlan, getSupabaseConfig } from './_lib/auth-helper.js'
 import { createClient } from '@supabase/supabase-js'
-import { normalizeComponentTree, type NormalizerOptions } from './_lib/normalizer.js'
+import { normalizeComponentTree, validateNavIntents, type NormalizerOptions } from './_lib/normalizer.js'
+import { runPlanner, type PlannerOutput, type ScreenEntry } from './_lib/planner.js'
 import { expandComponents } from '../lib/component-library.js'
 import { parseHtmlToComponentTree, shouldUseDomParser, extractAllText } from '../lib/html-parser.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './_lib/design-system.js'
@@ -1389,6 +1390,210 @@ Return ONLY the JSON. No markdown fences, no explanation.`
 // Main handler
 // =====================================================================
 
+// ─── Deep-navigation generation flow ─────────────────────────────────────────
+//
+// Drives a multi-screen app generation in three phases:
+//   1. Planner — produces appData + routeGraph (Stream A's runPlanner).
+//   2. Fan-out — one Anthropic call per planner screen, in parallel via
+//      Promise.all. Each prompt is given the full appData blob, the planner's
+//      own ScreenEntry, and the list of all screen ids so the model can emit
+//      navIntent targets that actually resolve.
+//   3. Validate — every generated tree is passed through normalizer and
+//      validateNavIntents so we strip dangling targets before responding.
+//
+// A per-screen rejection produces a tiny stub View (with the planner's id) so
+// downstream consumers always see exactly routeGraph.screens.length screens.
+
+const DEEP_NAV_SCREEN_PROMPT = `You are generating ONE React Native screen JSON tree for a multi-screen app.
+
+Output ONLY a JSON object representing the component tree — no prose, no markdown.
+
+Every TouchableOpacity MUST include a "navIntent" field. Valid forms:
+  { "kind": "push",      "target": "<screenId>", "params": { ... } }
+  { "kind": "openSheet", "target": "<sheetId>",  "params": { ... } }
+  { "kind": "noop" }                                                  // decorative
+
+Use "noop" ONLY for decorative icons (e.g. a chevron rendered inside a card whose
+parent already navigates). Cards, list rows, primary buttons, header back/close
+buttons MUST emit a real push or openSheet intent.
+
+Example — list row navigates to detail screen:
+  {
+    "type": "TouchableOpacity",
+    "navIntent": { "kind": "push", "target": "ProductDetail", "params": { "id": "ex1" } },
+    "children": [ { "type": "Text", "children": ["Item"] } ]
+  }
+
+Example — header close button on a modal:
+  {
+    "type": "TouchableOpacity",
+    "navIntent": { "kind": "noop" },
+    "children": [ { "type": "Icon", "props": { "name": "close" } } ]
+  }`
+
+interface DeepNavScreenResult {
+  id: string
+  tree: any
+  warnings: string[]
+  error?: string
+}
+
+async function generateOneDeepNavScreen(opts: {
+  apiKey: string
+  model: string
+  maxTokens: number
+  appData: unknown
+  screen: ScreenEntry
+  allScreenIds: string[]
+  allSheetIds: string[]
+  normalizerOpts: NormalizerOptions | undefined
+  routeGraph: PlannerOutput['routeGraph']
+}): Promise<DeepNavScreenResult> {
+  const { apiKey, model, maxTokens, appData, screen, allScreenIds, allSheetIds, normalizerOpts, routeGraph } = opts
+
+  const userPrompt = `App data (full blob, your screen reads slices from this):
+${JSON.stringify(appData)}
+
+This screen's planner spec:
+${JSON.stringify(screen)}
+
+Valid screen ids you may push to: ${JSON.stringify(allScreenIds)}
+Valid sheet ids you may openSheet to: ${JSON.stringify(allSheetIds)}
+
+Generate the JSON tree for screen "${screen.id}" (${screen.purpose}). Return ONLY the JSON object.`
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      system: [{ type: 'text', text: DEEP_NAV_SCREEN_PROMPT, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Anthropic ${response.status}: ${body.slice(0, 200)}`)
+  }
+
+  const data = await response.json()
+  const text: string = data.content?.[0]?.text ?? ''
+  if (!text) throw new Error('Empty response')
+
+  // Tolerant JSON extraction: locate the first { and the matching final }.
+  const firstBrace = text.indexOf('{')
+  const lastBrace = text.lastIndexOf('}')
+  if (firstBrace < 0 || lastBrace <= firstBrace) {
+    throw new Error('No JSON object in response')
+  }
+  let tree: any
+  try {
+    tree = JSON.parse(text.slice(firstBrace, lastBrace + 1))
+  } catch (e) {
+    throw new Error(`JSON parse failed: ${(e as Error).message}`)
+  }
+
+  // Macro expansion + structural normalization, same pipeline as single-screen.
+  tree = expandComponents(tree)
+  tree = normalizeComponentTree(tree, normalizerOpts)
+
+  // navIntent validation — fallback to noop on any unresolved target.
+  const { warnings } = validateNavIntents(tree, routeGraph)
+  void allSheetIds // currently informational only in the prompt
+  void allScreenIds
+
+  return { id: screen.id, tree, warnings }
+}
+
+function stubScreenTree(screenId: string): any {
+  return {
+    type: 'View',
+    style: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0A1A' },
+    children: [
+      { type: 'Text', style: { color: '#94a3b8', fontSize: 14 }, children: ['Screen unavailable'] },
+      { type: 'Text', style: { color: '#475569', fontSize: 11, marginTop: 4 }, children: [screenId] },
+    ],
+  }
+}
+
+async function handleDeepNavGenerate(
+  req: VercelRequest,
+  res: VercelResponse,
+  user: { id: string; email?: string; isMCP?: boolean },
+) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured' })
+
+  const { prompt, projectId, normalizerOptions } = (req.body ?? {}) as {
+    prompt?: string
+    projectId?: string
+    normalizerOptions?: NormalizerOptions
+  }
+  if (!prompt || typeof prompt !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid prompt' })
+  }
+
+  // Phase 1: planner. Stream A owns runPlanner — until they land it this will
+  // throw "Not yet implemented", which is exactly the contract right now.
+  let plan: PlannerOutput
+  try {
+    plan = await runPlanner()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return res.status(502).json({ error: `Planner failed: ${message}` })
+  }
+
+  const { appData, routeGraph } = plan
+  if (!routeGraph?.screens?.length) {
+    return res.status(502).json({ error: 'Planner produced no screens' })
+  }
+
+  const allScreenIds = routeGraph.screens.filter(s => s.kind !== 'modal').map(s => s.id)
+  const allSheetIds = routeGraph.screens.filter(s => s.kind === 'modal').map(s => s.id)
+
+  // Phase 2: fan-out. allSettled so a single screen failure doesn't take down
+  // the whole run — we substitute a stub for any rejection.
+  const settled = await Promise.allSettled(
+    routeGraph.screens.map(screen =>
+      generateOneDeepNavScreen({
+        apiKey,
+        model: 'claude-sonnet-4-6',
+        maxTokens: 8000,
+        appData,
+        screen,
+        allScreenIds,
+        allSheetIds,
+        normalizerOpts: normalizerOptions,
+        routeGraph,
+      })
+    )
+  )
+
+  const screens: Array<{ id: string; tree: any; warnings: string[]; error?: string }> = settled.map((r, i) => {
+    const id = routeGraph.screens[i].id
+    if (r.status === 'fulfilled') return r.value
+    const error = r.reason instanceof Error ? r.reason.message : String(r.reason)
+    console.error(`[deep-nav] screen "${id}" generation failed:`, error)
+    return { id, tree: stubScreenTree(id), warnings: [], error }
+  })
+
+  void user
+  void projectId
+
+  return res.status(200).json({
+    appData,
+    routeGraph,
+    screens,
+  })
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // GET requests with action=image → image proxy (no auth needed)
   if (req.method === 'GET' && req.query.action === 'image') {
@@ -1412,6 +1617,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { mode } = req.body ?? {}
   if (mode === 'import-html') {
     return handleImportHtml(req, res, user)
+  }
+  if (mode === 'deep-nav') {
+    return handleDeepNavGenerate(req, res, user)
   }
 
   // --- Normal generation mode ---

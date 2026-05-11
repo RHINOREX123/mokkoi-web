@@ -481,6 +481,84 @@ function stripBubbleStylingFromNonChat(node: any, insideChat: boolean = false): 
   return node
 }
 
+// ─── Deep-navigation: navIntent validator ─────────────────────────────────────
+//
+// Walks every TouchableOpacity node in the tree. If a touchable is missing
+// navIntent, or its navIntent.target points at a screen/sheet id not present
+// in the planner's routeGraph, we log a warning and replace it with a noop
+// intent. There is NO regeneration loop here — validate, log, fallback.
+//
+// Inputs:
+//   tree       — a ComponentNode (typed `any` to stay consistent with the rest
+//                of this file; the public schema lives in src/types/mokkoi.ts).
+//   routeGraph — { screens: [{ id, kind }, ...], tabs: [id, ...] } from the
+//                planner. We accept anything shaped like that to avoid an
+//                import cycle with api/_lib/planner.ts.
+//
+// Returns:
+//   { tree, warnings } — the tree (mutated in place for performance; callers
+//   that need immutability should clone first) and a list of human-readable
+//   warning strings for log / telemetry surfacing.
+
+export interface NavIntentRouteGraph {
+  screens: Array<{ id: string; kind?: 'screen' | 'modal' }>
+  tabs?: string[]
+}
+
+export interface ValidateNavIntentsResult {
+  tree: any
+  warnings: string[]
+}
+
+export function validateNavIntents(tree: any, routeGraph: NavIntentRouteGraph): ValidateNavIntentsResult {
+  const warnings: string[] = []
+  const screenIds = new Set<string>()
+  const sheetIds = new Set<string>()
+  for (const s of routeGraph?.screens ?? []) {
+    if (!s || typeof s.id !== 'string') continue
+    if (s.kind === 'modal') sheetIds.add(s.id)
+    else screenIds.add(s.id)
+  }
+
+  function walk(node: any, path: string): void {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'TouchableOpacity') {
+      const intent = node.navIntent
+      if (!intent || typeof intent !== 'object' || typeof intent.kind !== 'string') {
+        warnings.push(`[navIntent] missing on TouchableOpacity at ${path} — replacing with noop`)
+        node.navIntent = { kind: 'noop' }
+      } else if (intent.kind === 'push') {
+        if (typeof intent.target !== 'string' || !screenIds.has(intent.target)) {
+          warnings.push(`[navIntent] push target "${intent.target}" not in routeGraph at ${path} — replacing with noop`)
+          node.navIntent = { kind: 'noop' }
+        }
+      } else if (intent.kind === 'openSheet') {
+        if (typeof intent.target !== 'string' || !sheetIds.has(intent.target)) {
+          warnings.push(`[navIntent] openSheet target "${intent.target}" not in routeGraph modals at ${path} — replacing with noop`)
+          node.navIntent = { kind: 'noop' }
+        }
+      } else if (intent.kind !== 'noop') {
+        warnings.push(`[navIntent] unknown kind "${intent.kind}" at ${path} — replacing with noop`)
+        node.navIntent = { kind: 'noop' }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (let i = 0; i < node.children.length; i++) {
+        const c = node.children[i]
+        if (c && typeof c === 'object') walk(c, `${path}/${node.type ?? 'node'}[${i}]`)
+      }
+    }
+  }
+
+  walk(tree, '')
+
+  if (warnings.length > 0) {
+    console.warn(`[validateNavIntents] ${warnings.length} issue(s):`, warnings.slice(0, 10))
+  }
+
+  return { tree, warnings }
+}
+
 export function normalizeComponentTree(tree: any, options?: NormalizerOptions): any {
   if (!tree) return tree
 
