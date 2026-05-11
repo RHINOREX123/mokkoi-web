@@ -10,7 +10,7 @@ import {
 } from './_lib/generation-runs.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
-import { normalizeComponentTree, validateNavIntents } from './_lib/normalizer.js'
+import { normalizeComponentTree, validateNavIntents, inferCardParamsFromText } from './_lib/normalizer.js'
 import { repairDeadButtons, checkBackButton } from './_lib/dead-button-repair.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
@@ -979,6 +979,14 @@ ${WIDGET_MODE_RULES}
           finalTree = validated.tree
           if (validated.warnings.length > 0) {
             console.warn('[deep-nav] nav warnings for screen', planId, validated.warnings)
+          }
+          // Sentinel-substitution rescue: infer params.id on cards whose
+          // model-emitted navIntent omitted the params object. Without
+          // params.id, the runtime's resolveRecord returns undefined and
+          // detail screens render with raw `{{name}}` text.
+          const inferredCount = inferCardParamsFromText(finalTree, appData, uuidRouteGraph)
+          if (inferredCount > 0) {
+            console.log(`[deep-nav] inferred params on ${inferredCount} card(s) for screen ${planId}`)
           }
           const repairStats = { buttonsScanned: 0, repaired: 0, toasted: 0, preserved: 0, errors: 0 }
           finalTree = repairDeadButtons(finalTree, uuidRouteGraph as any, planId, repairStats)

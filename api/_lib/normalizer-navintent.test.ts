@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { validateNavIntents, hoistInnerNavIntents, type NavIntentRouteGraph } from './normalizer'
+import { validateNavIntents, hoistInnerNavIntents, inferCardParamsFromText, type NavIntentRouteGraph, type InferParamsRouteGraph } from './normalizer'
 
 describe('validateNavIntents', () => {
   const routeGraph: NavIntentRouteGraph = {
@@ -269,6 +269,161 @@ describe('hoistInnerNavIntents', () => {
   })
 
   it('handles a real-world Profile menu-row tree end-to-end', () => {
+    // (defined below)
+  })
+})
+
+// ─── Package A.2 part 2: inferCardParamsFromText ──────────────────────────────
+
+describe('inferCardParamsFromText', () => {
+  const restaurantsRG: InferParamsRouteGraph = {
+    screens: [
+      { id: 'restaurantDetail', kind: 'screen', dataSource: 'restaurants', params: ['id'] },
+    ],
+  }
+  const restaurantsData = {
+    restaurants: [
+      { id: 'r1', name: 'Spice Palace', cuisine: 'Indian' },
+      { id: 'r2', name: 'Burger Haven', cuisine: 'American' },
+      { id: 'r3', name: 'Sushi Dreams', cuisine: 'Japanese' },
+    ],
+  }
+
+  it('infers params.id from a card whose name appears in its text', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'restaurantDetail' },
+      children: [
+        { type: 'Image' },
+        { type: 'Text', children: ['Spice Palace'] },
+        { type: 'Text', children: ['Indian · $20 min order'] },
+      ],
+    }
+    const count = inferCardParamsFromText(tree, restaurantsData, restaurantsRG)
+    expect(count).toBe(1)
+    expect(tree.navIntent.params).toEqual({ id: 'r1' })
+  })
+
+  it('does not override existing params.id', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'restaurantDetail', params: { id: 'r2' } },
+      children: [{ type: 'Text', children: ['Spice Palace'] }],
+    }
+    const count = inferCardParamsFromText(tree, restaurantsData, restaurantsRG)
+    expect(count).toBe(0)
+    expect(tree.navIntent.params).toEqual({ id: 'r2' })
+  })
+
+  it('leaves card unchanged when text matches no record', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'restaurantDetail' },
+      children: [{ type: 'Text', children: ['Random Cafe That Does Not Exist'] }],
+    }
+    const count = inferCardParamsFromText(tree, restaurantsData, restaurantsRG)
+    expect(count).toBe(0)
+    expect(tree.navIntent.params).toBeUndefined()
+  })
+
+  it('picks the longest matching name when multiple records substring-match', () => {
+    const ambiguousData = {
+      restaurants: [
+        { id: 'a', name: 'Spice' },
+        { id: 'b', name: 'Spice Palace' }, // longer — should win
+      ],
+    }
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'restaurantDetail' },
+      children: [{ type: 'Text', children: ['Spice Palace · Indian'] }],
+    }
+    const count = inferCardParamsFromText(tree, ambiguousData, restaurantsRG)
+    expect(count).toBe(1)
+    expect(tree.navIntent.params).toEqual({ id: 'b' })
+  })
+
+  it('does not infer for cards pointing at a screen without a dataSource', () => {
+    const noDataSourceRG: InferParamsRouteGraph = {
+      screens: [{ id: 'about', kind: 'screen' }], // no dataSource, no params
+    }
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'about' },
+      children: [{ type: 'Text', children: ['Spice Palace'] }],
+    }
+    const count = inferCardParamsFromText(tree, restaurantsData, noDataSourceRG)
+    expect(count).toBe(0)
+    expect(tree.navIntent.params).toBeUndefined()
+  })
+
+  it('leaves sentinel-only detail templates untouched (no false-positive)', () => {
+    // Detail screen template that contains `{{name}}` but never literal names.
+    // Should not match any record by substring.
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'restaurantDetail' },
+      children: [{ type: 'Text', children: ['{{name}}'] }],
+    }
+    const count = inferCardParamsFromText(tree, restaurantsData, restaurantsRG)
+    expect(count).toBe(0)
+    expect(tree.navIntent.params).toBeUndefined()
+  })
+
+  it('walks nested children to find cards inside list/scroll containers', () => {
+    const tree: any = {
+      type: 'ScrollView',
+      children: [
+        {
+          type: 'View',
+          children: [
+            {
+              type: 'TouchableOpacity',
+              navIntent: { kind: 'push', target: 'restaurantDetail' },
+              children: [{ type: 'Text', children: ['Burger Haven'] }],
+            },
+            {
+              type: 'TouchableOpacity',
+              navIntent: { kind: 'push', target: 'restaurantDetail' },
+              children: [{ type: 'Text', children: ['Sushi Dreams'] }],
+            },
+          ],
+        },
+      ],
+    }
+    const count = inferCardParamsFromText(tree, restaurantsData, restaurantsRG)
+    expect(count).toBe(2)
+    expect(tree.children[0].children[0].navIntent.params).toEqual({ id: 'r2' })
+    expect(tree.children[0].children[1].navIntent.params).toEqual({ id: 'r3' })
+  })
+
+  it('no-ops when appData is missing or empty', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'restaurantDetail' },
+      children: [{ type: 'Text', children: ['Spice Palace'] }],
+    }
+    expect(inferCardParamsFromText(tree, null, restaurantsRG)).toBe(0)
+    expect(inferCardParamsFromText(tree, undefined, restaurantsRG)).toBe(0)
+    expect(inferCardParamsFromText(tree, {}, restaurantsRG)).toBe(0)
+  })
+
+  it('ignores modal targets even with dataSource (modals use different param flow)', () => {
+    const modalRG: InferParamsRouteGraph = {
+      screens: [{ id: 'restaurantSheet', kind: 'modal', dataSource: 'restaurants', params: ['id'] }],
+    }
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'push', target: 'restaurantSheet' },
+      children: [{ type: 'Text', children: ['Spice Palace'] }],
+    }
+    const count = inferCardParamsFromText(tree, restaurantsData, modalRG)
+    expect(count).toBe(0)
+  })
+})
+
+describe('hoistInnerNavIntents — real-world Profile menu-row tree', () => {
+  it('handles the Maya Patel Profile shape end-to-end', () => {
     // Shape from the production smoke test (Maya Patel Profile screen).
     const tree: any = {
       type: 'View',

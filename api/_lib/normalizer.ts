@@ -481,6 +481,115 @@ function stripBubbleStylingFromNonChat(node: any, insideChat: boolean = false): 
   return node
 }
 
+// ─── Deep-navigation: infer card params from card text ────────────────────────
+//
+// Bug observed in production smoke test: tap any restaurant card on Home →
+// Restaurant Detail opens with raw `{{name}}` and `{{description}}` sentinels
+// instead of the tapped restaurant's data. Root cause: the screen-gen LLM
+// emits navIntent: { kind:'push', target:'restaurantDetail' } on the card
+// but OMITS the params object, so the runtime's resolveRecord has no id to
+// look up and returns undefined — sentinel substitution silently no-ops.
+//
+// This pass infers params.id from the card's visible text content: walk the
+// card subtree, collect Text descendants, look for any appData record name
+// that appears in the card text. The longest matching record name wins
+// (avoids a "Spice" record stealing a "Spice Palace" card).
+//
+// Sentinel-only cards (like the detail screen template itself) don't match
+// any literal name, so they're left untouched — no false-positive inference.
+
+function collectTextContent(node: any): string {
+  if (!node) return ''
+  if (typeof node === 'string') return node
+  if (typeof node !== 'object') return ''
+  const parts: string[] = []
+  if (Array.isArray(node.children)) {
+    for (const c of node.children) parts.push(collectTextContent(c))
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+export interface InferParamsRouteGraph {
+  screens: Array<{
+    id: string
+    kind?: 'screen' | 'modal'
+    dataSource?: string
+    params?: string[]
+  }>
+}
+
+export function inferCardParamsFromText(
+  tree: any,
+  appData: Record<string, unknown> | null | undefined,
+  routeGraph: InferParamsRouteGraph,
+): number {
+  if (!appData || typeof appData !== 'object') return 0
+  // Map: screenId → { collection, paramKey } for any push-targetable screen
+  // declaring a dataSource. We need both — without a paramKey we have no
+  // navIntent.params field to populate.
+  const screenInfo = new Map<string, { collection: string; paramKey: string }>()
+  for (const s of routeGraph?.screens ?? []) {
+    if (s.kind === 'modal') continue
+    if (typeof s.dataSource !== 'string' || s.dataSource.length === 0) continue
+    if (!Array.isArray(s.params) || typeof s.params[0] !== 'string') continue
+    screenInfo.set(s.id, { collection: s.dataSource, paramKey: s.params[0] })
+  }
+  if (screenInfo.size === 0) return 0
+
+  let inferred = 0
+
+  function walk(node: any): void {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'TouchableOpacity') {
+      const intent = node.navIntent
+      if (intent && typeof intent === 'object' && intent.kind === 'push' &&
+          typeof intent.target === 'string') {
+        const info = screenInfo.get(intent.target)
+        if (info) {
+          const existingParams = (intent.params && typeof intent.params === 'object')
+            ? intent.params as Record<string, unknown>
+            : undefined
+          const hasParamKey = existingParams && typeof existingParams[info.paramKey] === 'string' &&
+            (existingParams[info.paramKey] as string).length > 0
+          if (!hasParamKey) {
+            const records = (appData as Record<string, unknown>)[info.collection]
+            if (Array.isArray(records)) {
+              const cardText = collectTextContent(node).toLowerCase()
+              if (cardText) {
+                // Find every record whose name appears in cardText, sort by
+                // name length DESC so the most specific match wins.
+                const matches = records
+                  .map(r => {
+                    if (!r || typeof r !== 'object') return null
+                    const rec = r as Record<string, unknown>
+                    const name = rec.name
+                    if (typeof name !== 'string' || name.length === 0) return null
+                    return { rec, name }
+                  })
+                  .filter((m): m is { rec: Record<string, unknown>; name: string } =>
+                    m !== null && cardText.includes(m.name.toLowerCase()),
+                  )
+                  .sort((a, b) => b.name.length - a.name.length)
+                const best = matches[0]
+                if (best && typeof best.rec.id === 'string' && best.rec.id.length > 0) {
+                  intent.params = { ...(existingParams ?? {}), [info.paramKey]: best.rec.id }
+                  inferred++
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) walk(c)
+    }
+  }
+
+  walk(tree)
+  return inferred
+}
+
 // ─── Deep-navigation: navIntent validator ─────────────────────────────────────
 //
 // Walks every TouchableOpacity node in the tree. If a touchable is missing
