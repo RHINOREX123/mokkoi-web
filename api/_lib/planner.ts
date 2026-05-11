@@ -449,5 +449,36 @@ export function validatePlannerOutput(
     }
   }
 
+  // Rule (Package A): Profile / Settings / Account screens must declare at
+  // least one menu-row sub-screen, otherwise their menu rows render as dead
+  // taps. The canonical sub-screen ids match the planner-prompt's
+  // MENU-ROW SUB-SCREENS block.
+  const profileLike = out.routeGraph.screens.filter(s =>
+    s.kind === 'screen' && /^(profile|settings|account|about)$/i.test(s.id),
+  )
+  if (profileLike.length > 0) {
+    const canonicalSubScreens = new Set([
+      'addresses',
+      'payment-methods',
+      'notification-settings',
+      'privacy',
+      'help',
+      'about',
+      'edit-profile',
+      'order-history',
+      'preferences',
+      'language-settings',
+    ])
+    const declaredSubScreens = out.routeGraph.screens.filter(s =>
+      s.kind === 'screen' && canonicalSubScreens.has(s.id),
+    )
+    if (declaredSubScreens.length === 0) {
+      issues.push({
+        rule: 'routeGraph.profile_needs_menu_subscreens',
+        detail: `Profile/Settings/Account screen(s) [${profileLike.map(s => s.id).join(', ')}] declared but no menu-row sub-screens (addresses, payment-methods, notification-settings, privacy, help, about, edit-profile, etc.) exist in routeGraph. Menu rows will render as dead taps.`,
+      })
+    }
+  }
+
   return { ok: issues.length === 0, issues }
 }

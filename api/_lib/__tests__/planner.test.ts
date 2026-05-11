@@ -53,6 +53,11 @@ const FITNESS_RESPONSE = {
       { id: 'addWorkout', kind: 'modal', purpose: 'Add a new workout entry' },
       { id: 'progress', kind: 'screen', purpose: 'Progress charts and PRs', dataSource: 'personalRecords' },
       { id: 'profile', kind: 'screen', purpose: 'User profile and settings' },
+      // Package A: menu-row sub-screens for the Profile screen.
+      { id: 'edit-profile', kind: 'screen', purpose: 'Edit account details' },
+      { id: 'notification-settings', kind: 'screen', purpose: 'Notification preferences' },
+      { id: 'privacy', kind: 'screen', purpose: 'Privacy and security' },
+      { id: 'help', kind: 'screen', purpose: 'Help and support' },
     ],
     tabs: ['home', 'workouts', 'progress', 'profile'],
   },
@@ -125,7 +130,8 @@ describe('runPlanner (deep-nav)', () => {
     })
     expect(out.plan.appName).toBe('FitForge')
     expect(Object.keys(out.appData)).toEqual(expect.arrayContaining(['workouts', 'personalRecords', 'meals']))
-    expect(out.routeGraph.screens).toHaveLength(6)
+    // 6 primary screens + 4 menu-row sub-screens (Package A).
+    expect(out.routeGraph.screens).toHaveLength(10)
     expect(out.routeGraph.tabs).toEqual(['home', 'workouts', 'progress', 'profile'])
   })
 })
@@ -186,6 +192,30 @@ describe('validatePlannerOutput', () => {
     const report = validatePlannerOutput(out)
     expect(report.ok).toBe(false)
     expect(report.issues.some(i => i.rule === 'routeGraph.dataSource_unresolved')).toBe(true)
+  })
+
+  // ── Package A: list-row navigation — Profile/Settings need menu sub-screens ─
+  it('flags Profile screen with no menu-row sub-screens (Package A)', async () => {
+    const broken = structuredClone(FITNESS_RESPONSE)
+    // Strip the menu-row sub-screens Package A's fixture added.
+    const subScreenIds = new Set(['edit-profile', 'notification-settings', 'privacy', 'help'])
+    broken.routeGraph.screens = broken.routeGraph.screens.filter(s => !subScreenIds.has(s.id))
+    const out = await runPlanner({ callApi: mockCallApi(broken), prompt: 'fitness', images: [] })
+    const report = validatePlannerOutput(out)
+    expect(report.ok).toBe(false)
+    expect(report.issues.some(i => i.rule === 'routeGraph.profile_needs_menu_subscreens')).toBe(true)
+  })
+
+  it('does not flag a planner output with no Profile/Settings screen', async () => {
+    const minimal = structuredClone(FITNESS_RESPONSE)
+    // Drop the Profile screen entirely — the rule should not fire.
+    minimal.routeGraph.screens = minimal.routeGraph.screens.filter(s =>
+      !['profile', 'edit-profile', 'notification-settings', 'privacy', 'help'].includes(s.id),
+    )
+    minimal.routeGraph.tabs = minimal.routeGraph.tabs.filter(t => t !== 'profile')
+    const out = await runPlanner({ callApi: mockCallApi(minimal), prompt: 'fitness', images: [] })
+    const report = validatePlannerOutput(out)
+    expect(report.issues.some(i => i.rule === 'routeGraph.profile_needs_menu_subscreens')).toBe(false)
   })
 })
 

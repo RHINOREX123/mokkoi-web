@@ -780,8 +780,16 @@ Rules:
 ${routeGraph.screens.map(s => `    "${s.id}" (${s.kind})`).join('\n')}
 - params: include "id" pointing at an appData record id when navigating to a
   detail screen (params: ["id"]). Other params per the routeGraph entry.
-- Every list/grid item that opens a detail screen MUST set navIntent on the
-  outer TouchableOpacity (NOT on inner text/icons).
+- Every list/grid item, list row, or menu row that opens any other screen
+  (detail screen, sub-screen, settings page, etc.) MUST set navIntent on
+  the outer TouchableOpacity (NOT on inner text/icons).
+- Profile / Settings / Account screens render a vertical list of menu rows
+  (Addresses, Payment Methods, Notifications, Privacy, Help, About, etc.).
+  Each row's outer TouchableOpacity MUST carry
+  navIntent: { kind: "push", target: "<sub-screen-id-from-routeGraph>" }
+  matching the destination the planner declared in routeGraph.screens.
+  If no destination exists in routeGraph.screens for a row, OMIT the row
+  entirely — never emit a row whose navIntent target is missing.
 - Tab bar items DO NOT need navIntent — the runtime resolves tabs by id from
   the routeGraph.tabs list.
 

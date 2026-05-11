@@ -77,6 +77,42 @@ ROUTE GRAPH COMPLETENESS RULES:
 - appData collections referenced via dataSource MUST exist in appData and
   contain ≥3 records each.
 
+MENU-ROW SUB-SCREENS (CRITICAL):
+
+If your routeGraph includes a Profile, Settings, Account, or About screen
+(any screen whose primary content is a vertical list of meta-action menu
+rows), you MUST also declare each row's destination screen in
+routeGraph.screens with kind="screen". Without these destinations, the
+rows render as dead taps.
+
+Canonical menu rows and their destination ids — emit the ones that match
+your app's vertical:
+
+  - "Addresses" / "Saved Addresses"        → id: "addresses"
+  - "Payment Methods" / "Cards" / "Wallet" → id: "payment-methods"
+  - "Notifications" (as a settings row)    → id: "notification-settings"
+  - "Privacy" / "Privacy & Security"       → id: "privacy"
+  - "Help" / "Help & Support" / "FAQ"      → id: "help"
+  - "About" / "About <App>"                → id: "about"
+  - "Edit Profile" / "Account Details"     → id: "edit-profile"
+  - "Order History" / "Past Orders"        → id: "order-history"
+  - "Preferences" / "Display" / "Theme"    → id: "preferences"
+  - "Language" / "Region"                  → id: "language-settings"
+
+Rows that are LOGOUT-style (Sign Out, Log Out, Delete Account) do NOT
+need a destination screen — they confirm an action. Either declare a
+modal screen (id: "sign-out-confirm") if confirmation is needed, or
+let them render without navIntent.
+
+RULE: Never emit a Profile / Settings / Account screen without
+declaring destinations for its menu rows. If a sub-screen is not worth
+declaring (too thin, not relevant to the app), OMIT the row entirely
+from the menu — a missing row is better than a dead row.
+
+The screen generator wires each menu row's outer TouchableOpacity to
+navIntent: {kind:"push", target:"<the-id-you-declared>"}. The runtime
+pushes onto the nav stack and renders the sub-screen.
+
 TEXT CONTENT IN DETAIL SCREENS — SENTINEL RULES
 
 Detail screens (kind: "screen", params: ["id"], with a matching
@@ -180,7 +216,7 @@ DICTATED by its semantic role, not invented. Use this mapping exactly:
   - Settings icon (gear / cog glyph)     → navIntent target: "settings"
   - Bell / notifications icon            → navIntent target: "notifications"
   - Share icon (arrow-up-square glyph)   → navIntent kind: "openSheet", target: a "share" modal in routeGraph
-  - Back chevron / arrow-left            → navIntent kind: "pop" (no target needed)
+  - Back chevron / arrow-left            → navIntent kind: "back" (no target needed)
   - Edit / pencil icon                   → navIntent kind: "openSheet", target: an "edit<Entity>" modal
   - Plus / FAB (floating action button)  → navIntent kind: "openSheet", target: the primary "add<Entity>" modal for the current screen
 
@@ -193,12 +229,32 @@ PILL ROW DISAMBIGUATION:
 
 A horizontal row of small rounded chips ("All", "Recent", "Favorites",
 category tags, time filters) below a screen header is a FILTER pill
-row. Filter pills DO NOT navigate. They MUST NOT carry navIntent.
-Tapping a pill changes which records the same screen renders.
+row. Filter pills DO NOT navigate to a different screen — they toggle
+which subset of records the SAME screen renders.
 
-A "pill" that DOES navigate (rare) is actually a category button —
-use a card or list row instead. If it looks like a pill, treat it as
-a filter and omit navIntent.
+Every pill in a filter row MUST carry a toggleState navIntent so the
+runtime knows to highlight the tapped pill (and dim the others):
+
+  navIntent: {
+    kind: "toggleState",
+    group: "<stable-group-id>",   // shared by every pill in the row
+    stateKey: "<this-pill-id>"    // unique per pill within the group
+  }
+
+Rules for group + stateKey:
+  - "group" is a kebab-case identifier scoped to the screen + filter
+    purpose, e.g. "restaurant-category", "workout-type", "order-status".
+    Every pill in the SAME row uses the SAME group.
+  - "stateKey" is a kebab-case identifier for the individual pill,
+    derived from its label, e.g. "all", "pizza", "burgers", "indian".
+    Each pill in a row has a UNIQUE stateKey.
+  - The FIRST pill in the row (typically "All") is the default active
+    pill. The runtime auto-highlights it until the user taps another.
+
+A "pill" that DOES navigate to a different screen (rare) is actually a
+category button — model it as a card or list row instead, with a
+push navIntent. If it looks like a pill row of filter chips, always
+emit toggleState.
 
 NO PILLS ABOVE LIST SCREENS BY DEFAULT:
 
