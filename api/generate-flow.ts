@@ -11,7 +11,7 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
 import { normalizeComponentTree, validateNavIntents } from './_lib/normalizer.js'
-import { repairDeadButtons } from './_lib/dead-button-repair.js'
+import { repairDeadButtons, checkBackButton } from './_lib/dead-button-repair.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
 import { DESIGN_TOKENS, CONTENT_LIBRARY, COMPONENT_TYPES, VIEWPORT_BUDGET, CONTENT_DENSITY, PLATFORM_RULES, QUALITY_CHECKLIST, FUNCTIONAL_APP_RULES } from './_lib/design-system.js'
@@ -909,7 +909,24 @@ keyed off the navigating screen's current params.
           if (validated.warnings.length > 0) {
             console.warn('[deep-nav] nav warnings for screen', planId, validated.warnings)
           }
-          finalTree = repairDeadButtons(finalTree, uuidRouteGraph as any, planId)
+          const repairStats = { buttonsScanned: 0, repaired: 0, toasted: 0, preserved: 0, errors: 0 }
+          finalTree = repairDeadButtons(finalTree, uuidRouteGraph as any, planId, repairStats)
+          if (repairStats.buttonsScanned > 0) {
+            console.log('[deep-nav] dead-button repair', planId, repairStats)
+          }
+          // Warn-only back-button heuristic. Look up this screen's planner
+          // metadata (presentation + params) and check for a back affordance.
+          const meta = routeGraph.screens.find(rs => rs.id === planId)
+          if (meta) {
+            const back = checkBackButton(finalTree, {
+              id: planId,
+              presentation: meta.kind === 'modal' ? 'modal' : 'screen',
+              params: meta.params,
+            })
+            if (back.warnings.length > 0) {
+              console.warn('[deep-nav] back-button warnings', planId, back.warnings)
+            }
+          }
         } catch (err) {
           console.error('[deep-nav] per-screen phase-0 hook failed for', planId, '— falling back to original tree:', err)
           finalTree = tree
