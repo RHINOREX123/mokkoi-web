@@ -10,7 +10,7 @@ import {
 } from './_lib/generation-runs.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
-import { normalizeComponentTree, validateNavIntents, inferCardParamsFromText } from './_lib/normalizer.js'
+import { normalizeComponentTree, validateNavIntents, inferCardParamsFromText, stampFilterChipToggleState } from './_lib/normalizer.js'
 import { repairDeadButtons, checkBackButton } from './_lib/dead-button-repair.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
@@ -960,6 +960,13 @@ ${WIDGET_MODE_RULES}
       // validateNavIntents (when wired in a follow-up) will turn them into
       // noop.
       if (deepNav) rewriteNavIntentTargets(tree, planIdToScreenId)
+      // Stamp toggleState onto filter-pill rows the model emitted without
+      // navIntent. Runs BEFORE validateNavIntents so the hoist pass doesn't
+      // see them as missing-intent rows and backfill noop+"Coming soon".
+      const pillStamps = stampFilterChipToggleState(tree)
+      if (pillStamps > 0) {
+        console.log(`[deep-nav] stamped toggleState on ${pillStamps} filter pill(s) for screen ${planId}`)
+      }
       // Phase 0: validate navIntents against routeGraph (UUID-rewritten form)
       // and run dead-button repair stub. Both are no-ops on the legacy path.
       // Wrapped in a per-screen try/catch so a bug in either hook can't kill

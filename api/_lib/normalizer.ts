@@ -590,6 +590,105 @@ export function inferCardParamsFromText(
   return inferred
 }
 
+// ─── Deep-navigation: stamp toggleState on filter pill rows ───────────────────
+//
+// Production smoke test surfaced: filter pill rows ("All / Pizza / Burgers /
+// Sushi / Indian") still classified at runtime as Deferred reason=filter-chip
+// even after the planner-prompt rewrite instructing the model to emit
+// toggleState on every pill. Model compliance is poor — the prior "pills MUST
+// NOT carry navIntent" rule it was trained on overrides the new instruction
+// for a non-trivial fraction of generations.
+//
+// Server-side fix: detect filter-pill rows by structural signature (a View
+// with flexDirection:'row' whose direct children are all TouchableOpacities,
+// 3+ of them, each with a short text label and no real navIntent) and stamp
+// toggleState onto each pill. Group id is derived from the row's pill labels
+// so multiple pill rows on the same screen get distinct groups; stateKey is
+// the slug of each pill's text.
+//
+// Mirrors the runtime's `isFilterChipClick` heuristic in src/runtime/main.tsx
+// so the same shapes get the same classification — except we fix them at
+// the tree level instead of just deferring at runtime.
+
+function slugifyText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+}
+
+export function stampFilterChipToggleState(tree: any): number {
+  let stamped = 0
+
+  function isPillRow(node: any): { pills: any[] } | null {
+    if (!node || typeof node !== 'object') return null
+    if (node.type !== 'View' && node.type !== 'ScrollView') return null
+    const style = node.style
+    const flexDir = style && typeof style === 'object' ? (style as Record<string, unknown>).flexDirection : undefined
+    if (flexDir !== 'row') return null
+    if (!Array.isArray(node.children) || node.children.length < 3) return null
+    // Every direct child must be a TouchableOpacity (no Text/View mixed in —
+    // those are headers, not chip rows).
+    for (const c of node.children) {
+      if (!c || typeof c !== 'object' || c.type !== 'TouchableOpacity') return null
+    }
+    return { pills: node.children }
+  }
+
+  function isEligiblePill(p: any): { label: string } | null {
+    // Pill must have NO existing real navIntent. noop is fine — we'll overwrite.
+    const intent = p.navIntent
+    if (intent && typeof intent === 'object' && typeof intent.kind === 'string') {
+      if (intent.kind === 'push' || intent.kind === 'openSheet' ||
+          intent.kind === 'back' || intent.kind === 'toggleState') {
+        return null
+      }
+    }
+    // Pill must have a short text label (≤25 chars) and small subtree (chip-y).
+    const text = collectTextContent(p)
+    if (text.length === 0 || text.length > 25) return null
+    return { label: text }
+  }
+
+  function walk(node: any): void {
+    if (!node || typeof node !== 'object') return
+    const row = isPillRow(node)
+    if (row) {
+      const pillLabels: Array<{ pill: any; label: string }> = []
+      let allEligible = true
+      for (const p of row.pills) {
+        const meta = isEligiblePill(p)
+        if (!meta) { allEligible = false; break }
+        pillLabels.push({ pill: p, label: meta.label })
+      }
+      if (allEligible && pillLabels.length >= 3) {
+        // Derive a group id from the concatenated labels — stable per row,
+        // unique across rows on the same screen with different pill sets.
+        const groupSeed = pillLabels.map(p => p.label).join('|')
+        const group = `filter-${slugifyText(groupSeed)}` || 'filter'
+        const seenStateKeys = new Set<string>()
+        for (const { pill, label } of pillLabels) {
+          let stateKey = slugifyText(label) || `pill-${seenStateKeys.size}`
+          // Disambiguate if two pills slugify to the same key (e.g. emoji-only).
+          while (seenStateKeys.has(stateKey)) stateKey = `${stateKey}-x`
+          seenStateKeys.add(stateKey)
+          pill.navIntent = { kind: 'toggleState', group, stateKey }
+          stamped++
+        }
+        // Don't recurse into stamped pills — their children are leaf Text.
+        return
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) walk(c)
+    }
+  }
+
+  walk(tree)
+  return stamped
+}
+
 // ─── Deep-navigation: navIntent validator ─────────────────────────────────────
 //
 // Walks every TouchableOpacity node in the tree. If a touchable is missing
