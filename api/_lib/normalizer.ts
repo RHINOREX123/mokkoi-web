@@ -481,6 +481,237 @@ function stripBubbleStylingFromNonChat(node: any, insideChat: boolean = false): 
   return node
 }
 
+// ─── Deep-navigation: infer card params from card text ────────────────────────
+//
+// Bug observed in production smoke test: tap any restaurant card on Home →
+// Restaurant Detail opens with raw `{{name}}` and `{{description}}` sentinels
+// instead of the tapped restaurant's data. Root cause: the screen-gen LLM
+// emits navIntent: { kind:'push', target:'restaurantDetail' } on the card
+// but OMITS the params object, so the runtime's resolveRecord has no id to
+// look up and returns undefined — sentinel substitution silently no-ops.
+//
+// This pass infers params.id from the card's visible text content: walk the
+// card subtree, collect Text descendants, look for any appData record name
+// that appears in the card text. The longest matching record name wins
+// (avoids a "Spice" record stealing a "Spice Palace" card).
+//
+// Sentinel-only cards (like the detail screen template itself) don't match
+// any literal name, so they're left untouched — no false-positive inference.
+
+function collectTextContent(node: any): string {
+  if (!node) return ''
+  if (typeof node === 'string') return node
+  if (typeof node !== 'object') return ''
+  const parts: string[] = []
+  if (Array.isArray(node.children)) {
+    for (const c of node.children) parts.push(collectTextContent(c))
+  }
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+export interface InferParamsRouteGraph {
+  screens: Array<{
+    id: string
+    kind?: 'screen' | 'modal'
+    dataSource?: string
+    params?: string[]
+  }>
+}
+
+export function inferCardParamsFromText(
+  tree: any,
+  appData: Record<string, unknown> | null | undefined,
+  routeGraph: InferParamsRouteGraph,
+): number {
+  if (!appData || typeof appData !== 'object') return 0
+  // Map: screenId → { collection, paramKey } for any push-targetable screen
+  // declaring a dataSource. We need both — without a paramKey we have no
+  // navIntent.params field to populate.
+  const screenInfo = new Map<string, { collection: string; paramKey: string }>()
+  for (const s of routeGraph?.screens ?? []) {
+    if (s.kind === 'modal') continue
+    if (typeof s.dataSource !== 'string' || s.dataSource.length === 0) continue
+    if (!Array.isArray(s.params) || typeof s.params[0] !== 'string') continue
+    screenInfo.set(s.id, { collection: s.dataSource, paramKey: s.params[0] })
+  }
+  if (screenInfo.size === 0) return 0
+
+  let inferred = 0
+
+  function walk(node: any): void {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'TouchableOpacity') {
+      const intent = node.navIntent
+      if (intent && typeof intent === 'object' && intent.kind === 'push' &&
+          typeof intent.target === 'string') {
+        const info = screenInfo.get(intent.target)
+        if (info) {
+          const existingParams = (intent.params && typeof intent.params === 'object')
+            ? intent.params as Record<string, unknown>
+            : undefined
+          const hasParamKey = existingParams && typeof existingParams[info.paramKey] === 'string' &&
+            (existingParams[info.paramKey] as string).length > 0
+          if (!hasParamKey) {
+            const records = (appData as Record<string, unknown>)[info.collection]
+            if (Array.isArray(records)) {
+              const cardText = collectTextContent(node).toLowerCase()
+              if (cardText) {
+                // Find every record whose name appears in cardText, sort by
+                // name length DESC so the most specific match wins.
+                const matches = records
+                  .map(r => {
+                    if (!r || typeof r !== 'object') return null
+                    const rec = r as Record<string, unknown>
+                    const name = rec.name
+                    if (typeof name !== 'string' || name.length === 0) return null
+                    return { rec, name }
+                  })
+                  .filter((m): m is { rec: Record<string, unknown>; name: string } =>
+                    m !== null && cardText.includes(m.name.toLowerCase()),
+                  )
+                  .sort((a, b) => b.name.length - a.name.length)
+                const best = matches[0]
+                if (best && typeof best.rec.id === 'string' && best.rec.id.length > 0) {
+                  intent.params = { ...(existingParams ?? {}), [info.paramKey]: best.rec.id }
+                  inferred++
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) walk(c)
+    }
+  }
+
+  walk(tree)
+  return inferred
+}
+
+// ─── Deep-navigation: stamp toggleState on filter pill rows ───────────────────
+//
+// Production smoke test surfaced: filter pill rows ("All / Pizza / Burgers /
+// Sushi / Indian") still classified at runtime as Deferred reason=filter-chip
+// even after the planner-prompt rewrite instructing the model to emit
+// toggleState on every pill. Model compliance is poor — the prior "pills MUST
+// NOT carry navIntent" rule it was trained on overrides the new instruction
+// for a non-trivial fraction of generations.
+//
+// Server-side fix: detect filter-pill rows by structural signature (a View
+// with flexDirection:'row' whose direct children are all TouchableOpacities,
+// 3+ of them, each with a short text label and no real navIntent) and stamp
+// toggleState onto each pill. Group id is derived from the row's pill labels
+// so multiple pill rows on the same screen get distinct groups; stateKey is
+// the slug of each pill's text.
+//
+// Mirrors the runtime's `isFilterChipClick` heuristic in src/runtime/main.tsx
+// so the same shapes get the same classification — except we fix them at
+// the tree level instead of just deferring at runtime.
+
+function slugifyText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+}
+
+export function stampFilterChipToggleState(tree: any): number {
+  let stamped = 0
+
+  function isPillRow(node: any): { pills: any[] } | null {
+    if (!node || typeof node !== 'object') return null
+    if (!Array.isArray(node.children) || node.children.length < 3) return null
+    // Every direct child must be a TouchableOpacity (no Text/View mixed in —
+    // those are headers, not chip rows).
+    for (const c of node.children) {
+      if (!c || typeof c !== 'object' || c.type !== 'TouchableOpacity') return null
+    }
+    // Exclude BottomNav-shaped containers (paddingBottom safe-area inset +
+    // top border). The runtime's isBottomNavRow uses the same signal.
+    const style = (node.style && typeof node.style === 'object')
+      ? node.style as Record<string, unknown>
+      : {}
+    const padBottom = typeof style.paddingBottom === 'number' ? style.paddingBottom
+      : typeof style.paddingBottom === 'string' ? parseFloat(style.paddingBottom) : 0
+    const borderTop = typeof style.borderTopWidth === 'number' ? style.borderTopWidth
+      : typeof style.borderTopWidth === 'string' ? parseFloat(style.borderTopWidth) : 0
+    if (padBottom >= 24 && borderTop >= 1) return null
+    // Exclude obviously-vertical containers (column layouts of buttons like
+    // Sign In / Sign Up / Forgot — those are NOT filter pills). If style.flexDirection
+    // is explicitly 'column', bail. Anything else (row, undefined, default) → eligible.
+    if (style.flexDirection === 'column') return null
+    return { pills: node.children }
+  }
+
+  function countDescendants(n: any): number {
+    if (!n || typeof n !== 'object') return 0
+    let c = 1
+    if (Array.isArray(n.children)) for (const k of n.children) c += countDescendants(k)
+    return c
+  }
+
+  function isEligiblePill(p: any): { label: string } | null {
+    // Pill must have NO existing real navIntent. noop is fine — we'll overwrite.
+    const intent = p.navIntent
+    if (intent && typeof intent === 'object' && typeof intent.kind === 'string') {
+      if (intent.kind === 'push' || intent.kind === 'openSheet' ||
+          intent.kind === 'back' || intent.kind === 'toggleState') {
+        return null
+      }
+    }
+    // Pill must have a short text label (≤25 chars).
+    const text = collectTextContent(p)
+    if (text.length === 0 || text.length > 25) return null
+    // Pill must have a small subtree (chip-y). This is what distinguishes a
+    // 5-icon Cuisines row from a 3-button login stack: a chip is icon+text
+    // (~3-6 descendants), a form button or card wraps more structure (10+).
+    // Excludes false-positives where the parent's children include
+    // structurally-complex TouchableOpacities like cards.
+    if (countDescendants(p) > 8) return null
+    return { label: text }
+  }
+
+  function walk(node: any): void {
+    if (!node || typeof node !== 'object') return
+    const row = isPillRow(node)
+    if (row) {
+      const pillLabels: Array<{ pill: any; label: string }> = []
+      let allEligible = true
+      for (const p of row.pills) {
+        const meta = isEligiblePill(p)
+        if (!meta) { allEligible = false; break }
+        pillLabels.push({ pill: p, label: meta.label })
+      }
+      if (allEligible && pillLabels.length >= 3) {
+        // Derive a group id from the concatenated labels — stable per row,
+        // unique across rows on the same screen with different pill sets.
+        const groupSeed = pillLabels.map(p => p.label).join('|')
+        const group = `filter-${slugifyText(groupSeed)}` || 'filter'
+        const seenStateKeys = new Set<string>()
+        for (const { pill, label } of pillLabels) {
+          let stateKey = slugifyText(label) || `pill-${seenStateKeys.size}`
+          // Disambiguate if two pills slugify to the same key (e.g. emoji-only).
+          while (seenStateKeys.has(stateKey)) stateKey = `${stateKey}-x`
+          seenStateKeys.add(stateKey)
+          pill.navIntent = { kind: 'toggleState', group, stateKey }
+          stamped++
+        }
+        // Don't recurse into stamped pills — their children are leaf Text.
+        return
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) walk(c)
+    }
+  }
+
+  walk(tree)
+  return stamped
+}
+
 // ─── Deep-navigation: navIntent validator ─────────────────────────────────────
 //
 // Walks every TouchableOpacity node in the tree. If a touchable is missing
@@ -510,8 +741,98 @@ export interface ValidateNavIntentsResult {
   warnings: string[]
 }
 
+/**
+ * Hoist a navIntent placed on an inner element up to the wrapping
+ * TouchableOpacity (Package A.2).
+ *
+ * Without this pass, screen-gen rows like
+ *   <TouchableOpacity>              ← no navIntent set on the wrapper
+ *     <Icon />
+ *     <View>
+ *       <Text navIntent={...}>Title</Text>  ← intent stranded on inner Text
+ *       <Text>Subtitle</Text>
+ *     </View>
+ *     <Chevron />
+ *   </TouchableOpacity>
+ * get classified at runtime as "Deferred reason=compound" — the click
+ * event bubbles to the outer TouchableOpacity which has no
+ * data-mokkoi-nav set, so no push fires. Observed in production smoke
+ * test on Profile menu rows where the model put navIntent on the
+ * "Addresses" Text instead of the row's TouchableOpacity wrapper.
+ *
+ * Rules:
+ *  - Only hoist when the outer TouchableOpacity has NO navIntent OR a
+ *    noop one. Never overwrite an explicit push/openSheet/back/toggleState
+ *    the model deliberately set.
+ *  - Only hoist if EXACTLY ONE hoistable descendant intent exists.
+ *    Multiple inner intents = ambiguous, leave alone (validator will
+ *    flag whichever survives).
+ *  - Do NOT traverse into nested TouchableOpacities — their descendants
+ *    belong to them. Stops the walk at the first inner TouchableOpacity.
+ *
+ * Mutates in place to match the rest of the normalizer's style.
+ */
+export function hoistInnerNavIntents(tree: any): number {
+  let hoistCount = 0
+
+  function findHoistable(node: any, results: any[], topLevel: boolean): void {
+    if (!node || typeof node !== 'object') return
+    // Stop at nested TouchableOpacity boundaries (except the outer one
+    // we're currently considering).
+    if (!topLevel && node.type === 'TouchableOpacity') return
+    const intent = node.navIntent
+    if (intent && typeof intent === 'object' && typeof intent.kind === 'string') {
+      const kind = intent.kind
+      if (kind === 'push' || kind === 'openSheet' || kind === 'back' || kind === 'toggleState') {
+        if (!topLevel) results.push(node)
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) findHoistable(c, results, false)
+    }
+  }
+
+  function walk(node: any): void {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'TouchableOpacity') {
+      const ownIntent = node.navIntent
+      const ownIsHoistTarget =
+        !ownIntent ||
+        typeof ownIntent !== 'object' ||
+        typeof ownIntent.kind !== 'string' ||
+        ownIntent.kind === 'noop'
+
+      if (ownIsHoistTarget) {
+        const candidates: any[] = []
+        findHoistable(node, candidates, true)
+        if (candidates.length === 1) {
+          node.navIntent = candidates[0].navIntent
+          delete candidates[0].navIntent
+          hoistCount++
+        }
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) walk(c)
+    }
+  }
+
+  walk(tree)
+  return hoistCount
+}
+
 export function validateNavIntents(tree: any, routeGraph: NavIntentRouteGraph): ValidateNavIntentsResult {
   const warnings: string[] = []
+
+  // Package A.2: hoist stranded navIntents on inner elements up to the
+  // wrapping TouchableOpacity BEFORE validation. Compound rows where the
+  // model placed navIntent on an inner Text would otherwise be backfilled
+  // to noop here and toast "Coming soon" at runtime.
+  const hoisted = hoistInnerNavIntents(tree)
+  if (hoisted > 0) {
+    warnings.push(`[navIntent] hoisted ${hoisted} inner navIntent${hoisted === 1 ? '' : 's'} to outer TouchableOpacity wrappers`)
+  }
+
   const screenIds = new Set<string>()
   const sheetIds = new Set<string>()
   for (const s of routeGraph?.screens ?? []) {
@@ -537,6 +858,16 @@ export function validateNavIntents(tree: any, routeGraph: NavIntentRouteGraph): 
           warnings.push(`[navIntent] openSheet target "${intent.target}" not in routeGraph modals at ${path} — replacing with noop`)
           node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
         }
+      } else if (intent.kind === 'toggleState') {
+        // Pure-visual filter-pill toggle (Workstream D). No routeGraph reference;
+        // group + stateKey must both be non-empty strings, otherwise strip.
+        if (typeof intent.group !== 'string' || intent.group.length === 0 ||
+            typeof intent.stateKey !== 'string' || intent.stateKey.length === 0) {
+          warnings.push(`[navIntent] toggleState missing group/stateKey at ${path} — replacing with noop`)
+          node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
+        }
+      } else if (intent.kind === 'back') {
+        // Back chevron — no target needed. Allow through.
       } else if (intent.kind !== 'noop') {
         warnings.push(`[navIntent] unknown kind "${intent.kind}" at ${path} — replacing with noop`)
         node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }

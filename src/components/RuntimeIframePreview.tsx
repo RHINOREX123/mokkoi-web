@@ -457,11 +457,13 @@ export function RuntimeIframePreview({
         if (import.meta.env.DEV) console.warn(`[mokkoi-click] navIntent target='${navIntent.target}' not found; falling through`)
       }
 
-      // Back-glyph short-circuit. The wirer doesn't reliably wire back arrows
-      // (planner connections key on forward triggers), so we maintain an
-      // in-session history stack and pop on back. Empty stack falls back to
-      // the project's entry screen — typically the first generated screen.
-      if (kind === 'IconButton' && BACK_GLYPHS.has(label.trim().toLowerCase())) {
+      // Shared back-navigation handler. The wirer doesn't reliably wire back
+      // arrows (planner connections key on forward triggers), so we maintain
+      // an in-session history stack and pop on back. Empty stack falls back
+      // to the project's entry screen — typically the first generated screen.
+      // Called from BOTH the explicit navIntent.kind:'back' path AND the
+      // glyph-name fallback so they share the same behavior.
+      function navigateBack(resolution: 'back_intent' | 'back_history' | 'back_noop'): void {
         const stack = historyRef.current
         let target: string | undefined
         while (stack.length) {
@@ -476,16 +478,29 @@ export function RuntimeIframePreview({
           if (entry && entry !== activeScreenId) target = entry
         }
         if (target) {
-          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=backHistory matched=${target}`)
+          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=back matched=${target}`)
           const targetScreen = screens.find(s => s.id === target) as
             | (GeneratedScreen & ScreenExtras) | undefined
           setModalAnim(targetScreen?.presentation === 'modal')
           onActiveScreenChange(target)
-          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'back_history' })
+          trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution })
         } else {
-          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=backHistory matched=none`)
+          if (import.meta.env.DEV) console.log(`[mokkoi-click] parent → kind=${kind} label='${label}' tried=back matched=none`)
           trackEvent('runtime_click', { project_id: projectId, kind, has_label, resolution: 'back_noop' })
         }
+      }
+
+      // 1. Explicit back navIntent (planner / screen-gen emits this on back
+      //    chevrons per HEADER_ICON_NAV_RULES). Always takes precedence.
+      if (navIntent && navIntent.kind === 'back') {
+        navigateBack('back_intent')
+        return
+      }
+
+      // 2. Glyph-name fallback for back chevrons the model didn't tag with
+      //    navIntent. Same behavior as the explicit path.
+      if (kind === 'IconButton' && BACK_GLYPHS.has(label.trim().toLowerCase())) {
+        navigateBack('back_history')
         return
       }
 

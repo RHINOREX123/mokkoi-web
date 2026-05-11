@@ -920,11 +920,20 @@ function App() {
                           while generation is in progress (avoids booting
                           Snack on a partial tree). */}
                       {(() => {
-                        // Flag is strict-equality on '1'. Setting to 'true',
-                        // 'yes', or any other truthy string will not enable.
-                        // This is intentional for explicit opt-in.
-                        const useRuntime = typeof window !== 'undefined'
-                          && window.localStorage.getItem('mokkoi_runtime_iframe_preview') === '1'
+                        // localStorage flag is strict — '1' forces runtime on,
+                        // '0' forces Snack. Without the flag set, default to
+                        // runtime on Vercel preview deploys (Snack's webPreview
+                        // origin restrictions hang on *.vercel.app subdomains
+                        // outside the production allowlist). Production
+                        // mokkoi.com keeps Snack as the default — no behavior
+                        // change for end users on the real domain.
+                        const useRuntime = (() => {
+                          if (typeof window === 'undefined') return false
+                          const flag = window.localStorage.getItem('mokkoi_runtime_iframe_preview')
+                          if (flag === '1') return true
+                          if (flag === '0') return false
+                          return window.location.hostname.endsWith('.vercel.app')
+                        })()
                         const sharedProps = {
                           screens: screens.generatedScreens.filter(s => s.tree),
                           connections: screens.connections,

@@ -10,7 +10,7 @@ import {
 } from './_lib/generation-runs.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserPlan as getUserTier, getFreeAppCount, decideAppGate, FREE_APP_LIMIT } from './_lib/userPlan.js'
-import { normalizeComponentTree, validateNavIntents } from './_lib/normalizer.js'
+import { normalizeComponentTree, validateNavIntents, inferCardParamsFromText, stampFilterChipToggleState } from './_lib/normalizer.js'
 import { repairDeadButtons, checkBackButton } from './_lib/dead-button-repair.js'
 import { expandComponents } from '../lib/component-library.js'
 import { validateBottomNavLabels } from './_lib/bottomnav-validator.js'
@@ -599,6 +599,11 @@ async function handleApp(
     emitMilestone(res, 'analyzing', 'Analyzing your prompt…')
     sendSSE(res, { type: 'status', phase: 'planning', message: 'Planning your app...' })
 
+    // Milestone (a.5): planning — fires while the planner LLM is reasoning
+    // about app architecture. Closes the 5-10s gap between analyzing and
+    // identified so the timeline doesn't feel idle during plan generation.
+    emitMilestone(res, 'planning', 'Designing app architecture…')
+
     const templateMatch = matchTemplate(prompt)
     if (templateMatch) {
       console.log(`[planner] template match: ${templateMatch.templateId} (score=${templateMatch.score.toFixed(2)})`)
@@ -780,8 +785,26 @@ Rules:
 ${routeGraph.screens.map(s => `    "${s.id}" (${s.kind})`).join('\n')}
 - params: include "id" pointing at an appData record id when navigating to a
   detail screen (params: ["id"]). Other params per the routeGraph entry.
-- Every list/grid item that opens a detail screen MUST set navIntent on the
-  outer TouchableOpacity (NOT on inner text/icons).
+- Every list/grid item, list row, or menu row that opens any other screen
+  (detail screen, sub-screen, settings page, etc.) MUST set navIntent on
+  the OUTERMOST TouchableOpacity that wraps the whole row (NOT on inner
+  text, icons, chevrons, badges, or subtitle elements).
+- Profile / Settings / Account screens render a vertical list of menu rows
+  (Addresses, Payment Methods, Notifications, Privacy, Help, About, etc.).
+  Each row is a SINGLE TouchableOpacity wrapping icon + title + subtitle +
+  chevron. The navIntent goes on THAT WRAPPER, not on any child element.
+  Required shape:
+    {
+      "type": "TouchableOpacity",
+      "navIntent": { "kind": "push", "target": "<sub-screen-id-from-routeGraph>" },
+      "children": [ <icon>, <title text>, <subtitle text>, <chevron> ]
+    }
+  matching the destination the planner declared in routeGraph.screens.
+  If no destination exists in routeGraph.screens for a row, OMIT the row
+  entirely — never emit a row whose navIntent target is missing.
+- Putting navIntent on an inner Text or Icon node causes the runtime
+  to classify the click as "compound deferred" and show a "not wired"
+  toast. ALWAYS hoist navIntent to the row's outer wrapper.
 - Tab bar items DO NOT need navIntent — the runtime resolves tabs by id from
   the routeGraph.tabs list.
 
@@ -906,6 +929,11 @@ ${WIDGET_MODE_RULES}
       planIdToScreenId.set(planId, crypto.randomUUID())
     }
 
+    // Milestone (c.5): wiring — screen-gen LLM has returned. Now we run
+    // navIntent validation + UUID rewriting + dead-button repair across every
+    // screen. Real work, real anchor point.
+    emitMilestone(res, 'wiring', 'Wiring navigation between screens…')
+
     // Sequential async loop (was screens.map) so we can persist each screen
     // to the DB mid-stream. The LLM has already returned all screens by this
     // point — we're iterating over an in-memory array, so awaiting per-screen
@@ -932,6 +960,13 @@ ${WIDGET_MODE_RULES}
       // validateNavIntents (when wired in a follow-up) will turn them into
       // noop.
       if (deepNav) rewriteNavIntentTargets(tree, planIdToScreenId)
+      // Stamp toggleState onto filter-pill rows the model emitted without
+      // navIntent. Runs BEFORE validateNavIntents so the hoist pass doesn't
+      // see them as missing-intent rows and backfill noop+"Coming soon".
+      const pillStamps = stampFilterChipToggleState(tree)
+      if (pillStamps > 0) {
+        console.log(`[deep-nav] stamped toggleState on ${pillStamps} filter pill(s) for screen ${planId}`)
+      }
       // Phase 0: validate navIntents against routeGraph (UUID-rewritten form)
       // and run dead-button repair stub. Both are no-ops on the legacy path.
       // Wrapped in a per-screen try/catch so a bug in either hook can't kill
@@ -951,6 +986,14 @@ ${WIDGET_MODE_RULES}
           finalTree = validated.tree
           if (validated.warnings.length > 0) {
             console.warn('[deep-nav] nav warnings for screen', planId, validated.warnings)
+          }
+          // Sentinel-substitution rescue: infer params.id on cards whose
+          // model-emitted navIntent omitted the params object. Without
+          // params.id, the runtime's resolveRecord returns undefined and
+          // detail screens render with raw `{{name}}` text.
+          const inferredCount = inferCardParamsFromText(finalTree, appData, uuidRouteGraph)
+          if (inferredCount > 0) {
+            console.log(`[deep-nav] inferred params on ${inferredCount} card(s) for screen ${planId}`)
           }
           const repairStats = { buttonsScanned: 0, repaired: 0, toasted: 0, preserved: 0, errors: 0 }
           finalTree = repairDeadButtons(finalTree, uuidRouteGraph as any, planId, repairStats)
@@ -1030,6 +1073,12 @@ ${WIDGET_MODE_RULES}
         tabs: (routeGraph.tabs ?? []).map(t => planIdToScreenId.get(t) || t),
       }
     }
+
+    // Milestone (c.7): finalizing — every screen normalized, navIntents
+    // validated, dead-buttons repaired. Closing the timeline with this
+    // before the terminal 'complete' event so the user sees a believable
+    // last beat before "Done".
+    emitMilestone(res, 'finalizing', 'Finalizing design tokens…')
 
     const homePlanId = plan.screens.find(s => s.isHome)?.id || plan.screens[0]?.id
     const homeScreenId = planIdToScreenId.get(homePlanId) || normalizedScreens[0]?.id
