@@ -537,6 +537,16 @@ export function validateNavIntents(tree: any, routeGraph: NavIntentRouteGraph): 
           warnings.push(`[navIntent] openSheet target "${intent.target}" not in routeGraph modals at ${path} — replacing with noop`)
           node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
         }
+      } else if (intent.kind === 'toggleState') {
+        // Pure-visual filter-pill toggle (Workstream D). No routeGraph reference;
+        // group + stateKey must both be non-empty strings, otherwise strip.
+        if (typeof intent.group !== 'string' || intent.group.length === 0 ||
+            typeof intent.stateKey !== 'string' || intent.stateKey.length === 0) {
+          warnings.push(`[navIntent] toggleState missing group/stateKey at ${path} — replacing with noop`)
+          node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }
+        }
+      } else if (intent.kind === 'back') {
+        // Back chevron — no target needed. Allow through.
       } else if (intent.kind !== 'noop') {
         warnings.push(`[navIntent] unknown kind "${intent.kind}" at ${path} — replacing with noop`)
         node.navIntent = { kind: 'noop', toastMessage: 'Coming soon' }

@@ -368,7 +368,7 @@ function RuntimeApp() {
       if (e.data.type === 'mokkoi:click-deferred') {
         const reason = String(e.data.reason ?? '')
         showToast(reason === 'list-row'
-          ? 'List-row taps need macro metadata (Phase 2)'
+          ? 'Coming soon'
           : 'This click type is not yet wired')
         return
       }

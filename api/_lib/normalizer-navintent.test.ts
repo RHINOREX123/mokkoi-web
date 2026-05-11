@@ -95,4 +95,53 @@ describe('validateNavIntents', () => {
     const { warnings } = validateNavIntents(tree, routeGraph)
     expect(warnings).toHaveLength(0)
   })
+
+  it('preserves valid toggleState navIntent (filter pills)', () => {
+    const tree: any = {
+      type: 'View',
+      children: [
+        { type: 'TouchableOpacity', navIntent: { kind: 'toggleState', group: 'category', stateKey: 'all' } },
+        { type: 'TouchableOpacity', navIntent: { kind: 'toggleState', group: 'category', stateKey: 'pizza' } },
+      ],
+    }
+    const { warnings } = validateNavIntents(tree, routeGraph)
+    expect(tree.children[0].navIntent).toEqual({ kind: 'toggleState', group: 'category', stateKey: 'all' })
+    expect(tree.children[1].navIntent).toEqual({ kind: 'toggleState', group: 'category', stateKey: 'pizza' })
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('strips toggleState when group is empty/missing', () => {
+    const tree: any = {
+      type: 'View',
+      children: [
+        { type: 'TouchableOpacity', navIntent: { kind: 'toggleState', group: '', stateKey: 'pizza' } },
+        { type: 'TouchableOpacity', navIntent: { kind: 'toggleState', stateKey: 'pizza' } },
+      ],
+    }
+    const { warnings } = validateNavIntents(tree, routeGraph)
+    expect(tree.children[0].navIntent).toEqual({ kind: 'noop', toastMessage: 'Coming soon' })
+    expect(tree.children[1].navIntent).toEqual({ kind: 'noop', toastMessage: 'Coming soon' })
+    expect(warnings).toHaveLength(2)
+    expect(warnings[0]).toMatch(/toggleState missing group\/stateKey/)
+  })
+
+  it('strips toggleState when stateKey is empty', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'toggleState', group: 'category', stateKey: '' },
+    }
+    const { warnings } = validateNavIntents(tree, routeGraph)
+    expect(tree.navIntent).toEqual({ kind: 'noop', toastMessage: 'Coming soon' })
+    expect(warnings[0]).toMatch(/toggleState missing group\/stateKey/)
+  })
+
+  it('preserves back navIntent (no target needed)', () => {
+    const tree: any = {
+      type: 'TouchableOpacity',
+      navIntent: { kind: 'back' },
+    }
+    const { warnings } = validateNavIntents(tree, routeGraph)
+    expect(tree.navIntent).toEqual({ kind: 'back' })
+    expect(warnings).toHaveLength(0)
+  })
 })
