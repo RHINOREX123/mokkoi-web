@@ -6,8 +6,11 @@
 
 export type MilestoneKind =
   | 'analyzing'
+  | 'planning'
   | 'identified'
   | 'generating'
+  | 'wiring'
+  | 'finalizing'
   | 'complete'
   | 'error'
 
@@ -20,7 +23,15 @@ export interface MilestoneEvent {
   status: MilestoneStatus
 }
 
-const KIND_ORDER: MilestoneKind[] = ['analyzing', 'identified', 'generating', 'complete']
+const KIND_ORDER: MilestoneKind[] = [
+  'analyzing',
+  'planning',
+  'identified',
+  'generating',
+  'wiring',
+  'finalizing',
+  'complete',
+]
 
 export function makeMilestone(
   kind: MilestoneKind,
