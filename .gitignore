@@ -31,3 +31,6 @@ dist-ssr
 .worktrees/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+
+# Mokkoi X-ray local data (file store, eval output)
+.xray-data/
