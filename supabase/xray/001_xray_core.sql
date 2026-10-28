@@ -134,7 +134,14 @@ alter table public.xray_reports  enable row level security;
 alter table public.xray_evidence enable row level security;
 alter table public.xray_findings enable row level security;
 
+-- Table privileges. New tables are not exposed to the Data API automatically on this
+-- project, so grant exactly what each role needs: the server (service_role) reads and
+-- writes everything; signed-in users may only select (RLS filters to their own rows);
+-- anonymous visitors get nothing.
 revoke all on public.xray_orders, public.xray_reports, public.xray_evidence, public.xray_findings from anon;
+grant usage on schema public to service_role, authenticated;
+grant select, insert, update, delete on public.xray_orders, public.xray_reports, public.xray_evidence, public.xray_findings to service_role;
+grant select on public.xray_orders, public.xray_reports, public.xray_evidence, public.xray_findings to authenticated;
 
 drop policy if exists "xray orders: owner reads" on public.xray_orders;
 create policy "xray orders: owner reads" on public.xray_orders

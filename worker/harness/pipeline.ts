@@ -66,10 +66,19 @@ export async function runHarness(input: HarnessInput, opts: HarnessOptions): Pro
   const errors: string[] = []
   const runSpecialist = async (section: SectionKey) => {
     try {
-      const r = await opts.client.call(
-        { role: 'specialist', label: `specialist:${section}`, cachedSystem: prefix, instructions: SPECIALIST_INSTRUCTIONS[section], input: specialistInput, schema: SpecialistZ, maxTokens: 20000 },
-        budget,
-      )
+      const call = () =>
+        opts.client.call(
+          { role: 'specialist', label: `specialist:${section}`, cachedSystem: prefix, instructions: SPECIALIST_INSTRUCTIONS[section], input: specialistInput, schema: SpecialistZ, maxTokens: 20000 },
+          budget,
+        )
+      let r = await call()
+      // An answer with nothing at all in it (seen in about 1 in 5 live calls) is almost
+      // always a dud, not a clean bill of health: retry once.
+      const empty = (d: SpecialistOut) => d.findings.length + d.strengths.length + d.claimChecks.length + d.questions.length === 0
+      if (empty(r.data)) {
+        log(`specialist ${section}: empty answer, retrying once`)
+        r = await call()
+      }
       results.set(section, r.data)
       log(`specialist ${section}: ${r.data.findings.length} findings ($${r.costUsd.toFixed(3)}, cache read ${r.usage.cacheReadTokens})`)
     } catch (err) {
