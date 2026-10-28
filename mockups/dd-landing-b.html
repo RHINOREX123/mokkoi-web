@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mokkoi — See inside before you buy (Direction B: Lightbox)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400;62..125,500;62..125,700;62..125,800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+/* Direction B — "The lightbox"
+   A business shown like a radiograph on a lightbox: the website rendered as an x-ray film,
+   with a radiologist's marker circling what's wrong. Film blue, not black; marker yellow for notes. */
+:root{
+  --film:#0F2A3A;        /* page */
+  --film-2:#143547;      /* panels */
+  --line:#2A5266;        /* rules */
+  --bone:#EAF6F8;        /* text */
+  --bone-soft:#A9C6D0;
+  --glow:#9FE7FF;        /* x-ray lines */
+  --marker:#FFD166;      /* annotations */
+  --crit:#FF6B6B;        /* critical */
+  --ok:#7EE0A8;
+  --sans:'Archivo', system-ui, sans-serif;
+  --hand:'Caveat', cursive;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--film);color:var(--bone);font:400 17px/1.6 var(--sans);font-stretch:100%;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--marker);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+.nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+.logo{font:800 24px/1 var(--sans);font-stretch:125%;letter-spacing:-.01em;text-decoration:none}
+.nav ul{display:flex;gap:28px;list-style:none;padding:0;font-size:15px;color:var(--bone-soft)}
+.nav ul a{text-decoration:none}
+.nav ul a:hover{color:var(--bone)}
+
+.btn{font:700 16px var(--sans);padding:15px 22px;border-radius:999px;border:0;background:var(--bone);color:var(--film);cursor:pointer;text-decoration:none;display:inline-block}
+.btn:hover{background:#fff}
+.btn.line{background:transparent;color:var(--bone);box-shadow:inset 0 0 0 1.5px var(--bone-soft)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:.95fr 1.05fr;gap:48px;align-items:center;padding:48px 0 96px}
+h1{font:800 clamp(46px,6.4vw,86px)/.95 var(--sans);font-stretch:125%;letter-spacing:-.02em}
+.lede{margin-top:24px;font-size:19px;color:var(--bone-soft);max-width:29em}
+form.run{margin-top:32px;display:flex;background:var(--film-2);border-radius:999px;padding:6px;box-shadow:inset 0 0 0 1.5px var(--line);max-width:560px}
+form.run input{flex:1;min-width:0;background:transparent;border:0;color:var(--bone);font:500 16px var(--sans);padding:0 18px}
+form.run input::placeholder{color:#6F94A3}
+form.run input:focus-visible{outline:none}
+form.run:focus-within{box-shadow:inset 0 0 0 2px var(--marker)}
+.fine{margin-top:12px;font-size:14px;color:var(--bone-soft)}
+
+/* the x-ray film */
+.lightbox{position:relative;border-radius:18px;background:radial-gradient(120% 90% at 50% 40%,#1D4A60 0%,#0D2533 75%);padding:28px;box-shadow:0 0 0 1px var(--line),0 30px 80px -30px #000}
+.film{display:block;width:100%;height:auto}
+.film .x{stroke:var(--glow);fill:none;stroke-width:1.4;opacity:.85}
+.film .xf{fill:var(--glow);opacity:.14}
+.film .mk{stroke:var(--marker);fill:none;stroke-width:2.5;stroke-linecap:round}
+.film .mk.crit{stroke:var(--crit)}
+.film text{font:600 21px var(--hand);fill:var(--marker)}
+.film text.crit{fill:var(--crit)}
+.film-cap{display:flex;justify-content:space-between;margin-top:14px;font-size:13px;color:var(--bone-soft)}
+@media (prefers-reduced-motion:no-preference){
+  .film .mk{stroke-dasharray:420;stroke-dashoffset:420;animation:draw .9s ease-out forwards}
+  .film .mk.d2{animation-delay:.5s}.film .mk.d3{animation-delay:1s}
+  .film text{opacity:0;animation:fade .4s forwards}
+  .film text.d1{animation-delay:.7s}.film text.d2{animation-delay:1.2s}.film text.d3{animation-delay:1.7s}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes fade{to{opacity:1}}
+}
+
+section{padding:96px 0;border-top:1px solid var(--line)}
+h2.sec{font:800 clamp(32px,4.2vw,52px)/1.02 var(--sans);font-stretch:118%;letter-spacing:-.015em;max-width:16em}
+.sec-intro{margin-top:16px;color:var(--bone-soft);max-width:36em}
+
+/* findings as annotated notes */
+.notes{margin-top:48px;display:grid;grid-template-columns:repeat(2,1fr);gap:40px 56px}
+.note{padding-left:22px;border-left:3px solid var(--marker)}
+.note.crit{border-left-color:var(--crit)}
+.note .hand{font:600 24px/1.1 var(--hand);color:var(--marker)}
+.note.crit .hand{color:var(--crit)}
+.note h3{font:700 22px/1.25 var(--sans);font-stretch:105%;margin-top:6px}
+.note p{margin-top:8px;color:var(--bone-soft);font-size:15.5px}
+
+/* steps */
+.steps{margin-top:48px;display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-radius:18px;overflow:hidden;box-shadow:0 0 0 1px var(--line)}
+.step{padding:30px;background:var(--film-2);border-right:1px solid var(--line)}
+.step:last-child{border-right:0}
+.step b{display:block;font:800 15px var(--sans);color:var(--glow)}
+.step h3{font:700 22px/1.25 var(--sans);font-stretch:105%;margin-top:10px}
+.step p{margin-top:8px;color:var(--bone-soft);font-size:15.5px}
+
+/* pricing as a list, not cards */
+.rows{margin-top:44px;border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:1.1fr 2fr auto;gap:32px;align-items:center;padding:28px 0;border-bottom:1px solid var(--line)}
+.row h3{font:800 26px/1.1 var(--sans);font-stretch:118%}
+.row .p{font:800 40px/1 var(--sans);font-stretch:118%;color:var(--glow);margin-top:6px}
+.row p{color:var(--bone-soft);font-size:15.5px}
+.row.main h3::after{content:"Most chosen";margin-left:12px;font:600 13px var(--sans);font-stretch:100%;color:var(--film);background:var(--marker);padding:3px 10px;border-radius:99px;vertical-align:5px}
+.compare{margin-top:24px;color:var(--bone-soft)}
+.compare b{color:var(--bone)}
+
+.sellers{display:grid;grid-template-columns:1.2fr 1fr;gap:56px;align-items:center}
+.seal{justify-self:center;width:240px;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;text-align:center;background:var(--film-2);box-shadow:0 0 0 1.5px var(--ok),0 0 0 12px var(--film),0 0 0 13.5px var(--ok)}
+.seal b{display:block;font:800 30px/1 var(--sans);font-stretch:118%;color:var(--ok)}
+.seal span{font-size:14px;color:var(--bone-soft)}
+
+.rules{margin-top:40px;display:grid;grid-template-columns:repeat(3,1fr);gap:36px}
+.rules h3{font:700 19px/1.3 var(--sans)}
+.rules p{margin-top:6px;color:var(--bone-soft);font-size:15px}
+
+footer{border-top:1px solid var(--line);padding:36px 0 56px;font-size:14px;color:var(--bone-soft);display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+
+@media (max-width:900px){
+  .hero,.sellers{grid-template-columns:1fr}
+  .notes,.steps,.rules{grid-template-columns:1fr}
+  .step{border-right:0;border-bottom:1px solid var(--line)}
+  .row{grid-template-columns:1fr;gap:12px}
+  .nav ul{display:none}
+}
+@media (max-width:520px){
+  form.run{flex-direction:column;border-radius:18px;gap:6px}
+  form.run input{padding:12px 14px}
+  .lightbox{padding:14px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav" aria-label="Main">
+    <a class="logo" href="#">mokkoi</a>
+    <ul>
+      <li><a href="#catches">What we catch</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#sellers">For sellers</a></li>
+    </ul>
+    <a class="btn line" href="#" style="padding:10px 18px;font-size:15px">Sign in</a>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <h1>See inside before you buy.</h1>
+      <p class="lede">Mokkoi x-rays a SaaS or AI app listed on Flippa or Acquire. The code, the traffic, the revenue claims: what's really there, with evidence for every finding.</p>
+      <form class="run" onsubmit="return false">
+        <label for="url" style="position:absolute;left:-9999px">Listing or website URL</label>
+        <input id="url" type="url" placeholder="Paste a listing or website URL">
+        <button class="btn" type="submit">X-ray it for $49</button>
+      </form>
+      <p class="fine">Report in about 15 minutes. Public data only, unless the seller shares access.</p>
+    </div>
+
+    <figure class="lightbox">
+      <svg class="film" viewBox="0 0 560 420" role="img" aria-label="A website shown as an x-ray, with three problems circled: revenue claim, dead backend, and outdated code">
+        <!-- browser frame -->
+        <rect class="x" x="20" y="20" width="520" height="380" rx="10"/>
+        <line class="x" x1="20" y1="48" x2="540" y2="48"/>
+        <circle class="x" cx="38" cy="34" r="4"/><circle class="x" cx="52" cy="34" r="4"/><circle class="x" cx="66" cy="34" r="4"/>
+        <!-- nav + hero -->
+        <rect class="xf" x="44" y="66" width="70" height="12" rx="3"/>
+        <rect class="x" x="430" y="64" width="86" height="18" rx="9"/>
+        <rect class="xf" x="44" y="108" width="270" height="22" rx="4"/>
+        <rect class="xf" x="44" y="138" width="210" height="22" rx="4"/>
+        <rect class="xf" x="44" y="172" width="240" height="8" rx="4"/>
+        <rect class="xf" x="44" y="186" width="200" height="8" rx="4"/>
+        <rect class="x" x="44" y="210" width="110" height="28" rx="14"/>
+        <!-- dashboard preview -->
+        <rect class="x" x="340" y="104" width="176" height="134" rx="8"/>
+        <polyline class="x" points="352,214 382,196 408,204 436,170 462,178 500,130"/>
+        <text x="356" y="128" style="font:600 13px Archivo,sans-serif;fill:#9FE7FF;opacity:.8">$1.7K MRR</text>
+        <!-- feature row -->
+        <rect class="x" x="44" y="266" width="148" height="100" rx="8"/>
+        <rect class="x" x="206" y="266" width="148" height="100" rx="8"/>
+        <rect class="x" x="368" y="266" width="148" height="100" rx="8"/>
+        <!-- annotations -->
+        <ellipse class="mk crit" cx="410" cy="124" rx="78" ry="24"/>
+        <text class="crit d1" x="300" y="80">real MRR: $968</text>
+        <ellipse class="mk d2" cx="99" cy="224" rx="70" ry="26"/>
+        <text class="d2" x="34" y="276" style="paint-order:stroke;stroke:#0F2A3A;stroke-width:6px">sign-in goes nowhere</text>
+        <ellipse class="mk d3" cx="442" cy="316" rx="88" ry="60"/>
+        <text class="d3" x="368" y="398" style="paint-order:stroke;stroke:#0F2A3A;stroke-width:6px">untouched since 2021</text>
+      </svg>
+      <figcaption class="film-cap"><span>Sample findings from real listings</span><span>3 issues found</span></figcaption>
+    </figure>
+  </header>
+</div>
+
+<section id="catches">
+  <div class="wrap">
+    <h2 class="sec">What the listing photos don't show.</h2>
+    <p class="sec-intro">Each note links to the evidence behind it. These come from real checks.</p>
+    <div class="notes">
+      <div class="note crit"><div class="hand">inflated revenue</div><h3>The title says $1.7K MRR. The platform says $968.</h3><p>We check every claim in the listing against its own verified data.</p></div>
+      <div class="note"><div class="hand">losing pricing power</div><h3>Same price since 2016, 50 times more included.</h3><p>Archived pricing pages show a business quietly giving more away to keep customers.</p></div>
+      <div class="note crit"><div class="hand">dead backend</div><h3>The website loads. The app behind it doesn't.</h3><p>We check that the database and API actually respond, not just the homepage.</p></div>
+      <div class="note"><div class="hand">won't transfer</div><h3>The core data licence may not come with the sale.</h3><p>We flag licences, personal accounts and keys that stay with the founder.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2 class="sec">From link to verdict.</h2>
+    <div class="steps">
+      <div class="step"><b>Step 1</b><h3>Paste the link</h3><p>A Flippa or Acquire listing, or just the website. No seller involvement needed.</p></div>
+      <div class="step"><b>Step 2</b><h3>Mokkoi investigates</h3><p>Stack, security, domain history, traffic, reviews and every claim. With seller access: Stripe, analytics and code.</p></div>
+      <div class="step"><b>Step 3</b><h3>You get a verdict</h3><p>A score, red flags with evidence, and the questions to ask before you make an offer.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <h2 class="sec">Screen ten deals for the price of one audit.</h2>
+    <div class="rows">
+      <div class="row"><div><h3>Quick X-ray</h3><div class="p">$49</div></div><p>Public data only. Claims vs evidence, tech and security, domain history, questions for the seller. Ready in about 15 minutes.</p><a class="btn line" href="#">Run a Quick X-ray</a></div>
+      <div class="row main"><div><h3>Full X-ray</h3><div class="p">$199</div></div><p>Everything in Quick, plus real revenue, churn and customers from Stripe, real traffic from analytics, and true margin. Ready within 24 hours.</p><a class="btn" href="#">Order a Full X-ray</a></div>
+      <div class="row"><div><h3>Deep X-ray</h3><div class="p">$499</div></div><p>Everything in Full, plus a code and security audit, hidden AI and API costs, and handover risks. Ready within 48 hours.</p><a class="btn line" href="#">Order a Deep X-ray</a></div>
+    </div>
+    <p class="compare">Human due diligence for small deals usually costs <b>$1,500 to $2,900</b>. Use Mokkoi to choose which deal deserves one.</p>
+  </div>
+</section>
+
+<section id="sellers">
+  <div class="wrap sellers">
+    <div>
+      <h2 class="sec">Selling? Let buyers see the proof.</h2>
+      <p class="sec-intro">Get a Mokkoi Verified report on your own business and link it in your listing. Checked numbers build trust, and serious buyers move faster.</p>
+      <p style="margin-top:28px"><a class="btn" href="#">Get verified from $149</a></p>
+    </div>
+    <div class="seal" aria-hidden="true"><div><b>Verified</b><span>by Mokkoi</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="sec">How we keep it fair.</h2>
+    <div class="rules">
+      <div><h3>Evidence or it isn't in the report</h3><p>Every finding links to its source. What we can't prove is marked as a question, not a fact.</p></div>
+      <div><h3>We only look, unless the owner says yes</h3><p>Without the seller's consent we use public information only. No logins, no testing their systems.</p></div>
+      <div><h3>Informational, not advice</h3><p>Mokkoi helps you ask better questions. It isn't legal, financial or investment advice.</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <footer>
+    <span>© 2026 Mokkoi</span>
+    <span><a href="#">Sample report</a> &nbsp; <a href="#">Terms</a> &nbsp; <a href="#">Privacy</a></span>
+  </footer>
+</div>
+</body>
+</html>

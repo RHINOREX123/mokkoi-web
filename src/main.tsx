@@ -5,6 +5,8 @@ import { initAnalytics } from './lib/analytics'
 import './index.css'
 import App from './App'
 import LandingPage from './pages/LandingPage'
+import XrayLanding from './pages/XrayLanding'
+import XrayDocPage from './pages/XrayDocPage'
 import AuthPage from './pages/AuthPage'
 import Dashboard from './pages/Dashboard'
 import AuthGuard from './components/AuthGuard'
@@ -75,7 +77,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RootPage />} />
+        <Route path="/" element={<XrayLanding />} />
+        {/* Previous mobile-builder home (dashboard / old landing), kept reachable during the pivot. */}
+        <Route path="/legacy" element={<RootPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/projects" element={<ProjectsRedirect />} />
@@ -95,9 +99,10 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/blog" element={<ComingSoonPage title="Blog" blurb="We're writing. Follow along for build logs, launches, and what we're learning." />} />
         <Route path="/changelog" element={<ComingSoonPage title="Changelog" blurb="Every update, every fix. Public changelog coming soon." />} />
         <Route path="/about" element={<ComingSoonPage title="About Mokkoi" blurb="We're building the fastest way to go from idea to mobile app. More about the team and mission soon." />} />
-        <Route path="/support" element={<ComingSoonPage title="Support" blurb="Need help? Reach us on Twitter — we reply fast." />} />
-        <Route path="/terms" element={<ComingSoonPage title="Terms of Service" blurb="Formal terms are being drafted. By using Mokkoi today you agree to the standard terms: don't abuse the service, don't generate harmful content, you own what you build." />} />
-        <Route path="/privacy" element={<ComingSoonPage title="Privacy Policy" blurb="Formal policy coming soon. Short version: we store only what's needed to run the service (your projects, auth, usage), we don't sell data, we use Supabase/Stripe/Anthropic as subprocessors." />} />
+        <Route path="/support" element={<XrayDocPage page="support" />} />
+        <Route path="/terms" element={<XrayDocPage page="terms" />} />
+        <Route path="/privacy" element={<XrayDocPage page="privacy" />} />
+        <Route path="/refunds" element={<XrayDocPage page="refunds" />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

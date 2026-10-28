@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mokkoi — Know what you're buying (Direction A: Inspection report)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Direction A — "The inspection report"
+   The page itself reads like a filled-in report: the hero IS a report, claims get struck through
+   and corrected in ink. Navy ink on white paper, stamp red for contradictions. */
+:root{
+  --paper:#FFFFFF;
+  --paper-2:#F3F5F9;     /* table rows, panels */
+  --ink:#14213D;         /* text, rules */
+  --ink-soft:#4A5672;
+  --rule:#D9DEE8;
+  --stamp:#C8102E;       /* contradicted */
+  --amber:#B7791F;       /* unverified */
+  --verified:#1F7A4D;    /* verified */
+  --focus:#2F5BEA;
+  --display:'Bricolage Grotesque', system-ui, sans-serif;
+  --body:'Public Sans', system-ui, sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--paper);color:var(--ink);font:400 17px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+
+/* nav */
+.nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+.logo{font:800 24px/1 var(--display);letter-spacing:-.02em;text-decoration:none}
+.logo span{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--stamp);margin-left:3px;vertical-align:2px}
+.nav ul{display:flex;gap:28px;list-style:none;padding:0;font-size:15px;color:var(--ink-soft)}
+.nav ul a{text-decoration:none}
+.nav ul a:hover{color:var(--ink)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:start;padding:56px 0 88px}
+h1{font:800 clamp(44px,6.2vw,80px)/.98 var(--display);letter-spacing:-.035em}
+.lede{margin-top:24px;font-size:19px;color:var(--ink-soft);max-width:30em}
+form.run{margin-top:32px;display:flex;gap:10px;flex-wrap:wrap}
+form.run input{flex:1 1 280px;min-width:0;font:500 16px var(--body);padding:16px 18px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);color:var(--ink)}
+form.run input::placeholder{color:#8A93A8}
+.btn{font:600 16px var(--body);padding:16px 22px;border-radius:10px;border:2px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
+.btn:hover{background:#0B1529}
+.btn.ghost{background:transparent;color:var(--ink)}
+.fine{margin-top:12px;font-size:14px;color:var(--ink-soft)}
+
+/* the report sheet in the hero */
+.sheet{border:2px solid var(--ink);border-radius:14px;background:var(--paper);box-shadow:10px 10px 0 var(--paper-2), 10px 10px 0 2px var(--ink)}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 22px;border-bottom:2px solid var(--ink)}
+.sheet-head h2{font:700 18px/1.2 var(--display)}
+.sheet-head p{font-size:13px;color:var(--ink-soft);margin-top:2px}
+.score{display:flex;align-items:baseline;gap:4px;padding:6px 12px;border:2px solid var(--amber);border-radius:8px;color:var(--amber);font:800 28px/1 var(--display);white-space:nowrap}
+.score small{font:600 13px var(--body)}
+.verdict{padding:16px 22px;font-size:15px;border-bottom:1px solid var(--rule)}
+.verdict strong{font-weight:600}
+table.claims{width:100%;border-collapse:collapse;font-size:14.5px}
+table.claims th{text-align:left;font-weight:600;color:var(--ink-soft);padding:10px 22px;background:var(--paper-2);font-size:13px}
+table.claims td{padding:12px 22px;border-top:1px solid var(--rule);vertical-align:top}
+.claim s{text-decoration-color:var(--stamp);text-decoration-thickness:2px;color:var(--ink-soft)}
+.fix{display:block;margin-top:2px;color:var(--stamp);font-weight:600}
+.tag{display:inline-block;font-size:12.5px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.tag.ok{background:#E3F2EA;color:var(--verified)}
+.tag.no{background:#FBE5E8;color:var(--stamp)}
+.tag.warn{background:#FBF1DE;color:var(--amber)}
+.sheet-foot{padding:14px 22px;font-size:13px;color:var(--ink-soft);border-top:1px solid var(--rule)}
+
+/* sections */
+section{padding:88px 0;border-top:2px solid var(--ink)}
+h2.sec{font:800 clamp(32px,4vw,48px)/1.05 var(--display);letter-spacing:-.03em;max-width:18em}
+.sec-intro{margin-top:16px;color:var(--ink-soft);max-width:36em}
+
+/* catches: real findings as clippings */
+.finds{margin-top:44px;display:grid;grid-template-columns:repeat(2,1fr);gap:0;border:2px solid var(--ink);border-radius:14px;overflow:hidden}
+.find{padding:28px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.find:nth-child(2n){border-right:0}
+.find:nth-last-child(-n+2){border-bottom:0}
+.find h3{font:700 21px/1.25 var(--display);margin-top:10px}
+.find p{margin-top:8px;color:var(--ink-soft);font-size:15.5px}
+
+/* steps: real sequence */
+.steps{margin-top:44px;display:grid;grid-template-columns:repeat(3,1fr);gap:32px;counter-reset:s}
+.step{counter-increment:s;border-top:2px solid var(--ink);padding-top:18px}
+.step::before{content:counter(s);font:800 44px/1 var(--display);color:var(--rule)}
+.step h3{font:700 21px/1.3 var(--display);margin-top:10px}
+.step p{margin-top:8px;color:var(--ink-soft);font-size:15.5px}
+
+/* pricing */
+.plans{margin-top:44px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.plan{border:2px solid var(--ink);border-radius:14px;padding:28px;display:flex;flex-direction:column}
+.plan.main{background:var(--ink);color:#fff}
+.plan h3{font:700 22px var(--display)}
+.price{font:800 52px/1 var(--display);letter-spacing:-.03em;margin:18px 0 4px}
+.plan .when{font-size:14px;opacity:.75}
+.plan ul{margin:20px 0 26px;padding-left:18px;font-size:15px;display:grid;gap:8px;flex:1}
+.plan.main .btn{background:#fff;color:var(--ink);border-color:#fff}
+.compare{margin-top:22px;font-size:15px;color:var(--ink-soft)}
+.compare b{color:var(--ink)}
+
+/* sellers band */
+.sellers{display:grid;grid-template-columns:1.2fr 1fr;gap:56px;align-items:center}
+.badge{justify-self:center;width:250px;aspect-ratio:1;border-radius:50%;border:3px solid var(--verified);display:grid;place-items:center;text-align:center;color:var(--verified);transform:rotate(-8deg);box-shadow:inset 0 0 0 8px var(--paper),inset 0 0 0 10px var(--verified)}
+.badge b{display:block;font:800 30px/1 var(--display)}
+.badge span{font-size:13px;font-weight:600}
+
+/* rules */
+.rules{margin-top:40px;display:grid;grid-template-columns:repeat(3,1fr);gap:32px}
+.rules h3{font:700 19px/1.3 var(--display)}
+.rules p{margin-top:6px;color:var(--ink-soft);font-size:15px}
+
+footer{border-top:2px solid var(--ink);padding:36px 0 56px;font-size:14px;color:var(--ink-soft);display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+
+@media (max-width:900px){
+  .hero,.sellers{grid-template-columns:1fr}
+  .finds{grid-template-columns:1fr}
+  .find{border-right:0}
+  .find:nth-last-child(2){border-bottom:1px solid var(--rule)}
+  .steps,.plans,.rules{grid-template-columns:1fr}
+  .nav ul{display:none}
+  .sheet{box-shadow:6px 6px 0 var(--paper-2),6px 6px 0 2px var(--ink)}
+}
+@media (max-width:520px){
+  table.claims th:nth-child(3),table.claims td:nth-child(3){display:none}
+  table.claims td,table.claims th{padding-left:16px;padding-right:16px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .claim s{background:linear-gradient(var(--stamp),var(--stamp)) no-repeat 0 55%/0 2px;text-decoration:none;animation:strike .6s .5s forwards}
+  .claim .fix{opacity:0;animation:show .3s 1.1s forwards}
+  @keyframes strike{to{background-size:100% 2px}}
+  @keyframes show{to{opacity:1}}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav" aria-label="Main">
+    <a class="logo" href="#">mokkoi<span aria-hidden="true"></span></a>
+    <ul>
+      <li><a href="#catches">What we catch</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#sellers">For sellers</a></li>
+    </ul>
+    <a class="btn ghost" href="#run" style="padding:10px 16px;font-size:15px">Sign in</a>
+  </nav>
+
+  <header class="hero" id="run">
+    <div>
+      <h1>Know what you're buying.</h1>
+      <p class="lede">Mokkoi checks a SaaS or AI app before you buy it on Flippa or Acquire. We look at the code, the traffic and the revenue claims, and show you the evidence for everything we find.</p>
+      <form class="run" onsubmit="return false">
+        <label for="url" class="sr" style="position:absolute;left:-9999px">Listing or website URL</label>
+        <input id="url" type="url" placeholder="Paste a Flippa listing or website URL">
+        <button class="btn" type="submit">Run a Quick X-ray for $49</button>
+      </form>
+      <p class="fine">Report in about 15 minutes. Public data only, unless the seller shares access.</p>
+    </div>
+
+    <article class="sheet" aria-label="Sample report">
+      <div class="sheet-head">
+        <div>
+          <h2>Sample: AI video SaaS on Flippa</h2>
+          <p>Asking $25,000, checked 29 Oct 2026</p>
+        </div>
+        <div class="score" aria-label="Score 41 out of 100">41<small>/100</small></div>
+      </div>
+      <p class="verdict"><strong>Don't value this on the headline.</strong> The listing's own data shows about half the MRR the title claims.</p>
+      <table class="claims">
+        <thead><tr><th>The listing says</th><th>We found</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="claim"><s>~$1.7K MRR</s><span class="fix">$968 MRR, 18 subscribers</span></td>
+            <td><span class="tag no">Contradicted</span></td>
+            <td>Flippa metrics panel</td>
+          </tr>
+          <tr>
+            <td class="claim">80% margin</td>
+            <td><span class="tag warn">Doesn't add up</span></td>
+            <td>Profit vs revenue math</td>
+          </tr>
+          <tr>
+            <td class="claim">10% churn</td>
+            <td><span class="tag warn">Ask</span></td>
+            <td>Monthly churn, about 70% a year</td>
+          </tr>
+          <tr>
+            <td class="claim">Stripe connected</td>
+            <td><span class="tag ok">Verified</span></td>
+            <td>Flippa data integration</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="sheet-foot">Full report includes 6 more checks, red flags and questions for the seller.</p>
+    </article>
+  </header>
+</div>
+
+<section id="catches">
+  <div class="wrap">
+    <h2 class="sec">Things sellers don't put in the listing.</h2>
+    <p class="sec-intro">Every finding comes with the evidence behind it: a screenshot, a record, a link. These are from real checks.</p>
+    <div class="finds">
+      <div class="find"><span class="tag no">Revenue</span><h3>The title says $1.7K MRR. The platform says $968.</h3><p>We compare every claim in the listing against the listing's own verified data.</p></div>
+      <div class="find"><span class="tag warn">Market</span><h3>Same price since 2016, 50 times more included.</h3><p>Archived pricing pages show when a business has been quietly losing pricing power.</p></div>
+      <div class="find"><span class="tag no">Tech</span><h3>The app's backend no longer exists.</h3><p>The site loads, but sign-in can't work. We check that the database and API actually respond.</p></div>
+      <div class="find"><span class="tag warn">Transfer</span><h3>The core data licence may not transfer.</h3><p>We flag what you'd lose on handover: licences, personal accounts, keys tied to the founder.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2 class="sec">How a report is made.</h2>
+    <div class="steps">
+      <div class="step"><h3>Paste the link</h3><p>A Flippa or Acquire listing, or just the website. Nothing to install, no seller needed.</p></div>
+      <div class="step"><h3>Mokkoi investigates</h3><p>Stack, security, domain history, traffic, reviews and every listing claim. With seller access: Stripe, analytics and code.</p></div>
+      <div class="step"><h3>You get a verdict</h3><p>A score, red flags with evidence, and the exact questions to ask the seller before you make an offer.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <h2 class="sec">Check ten deals for the price of one audit.</h2>
+    <div class="plans">
+      <div class="plan">
+        <h3>Quick X-ray</h3>
+        <div class="price">$49</div>
+        <div class="when">Ready in about 15 minutes</div>
+        <ul><li>Public data only</li><li>Claims vs evidence</li><li>Tech, security, domain history</li><li>Questions for the seller</li></ul>
+        <a class="btn ghost" href="#run">Run a Quick X-ray</a>
+      </div>
+      <div class="plan main">
+        <h3>Full X-ray</h3>
+        <div class="price">$199</div>
+        <div class="when">Ready within 24 hours</div>
+        <ul><li>Everything in Quick</li><li>Real revenue, churn and customers from Stripe</li><li>Real traffic from analytics</li><li>True costs and margin</li></ul>
+        <a class="btn" href="#run">Order a Full X-ray</a>
+      </div>
+      <div class="plan">
+        <h3>Deep X-ray</h3>
+        <div class="price">$499</div>
+        <div class="when">Ready within 48 hours</div>
+        <ul><li>Everything in Full</li><li>Code and security audit</li><li>Hidden AI and API costs</li><li>Handover risks</li></ul>
+        <a class="btn ghost" href="#run">Order a Deep X-ray</a>
+      </div>
+    </div>
+    <p class="compare">Human due diligence for small deals usually costs <b>$1,500 to $2,900</b>. Use Mokkoi to decide which deal deserves one.</p>
+  </div>
+</section>
+
+<section id="sellers">
+  <div class="wrap sellers">
+    <div>
+      <h2 class="sec">Selling? Show buyers the proof first.</h2>
+      <p class="sec-intro">Get a Mokkoi Verified report on your own business and link it in your listing. Buyers trust numbers someone else checked, and serious ones move faster.</p>
+      <p style="margin-top:28px"><a class="btn" href="#">Get verified from $149</a></p>
+    </div>
+    <div class="badge" aria-hidden="true"><div><b>Verified</b><span>by Mokkoi</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="sec">How we keep it fair.</h2>
+    <div class="rules">
+      <div><h3>Evidence or it isn't in the report</h3><p>Every finding links to its source. Anything we can't prove is marked as a question, not a fact.</p></div>
+      <div><h3>We only look, unless the owner says yes</h3><p>Without the seller's consent we use public information only. No logins, no testing their systems.</p></div>
+      <div><h3>Informational, not advice</h3><p>Mokkoi helps you ask better questions. It isn't legal, financial or investment advice.</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <footer>
+    <span>© 2026 Mokkoi</span>
+    <span><a href="#">Sample report</a> &nbsp; <a href="#">Terms</a> &nbsp; <a href="#">Privacy</a></span>
+  </footer>
+</div>
+</body>
+</html>

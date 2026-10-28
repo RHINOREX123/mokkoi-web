@@ -21,6 +21,33 @@
 }
 
 /* ============================================================
+   Mokkoi X-ray (due diligence) brand tokens
+   ------------------------------------------------------------
+   Light "inspection report" look: navy ink on white, ultramarine
+   brand, marker yellow for highlights. Red/amber/green are reserved
+   for report verdicts only. Spec: docs/mokkoi-due-diligence-spec-2026-10-29.md
+   ============================================================ */
+:root {
+  --xr-paper: #FFFFFF;
+  --xr-paper-2: #F3F5F9;
+  --xr-ink: #14213D;
+  --xr-ink-soft: #4A5672;
+  --xr-rule: #D9DEE8;
+  --xr-brand: #2440E6;
+  --xr-brand-deep: #1A31B8;
+  --xr-brand-tint: #EEF1FF;
+  --xr-marker: #FFC83D;
+  --xr-contradicted: #C8102E;
+  --xr-contradicted-bg: #FBE5E8;
+  --xr-unverified: #B7791F;
+  --xr-unverified-bg: #FBF1DE;
+  --xr-verified: #1F7A4D;
+  --xr-verified-bg: #E3F2EA;
+  --xr-font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --xr-font-body: 'Public Sans', system-ui, sans-serif;
+}
+
+/* ============================================================
    Dashboard V2 design tokens
    ------------------------------------------------------------
    Locally-scoped to dashboard surfaces. Existing --color-mokkoi-*
