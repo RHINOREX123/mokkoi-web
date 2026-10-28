@@ -7,7 +7,7 @@ import './xray-landing.css'
 import './xray/order.css'
 
 const PLAN_OPTIONS = [
-  ...XRAY_PLANS.map((p) => ({ id: p.id as XrayPlan, name: p.name, price: p.price, when: p.when, blurb: p.features[0] + (p.features[1] ? `, ${p.features[1].toLowerCase()}` : '') })),
+  ...XRAY_PLANS.map((p) => ({ id: p.id as XrayPlan, name: p.name, price: p.price, when: p.when, blurb: p.features[0] + (p.features[1] ? `, ${p.features[1][0].toLowerCase()}${p.features[1].slice(1)}` : '') })),
   { id: 'verified' as XrayPlan, name: XRAY_VERIFIED_PLAN.name, price: XRAY_VERIFIED_PLAN.price, when: XRAY_VERIFIED_PLAN.when, blurb: 'For sellers: a checked report on your own business to share with buyers' },
 ]
 
