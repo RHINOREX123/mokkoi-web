@@ -1,7 +1,7 @@
 // Eval runner: re-runs the benchmark targets from recorded fixtures and scores whether each
 // known finding was found. Run it after every prompt or skill change.
 //
-//   npx tsx worker/evals/run.ts [--dir <eval dir>] [--case pointpin] [--mock] [--live]
+//   npx tsx worker/evals/run.ts [--dir <eval dir>] [--case <id>] [--mock] [--live]
 //
 // The eval set (cases.json + fixtures) lives outside this public repo, because it is built
 // from private sample reports. Point XRAY_EVAL_DIR (or --dir) at it.

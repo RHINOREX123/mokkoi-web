@@ -81,7 +81,7 @@ export interface GetOptions {
 }
 
 export interface SafeHttpOptions {
-  /** Registrable domains of the business being checked, e.g. ["pointp.in"]. Subdomains are allowed. */
+  /** Registrable domains of the business being checked, e.g. ["example.com"]. Subdomains are allowed. */
   targetDomains: string[]
   extraHosts?: string[]
   mode?: FixtureMode

@@ -45,10 +45,10 @@ describe('api/xray', () => {
   })
 
   it('creates an order awaiting payment', async () => {
-    const r = await call('POST', { action: 'order' }, { plan: 'quick', listing_url: 'flippa.com/14580347', website_url: 'pointp.in', email: 'Buyer@Example.com', terms: true })
+    const r = await call('POST', { action: 'order' }, { plan: 'quick', listing_url: 'flippa.com/12345678', website_url: 'example-saas.com', email: 'Buyer@Example.com', terms: true })
     expect(r.status).toBe(201)
     const o = await store.getOrder(r.json.id as string)
-    expect(o).toMatchObject({ status: 'awaiting_payment', listing_url: 'https://flippa.com/14580347', website_url: 'https://pointp.in/', email: 'buyer@example.com' })
+    expect(o).toMatchObject({ status: 'awaiting_payment', listing_url: 'https://flippa.com/12345678', website_url: 'https://example-saas.com/', email: 'buyer@example.com' })
   })
 
   it('keeps admin closed without the token', async () => {

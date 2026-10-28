@@ -22,7 +22,7 @@ describe('bundle secret scan', () => {
   })
 
   it('finds backends the front end calls', () => {
-    expect(findBackends('fetch("https://qsqbawyubkrcosthiqzj.supabase.co/rest/v1")')).toEqual([{ kind: 'Supabase', host: 'qsqbawyubkrcosthiqzj.supabase.co' }])
+    expect(findBackends('fetch("https://abcdefghijklmnopqrst.supabase.co/rest/v1")')).toEqual([{ kind: 'Supabase', host: 'abcdefghijklmnopqrst.supabase.co' }])
   })
 
   it('mask keeps only a prefix and suffix', () => {
@@ -45,7 +45,7 @@ describe('Flippa listing parser', () => {
 
 describe('site helpers', () => {
   it('fingerprints Rails and legacy trackers', () => {
-    const fp = fingerprint({ server: 'nginx + Phusion Passenger 6.1.1', 'x-runtime': '0.1' }, ['_pointpin_dashboard_session=abc; path=/'], `<script src="//connect.facebook.net/en_US/fbds.js"></script> ga('create','UA-1234567-1')`)
+    const fp = fingerprint({ server: 'nginx + Phusion Passenger 6.1.1', 'x-runtime': '0.1' }, ['_acme_dashboard_session=abc; path=/'], `<script src="//connect.facebook.net/en_US/fbds.js"></script> ga('create','UA-1234567-1')`)
     expect(fp.stack.some((s) => s.includes('Rails'))).toBe(true)
     expect(fp.trackers.some((t) => t.includes('Universal Analytics'))).toBe(true)
     expect(fp.trackers.some((t) => t.includes('fbds'))).toBe(true)
@@ -63,7 +63,7 @@ describe('site helpers', () => {
   })
 
   it('finds registrable domains', () => {
-    expect(registrableDomain('geo.pointp.in')).toBe('pointp.in')
+    expect(registrableDomain('api.example.io')).toBe('example.io')
     expect(registrableDomain('app.shop.co.uk')).toBe('shop.co.uk')
   })
 })

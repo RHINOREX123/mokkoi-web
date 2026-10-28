@@ -33,7 +33,7 @@ describe('rubric score', () => {
     const lows = Array.from({ length: 10 }, () => f('low'))
     expect(rubricScore(lows, []).score).toBe(94)
   })
-  it('lands a PointPin-like mix in the yellow band', () => {
+  it('lands a typical small-SaaS mix in the yellow band', () => {
     const findings = [f('high'), f('high'), ...Array.from({ length: 6 }, () => f('medium')), ...Array.from({ length: 6 }, () => f('low'))]
     const claims = [{ status: 'contradicted' as const }, ...Array.from({ length: 8 }, () => ({ status: 'unverified' as const }))]
     const r = rubricScore(findings, claims)
