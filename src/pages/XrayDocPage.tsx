@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { XRAY_CONTACT_EMAIL } from '../constants/xray'
 import { XrayNav, XrayFooter } from './xray/chrome'
+import SmoothScroll from './xray/SmoothScroll'
 import './xray-landing.css'
 
 // NOTE: first-draft policies written for launch. Have them reviewed by a lawyer before
@@ -107,6 +108,7 @@ export default function XrayDocPage({ page }: { page: DocId }) {
   const doc = DOCS[page]
   return (
     <div className="xr">
+      <SmoothScroll />
       <div className="xr-wrap">
         <XrayNav />
         <main className="xr-doc">

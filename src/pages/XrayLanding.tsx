@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react'
 import { XRAY_PLANS, xrayOrderHref } from '../constants/xray'
 import { SAMPLES, FINDINGS, CHECK_GROUPS, COMPARE_ROWS, FAQ } from './xray/content'
 import { XrayNav, RunForm, XrayFooter } from './xray/chrome'
+import SmoothScroll from './xray/SmoothScroll'
 import './xray-landing.css'
 
 const STEPS = [
@@ -22,12 +24,27 @@ function scoreTone(score: number) {
   return 'contradicted'
 }
 
+/** Score that counts up from 0 when a sample is shown (writes to the DOM, no re-renders). */
+function Score({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const reduce = useReducedMotion()
+  useEffect(() => {
+    const el = ref.current
+    if (!el || reduce) return
+    const controls = animate(0, value, { duration: 0.9, ease: 'easeOut', onUpdate: (v) => { el.textContent = String(Math.round(v)) } })
+    return () => controls.stop()
+  }, [value, reduce])
+  return <span ref={ref}>{value}</span>
+}
+
 export default function XrayLanding() {
   const [sampleId, setSampleId] = useState(SAMPLES[0].id)
   const sample = SAMPLES.find((s) => s.id === sampleId) ?? SAMPLES[0]
+  const reduce = useReducedMotion()
 
   return (
     <div className="xr">
+      <SmoothScroll />
       <div className="xr-wrap">
         <XrayNav home />
 
@@ -58,8 +75,13 @@ export default function XrayLanding() {
                 </button>
               ))}
             </div>
-            <article
+            <AnimatePresence mode="wait" initial={false}>
+            <motion.article
               key={sample.id}
+              initial={reduce ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduce ? { opacity: 1 } : { opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
               className="xr-sheet"
               id="xr-sample-panel"
               role="tabpanel"
@@ -71,7 +93,7 @@ export default function XrayLanding() {
                   <p>{sample.meta}</p>
                 </div>
                 <div className={`xr-score xr-score-${scoreTone(sample.score)}`} aria-label={`Score ${sample.score} out of 100`}>
-                  {sample.score}<small>/100</small>
+                  <Score value={sample.score} /><small>/100</small>
                 </div>
               </div>
               <p className="xr-verdict"><strong>{sample.verdictLead}</strong> {sample.verdict}</p>
@@ -92,7 +114,8 @@ export default function XrayLanding() {
                 </tbody>
               </table>
               <p className="xr-sheet-foot">A full report adds red flags, evidence links and questions for the seller.</p>
-            </article>
+            </motion.article>
+            </AnimatePresence>
           </div>
         </header>
       </div>
