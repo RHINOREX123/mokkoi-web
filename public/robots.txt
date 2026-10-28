@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /r/
+Disallow: /legacy
+
+Sitemap: https://mokkoi.com/sitemap.xml
