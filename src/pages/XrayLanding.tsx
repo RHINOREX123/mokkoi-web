@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react'
 import { XRAY_PLANS, xrayOrderHref } from '../constants/xray'
 import { SAMPLES, FINDINGS, CHECK_GROUPS, COMPARE_ROWS, FAQ } from './xray/content'
@@ -198,7 +199,7 @@ export default function XrayLanding() {
                 <div className="xr-price">{p.price}</div>
                 <div className="xr-when">{p.when}</div>
                 <ul>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
-                <a className={`xr-btn${'featured' in p && p.featured ? '' : ' xr-btn-ghost'}`} href={xrayOrderHref(p.id)}>{p.cta}</a>
+                <Link className={`xr-btn${'featured' in p && p.featured ? '' : ' xr-btn-ghost'}`} to={xrayOrderHref(p.id)}>{p.cta}</Link>
               </div>
             ))}
           </div>
@@ -217,7 +218,7 @@ export default function XrayLanding() {
               Get a Mokkoi Verified report on your own business and link it in your listing. Buyers trust numbers
               someone else checked, and serious ones move faster.
             </p>
-            <p className="xr-band-cta"><a className="xr-btn" href={xrayOrderHref('verified')}>Get verified from $149</a></p>
+            <p className="xr-band-cta"><Link className="xr-btn" to={xrayOrderHref('verified')}>Get verified from $149</Link></p>
           </div>
           <div className="xr-badge" aria-hidden="true"><div><b>Verified</b><span>by Mokkoi</span></div></div>
         </div>

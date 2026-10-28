@@ -1,4 +1,6 @@
 /* Mokkoi X-ray landing. Tokens live in src/index.css (--xr-*). Everything is scoped under .xr. */
+/* The legacy app paints body black; on X-ray pages overscroll should show paper, not black. */
+html:has(.xr), body:has(.xr) { background-color: var(--xr-paper); }
 .xr { background: var(--xr-paper); color: var(--xr-ink); font: 400 17px/1.6 var(--xr-font-body); -webkit-font-smoothing: antialiased; min-height: 100vh; }
 .xr a { color: inherit; }
 .xr :focus-visible { outline: 3px solid var(--xr-brand); outline-offset: 2px; border-radius: 4px; }
