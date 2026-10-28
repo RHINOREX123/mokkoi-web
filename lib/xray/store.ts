@@ -56,7 +56,7 @@ export function getStore(): XrayStore {
   if (cached) return cached
   if (supabaseConfigured()) {
     cached = new SupabaseStore(createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } }))
-  } else if (process.env.VERCEL) {
+  } else if (process.env.VERCEL || process.env.XRAY_REQUIRE_SUPABASE) {
     throw new Error('X-ray storage is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).')
   } else {
     cached = new FileStore(process.env.XRAY_DATA_DIR || '.xray-data')

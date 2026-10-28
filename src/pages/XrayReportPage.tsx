@@ -43,7 +43,7 @@ export default function XrayReportPage() {
         <Link className="xr-logo" to="/">mokkoi<span aria-hidden="true" /></Link>
         {state.kind === 'ready' && (
           <span className="xr-r-bar-note">
-            Private report. Anyone with this link can read it.{' '}
+            <span className="xr-r-bar-text">Private report. Anyone with this link can read it. </span>
             <button type="button" className="xr-r-print" onClick={() => window.print()}>Save as PDF</button>
           </span>
         )}

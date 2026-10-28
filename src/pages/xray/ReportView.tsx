@@ -50,6 +50,8 @@ export default function ReportView({ report, approvedAt }: { report: XrayReport;
   const r = report
   const title = r.target.title || host(r.target.websiteUrl ?? r.target.listingUrl)
   const evidenceIndex = new Map(r.evidence.map((e) => [e.key, e]))
+  const websiteOnly = r.target.marketplace === 'website'
+  const listingId = r.target.listingUrl.match(/\/(\d{6,})/)?.[1]
 
   return (
     <article className="xr-r">
@@ -59,7 +61,7 @@ export default function ReportView({ report, approvedAt }: { report: XrayReport;
             <p className="xr-r-kind">{PLAN_LABELS[r.plan]} report</p>
             <h1>{title}</h1>
             <dl className="xr-r-meta">
-              <div><dt>Listing</dt><dd><a href={r.target.listingUrl} rel="noopener noreferrer nofollow" target="_blank">{host(r.target.listingUrl)}{r.target.listingUrl.match(/\/(\d{6,})/)?.[1] ? ` #${r.target.listingUrl.match(/\/(\d{6,})/)![1]}` : ''}</a></dd></div>
+              {!websiteOnly && <div><dt>Listing</dt><dd><a href={r.target.listingUrl} rel="noopener noreferrer nofollow" target="_blank">{host(r.target.listingUrl)}{listingId ? ` #${listingId}` : ''}</a></dd></div>}
               {r.target.websiteUrl && <div><dt>Website</dt><dd><a href={r.target.websiteUrl} rel="noopener noreferrer nofollow" target="_blank">{host(r.target.websiteUrl)}</a></dd></div>}
               <div><dt>Checked</dt><dd>{day(r.generatedAt)}</dd></div>
               <div><dt>Data used</dt><dd>{r.accessLevel === 0 ? 'Public information only' : 'Public information plus seller-shared access'}</dd></div>
@@ -92,11 +94,11 @@ export default function ReportView({ report, approvedAt }: { report: XrayReport;
 
         <div className="xr-r-main">
           {r.claims.length > 0 && (
-            <Section id="claims" title="Claims vs evidence" intro="What the listing says, checked against what we could find. Unverified means public data can't confirm it either way.">
+            <Section id="claims" title="Claims vs evidence" intro={`What the ${websiteOnly ? 'site' : 'listing'} says, checked against what we could find. Unverified means public data can't confirm it either way.`}>
               <div className="xr-r-tablewrap">
                 <table className="xr-r-claims">
                   <thead>
-                    <tr><th scope="col">The listing says</th><th scope="col">Status</th><th scope="col">What we found</th></tr>
+                    <tr><th scope="col">{websiteOnly ? 'The site says' : 'The listing says'}</th><th scope="col">Status</th><th scope="col">What we found</th></tr>
                   </thead>
                   <tbody>
                     {r.claims.map((c, i) => (

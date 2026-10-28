@@ -25,7 +25,7 @@ function Confirmation({ placed }: { placed: Placed }) {
       <ol className="xr-o-next">
         <li><strong>Payment link.</strong> We'll email a payment link for {plan.price} to {placed.email}, usually within a few hours.</li>
         <li><strong>We run the checks.</strong> {placed.plan === 'quick' ? 'Once paid, Mokkoi runs the Quick X-ray and a person reviews it before it goes out.' : 'Once paid, we start work and keep you posted.'}</li>
-        <li><strong>Your report.</strong> You get a private link. {plan.when}.</li>
+        <li><strong>Your report.</strong> You get a private link by email. {placed.plan === 'quick' ? 'Usually within a few hours of payment.' : `${plan.when} of payment.`}</li>
       </ol>
       <p className="xr-fine">Order reference {placed.id.slice(0, 8)}. Questions? Write to <a href={`mailto:${XRAY_CONTACT_EMAIL}`}>{XRAY_CONTACT_EMAIL}</a>.</p>
       <p><Link className="xr-btn xr-btn-ghost" to="/">Back to Mokkoi</Link></p>

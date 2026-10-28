@@ -99,8 +99,8 @@ export default function XrayAdminPage() {
     try {
       const j = await api<{ note?: string; email?: { sent: boolean; reason?: string }; report?: { share_token: string } }>('admin', { body: { op, orderId: o.id, reportId: o.latest_report?.id } })
       const mail = j.email ? (j.email.sent ? ' Email sent to the customer.' : ` Email not sent (${j.email.reason}); send the link yourself.`) : ''
-      setNotice(`${label}: done.${j.note ? ` ${j.note}.` : ''}${mail}`)
-      if (j.report?.share_token) await copyLink(j.report.share_token, false)
+      const link = j.report?.share_token ? ` ${await copyLink(j.report.share_token, false)}` : ''
+      setNotice(`${label}: done.${j.note ? ` ${j.note}.` : ''}${mail}${link}`)
       await load()
     } catch (e) {
       setNotice(`${label} failed: ${(e as Error).message}`)
@@ -109,19 +109,24 @@ export default function XrayAdminPage() {
     }
   }
 
+  /** Copies the share link; returns a sentence describing what happened. */
   const copyLink = async (shareToken: string, say = true) => {
     const url = `${window.location.origin}/r/${shareToken}`
+    let msg = `Report link (copy it): ${url}`
     try {
       await navigator.clipboard.writeText(url)
-      if (say) setNotice(`Copied ${url}`)
+      msg = `Copied ${url}`
     } catch {
-      setNotice(`Report link: ${url}`)
+      /* clipboard blocked: show the link instead */
     }
+    if (say) setNotice(msg)
+    return msg
   }
 
   const openPreview = async (o: OrderWithReport) => {
     if (!o.latest_report) return
     try {
+      setNotice('')
       setPreview(await api<StoredReport>('admin-report', { query: `&id=${o.latest_report.id}` }))
       window.scrollTo(0, 0)
     } catch (e) {

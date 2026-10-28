@@ -9,7 +9,7 @@
 --     by the API, which looks the report up by its unguessable share_token and only
 --     returns approved reports.
 
-create extension if not exists pgcrypto;
+-- gen_random_uuid() is built into Postgres 13+ (no extension needed).
 
 -- ---------------------------------------------------------------------------
 -- Orders
