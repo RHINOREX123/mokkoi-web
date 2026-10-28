@@ -157,5 +157,32 @@ export interface XrayRunMeta {
   aborted?: string
 }
 
+// ---------------------------------------------------------------------------
+// Stored rows (as returned by the store and the admin API)
+// ---------------------------------------------------------------------------
+
+export type ReportStatus = 'draft' | 'approved' | 'superseded'
+
+export interface StoredReport {
+  id: string
+  order_id: string
+  created_at: string
+  status: ReportStatus
+  approved_at: string | null
+  share_token: string
+  harness_version: string
+  score: number | null
+  verdict: string | null
+  cost_usd: number
+  model_usage: Record<string, unknown>
+  report: XrayReport
+}
+
+export type ReportSummary = Omit<StoredReport, 'report' | 'model_usage'>
+
+export interface OrderWithReport extends XrayOrder {
+  latest_report: ReportSummary | null
+}
+
 export const REPORT_DISCLAIMER =
   'Informational only. Not legal, financial or investment advice. Verify before you buy.'

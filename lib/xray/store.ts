@@ -8,7 +8,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { PLAN_ACCESS_LEVEL, type Evidence, type Finding, type XrayOrder, type XrayOrderStatus, type XrayPlan, type XrayReport, type XrayRunMeta } from './types.js'
+import { PLAN_ACCESS_LEVEL, type Evidence, type OrderWithReport, type ReportStatus, type ReportSummary, type StoredReport, type Finding, type XrayOrder, type XrayOrderStatus, type XrayPlan, type XrayReport, type XrayRunMeta } from './types.js'
 
 export interface NewOrder {
   plan: XrayPlan
@@ -21,28 +21,7 @@ export interface NewOrder {
   source?: string | null
 }
 
-export type ReportStatus = 'draft' | 'approved' | 'superseded'
-
-export interface StoredReport {
-  id: string
-  order_id: string
-  created_at: string
-  status: ReportStatus
-  approved_at: string | null
-  share_token: string
-  harness_version: string
-  score: number | null
-  verdict: string | null
-  cost_usd: number
-  model_usage: Record<string, unknown>
-  report: XrayReport
-}
-
-export type ReportSummary = Omit<StoredReport, 'report' | 'model_usage'>
-
-export interface OrderWithReport extends XrayOrder {
-  latest_report: ReportSummary | null
-}
+export type { ReportStatus, StoredReport, ReportSummary, OrderWithReport } from './types.js'
 
 export type OrderPatch = Partial<Pick<XrayOrder, 'status' | 'paid_at' | 'payment_ref' | 'attempts' | 'last_error' | 'run_started_at' | 'notes'>>
 
