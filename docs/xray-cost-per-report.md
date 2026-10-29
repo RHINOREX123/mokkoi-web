@@ -61,5 +61,5 @@ answers. **Plan on $0.30–0.70 per Quick report, about $0.50 typical.**
 | Real end-to-end on Supabase (the one allowed after the limit) | 1 | $0.67 |
 | **Total** | **9** | **≈ $4.25** |
 
-All of this ran before the "at most 3 live reports" instruction arrived, and it stayed under the $10 budget.
-After that instruction, exactly one live run was made (the Supabase end-to-end).
+The first 8 reports ran before the "at most 3 live reports" instruction arrived. After it, exactly
+one live run was made (the Supabase end-to-end). Total spend stayed under the $10 budget.
