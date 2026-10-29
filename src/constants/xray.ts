@@ -1,7 +1,4 @@
-// Mokkoi X-ray ordering config. Set these in Vercel / .env once checkout exists.
-// VITE_XRAY_ORDER_URL: hosted checkout link (e.g. Lemon Squeezy). The listing URL
-// is appended as a custom field so the report job knows what to check.
-export const XRAY_ORDER_URL: string | undefined = import.meta.env.VITE_XRAY_ORDER_URL || undefined
+// Mokkoi X-ray ordering config.
 export const XRAY_CONTACT_EMAIL: string = import.meta.env.VITE_XRAY_CONTACT_EMAIL || 'mokkoidev@gmail.com'
 
 export const XRAY_PLANS = [
@@ -34,15 +31,14 @@ export const XRAY_PLANS = [
 
 export type XrayPlanId = (typeof XRAY_PLANS)[number]['id']
 
-/** Where a "run/order" action should go for a given plan and listing URL. */
-export function xrayOrderHref(plan: XrayPlanId | 'verified', listingUrl = ''): string {
-  if (XRAY_ORDER_URL) {
-    const u = new URL(XRAY_ORDER_URL)
-    u.searchParams.set('checkout[custom][plan]', plan)
-    if (listingUrl) u.searchParams.set('checkout[custom][listing_url]', listingUrl)
-    return u.toString()
-  }
-  const subject = `Mokkoi ${plan} X-ray order`
-  const body = listingUrl ? `Listing or website to check: ${listingUrl}` : 'Listing or website to check: '
-  return `mailto:${XRAY_CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+/** Seller "Verified" report, sold alongside the buyer plans. */
+export const XRAY_VERIFIED_PLAN = { id: 'verified', name: 'Mokkoi Verified', price: '$149', when: 'Ready within 48 hours' } as const
+
+export type XrayOrderPlanId = XrayPlanId | 'verified'
+
+/** Where a "run/order" action goes: the order form, prefilled with the plan and listing URL. */
+export function xrayOrderHref(plan: XrayOrderPlanId, listingUrl = ''): string {
+  const q = new URLSearchParams({ plan })
+  if (listingUrl) q.set('url', listingUrl)
+  return `/order?${q.toString()}`
 }

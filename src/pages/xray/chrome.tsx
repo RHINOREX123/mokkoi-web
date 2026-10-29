@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { XRAY_CONTACT_EMAIL, xrayOrderHref } from '../../constants/xray'
 
 /** Shared top nav for the X-ray landing and its legal/support pages. */
@@ -22,9 +22,10 @@ export function XrayNav({ home = false }: { home?: boolean }) {
 /** Listing URL input + order button. Sends the URL along with the Quick X-ray order. */
 export function RunForm({ id, buttonLabel = 'Run a Quick X-ray for $49' }: { id: string; buttonLabel?: string }) {
   const [listingUrl, setListingUrl] = useState('')
+  const navigate = useNavigate()
   const onRun = (e: FormEvent) => {
     e.preventDefault()
-    window.location.href = xrayOrderHref('quick', listingUrl.trim())
+    navigate(xrayOrderHref('quick', listingUrl.trim()))
   }
   return (
     <form className="xr-run" onSubmit={onRun}>
